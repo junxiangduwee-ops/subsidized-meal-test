@@ -34,4 +34,21 @@ const result = spawnSync(
   },
 );
 
+if (result.status === 0 && (args.includes('push') || args.includes('migrate'))) {
+  console.log('Database updated! Automatically triggering seed script...');
+
+  const seedScriptPath = path.join(process.cwd(), 'scripts', 'seed.mjs');
+
+  spawnSync(
+    process.platform === 'win32' ? 'node.cmd' : 'node',
+    [seedScriptPath],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: db.url }, // Passes the Supabase URL straight to your seed script
+      shell: process.platform === 'win32',
+    }
+  );
+}
+
 process.exit(result.status ?? 1);
+
