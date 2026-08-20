@@ -47,7 +47,9 @@ function baseUrl(): string {
 }
 
 function appUrl(): string {
-  return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'http://localhost:3000';
 }
 
 export type CreatePaymentRequestInput = {
