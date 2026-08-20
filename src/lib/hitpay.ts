@@ -81,10 +81,16 @@ export async function createPaymentRequest(
     purpose: input.purpose,
     reference_number: input.reference,
     redirect_url: `${appUrl()}/orders/${encodeURIComponent(input.reference)}?from=hitpay`,
-    webhook: `${appUrl()}/api/webhooks/hitpay`,
+    webhook: webhookUrl(),
     // One-shot link: HitPay must not let the same link be paid twice.
     allow_repeated_payments: 'false',
   });
+
+  function webhookUrl(): string {
+    const base = `${appUrl()}/api/webhooks/hitpay`;
+    const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    return secret ? `${base}?x-vercel-protection-bypass=${secret}` : base;
+  }
 
   // Repeated `payment_methods[]` keys - HitPay rejects a comma-joined string.
   for (const method of paymentMethods()) {
