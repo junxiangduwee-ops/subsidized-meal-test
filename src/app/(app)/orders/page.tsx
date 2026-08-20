@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function OrdersPage() {
   const user = await requireCapability('order:place');
+  const t = await getTranslations('orders');
+  const locale = await getLocale();
 
   const orders = await prisma.order.findMany({
     where: { userId: user.id, status: { not: 'CART' } },
@@ -33,31 +36,31 @@ export default async function OrdersPage() {
   return (
     <>
       <PageHeader
-        title="My orders"
-        subtitle="Every week you have ordered for."
+        title={t('title')}
+        subtitle={t('subtitle')}
         action={
           <Link href="/menu" className="btn-primary">
-            Order for next week
+            {t('orderForNextWeek')}
           </Link>
         }
       />
 
       <div className={`mb-6 grid gap-4 ${showSubsidy ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-        <Stat label="Orders placed" value={paid.length} />
-        <Stat label="You have paid" value={formatSen(spent)} />
+        <Stat label={t('ordersPlaced')} value={paid.length} />
+        <Stat label={t('youHavePaid')} value={formatSen(spent)} />
         {showSubsidy ? (
-          <Stat label="Company covered" value={formatSen(saved)} tone="positive" />
+          <Stat label={t('companyCovered')} value={formatSen(saved)} tone="positive" />
         ) : null}
       </div>
 
-      <Section title="History">
+      <Section title={t('history')}>
         {orders.length === 0 ? (
           <EmptyState
-            title="No orders yet"
-            hint="When a menu is open you can pick meals for each day of the following week."
+            title={t('noOrdersYet')}
+            hint={t('noOrdersHint')}
             action={
               <Link href="/menu" className="btn-primary">
-                Browse the menu
+                {t('browseMenu')}
               </Link>
             }
           />
@@ -66,14 +69,14 @@ export default async function OrdersPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Reference</th>
-                  <th>Service week</th>
-                  <th className="num">Meals</th>
-                  {showSubsidy ? <th className="num">Food total</th> : null}
-                  {showSubsidy ? <th className="num">Subsidy</th> : null}
-                  <th className="num">You paid</th>
-                  <th>Status</th>
-                  <th>Placed</th>
+                  <th>{t('reference')}</th>
+                  <th>{t('serviceWeek')}</th>
+                  <th className="num">{t('meals')}</th>
+                  {showSubsidy ? <th className="num">{t('foodTotal')}</th> : null}
+                  {showSubsidy ? <th className="num">{t('subsidy')}</th> : null}
+                  <th className="num">{t('youPaid')}</th>
+                  <th>{t('status')}</th>
+                  <th>{t('placed')}</th>
                   <th />
                 </tr>
               </thead>
@@ -81,7 +84,7 @@ export default async function OrdersPage() {
                 {orders.map((o) => (
                   <tr key={o.id}>
                     <td className="font-mono text-xs text-slate-700">{o.reference}</td>
-                    <td className="text-slate-900">{formatWeekRange(o.cycle.serviceWeekStart)}</td>
+                    <td className="text-slate-900">{formatWeekRange(o.cycle.serviceWeekStart, locale)}</td>
                     <td className="num text-slate-600">{o._count.items}</td>
                     {showSubsidy ? (
                       <td className="num text-slate-600">{formatSen(o.grossSen)}</td>
@@ -94,12 +97,12 @@ export default async function OrdersPage() {
                       <StatusBadge status={o.status} />
                     </td>
                     <td className="text-xs text-slate-500">
-                      {o.submittedAt ? formatDateTime(o.submittedAt) : '—'}
+                      {o.submittedAt ? formatDateTime(o.submittedAt, locale) : '—'}
                     </td>
                     <td>
                       <div className="flex justify-end">
                         <Link href={`/orders/${o.reference}`} className="btn-secondary btn-sm">
-                          View
+                          {t('view')}
                         </Link>
                       </div>
                     </td>

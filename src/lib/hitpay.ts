@@ -43,13 +43,13 @@ export function paymentMethods(): string[] {
 }
 
 function baseUrl(): string {
-  return process.env.HITPAY_MODE === 'live' ? LIVE_BASE : SANDBOX_BASE;
-}
-
-function appUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return 'http://localhost:3000';
+}
+
+function appUrl(): string {
+  return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 }
 
 export type CreatePaymentRequestInput = {
@@ -81,8 +81,7 @@ export async function createPaymentRequest(
     purpose: input.purpose,
     reference_number: input.reference,
     redirect_url: `${appUrl()}/orders/${encodeURIComponent(input.reference)}?from=hitpay`,
-    webhook: webhookUrl(),
-    // One-shot link: HitPay must not let the same link be paid twice.
+    webhook: webhookUrl(),    // One-shot link: HitPay must not let the same link be paid twice.
     allow_repeated_payments: 'false',
   });
 

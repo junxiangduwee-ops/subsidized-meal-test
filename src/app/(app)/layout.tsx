@@ -1,44 +1,49 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 
 import { requireUser } from '@/lib/session';
 import { can, ROLE_LABEL } from '@/lib/rbac';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
+import { UserMenu } from '@/components/user-menu';
 import { logoutAction } from '@/app/login/actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const t = await getTranslations('nav');
 
   const groups: NavGroup[] = [];
 
   if (can(user.role, 'order:place')) {
     groups.push({
-      heading: 'Order',
+      heading: t('order'),
       items: [
-        { href: '/menu', label: "Next week's menu" },
-        { href: '/orders', label: 'My orders' },
+        { href: '/menu', label: t('nextWeeksMenu') },
+        { href: '/orders', label: t('myOrders') },
       ],
     });
   }
 
   if (can(user.role, 'menu:plan')) {
     groups.push({
-      heading: 'Administration',
+      heading: t('administration'),
       items: [
-        { href: '/admin/cycles', label: 'Weekly menus' },
-        { href: '/admin/restaurants', label: 'Restaurants' },
-        { href: '/admin/dishes', label: 'Dishes & prices' },
-        { href: '/admin/subsidies', label: 'Subsidies' },
-        { href: '/admin/users', label: 'Users & roles' },
+        { href: '/admin/cycles', label: t('weeklyMenus') },
+        { href: '/admin/restaurants', label: t('restaurants') },
+        { href: '/admin/delivery-sites', label: t('deliverySites') },
+        { href: '/admin/dishes', label: t('dishesPrices') },
+        { href: '/admin/subsidies', label: t('subsidies') },
+        { href: '/admin/users', label: t('usersRoles') },
       ],
     });
   }
 
-  const insights: NavGroup = { heading: 'Insights', items: [] };
-  if (can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: 'Analytics' });
-  if (can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: 'Finance' });
-  if (can(user.role, 'kitchen:view')) insights.items.push({ href: '/kitchen', label: 'Kitchen counts' });
+  const insights: NavGroup = { heading: t('insights'), items: [] };
+  if (can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
+  if (can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
+  if (can(user.role, 'kitchen:view'))
+    insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
   if (insights.items.length) groups.push(insights);
 
   const initials = user.name
@@ -55,28 +60,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
               MR
             </span>
-            <span className="text-sm font-semibold text-slate-900">Food Ordering</span>
+            <span className="text-sm font-semibold text-slate-900">{t('brand')}</span>
           </Link>
 
           <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <div className="text-sm font-medium leading-tight text-slate-900">{user.name}</div>
-              <div className="text-xs text-slate-500">
-                {ROLE_LABEL[user.role]}
-                {user.department ? ` · ${user.department}` : ''}
-              </div>
-            </div>
-            <span
-              aria-hidden
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600"
-            >
-              {initials}
-            </span>
-            <form action={logoutAction}>
-              <button type="submit" className="btn-secondary btn-sm">
-                Sign out
-              </button>
-            </form>
+            <UserMenu
+              name={user.name}
+              roleLabel={ROLE_LABEL[user.role]}
+              department={user.department}
+              initials={initials}
+              canViewOrders={can(user.role, 'order:place')}
+              onLogout={logoutAction}
+            />
           </div>
         </div>
 

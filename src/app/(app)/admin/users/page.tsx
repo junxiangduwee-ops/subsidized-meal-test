@@ -1,3 +1,5 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { containsInsensitive } from '@/lib/db-compat';
@@ -25,6 +27,8 @@ export default async function UsersPage({
 }) {
   const me = await requireCapability('users:manage');
   const params = await searchParams;
+  const t = await getTranslations('usersAdmin');
+  const locale = await getLocale();
 
   const users = await prisma.user.findMany({
     where: {
@@ -51,56 +55,49 @@ export default async function UsersPage({
 
   return (
     <>
-      <PageHeader
-        title="Users & roles"
-        subtitle="Who can sign in, and what they can do."
-        action={<AddUserButton departments={departments} />}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddUserButton departments={departments} />} />
 
       <div className="mb-6">
-        <Alert tone="info">
-          <strong>Roles:</strong> Administrator plans menus and manages the catalogue · Analytics sees
-          demand dashboards · Finance sees revenue, subsidy cost and exports · Employee orders food.
-        </Alert>
+        <Alert tone="info">{t('rolesInfo')}</Alert>
       </div>
 
       <Section
-        title="Accounts"
-          description={`${users.length} shown`}
+        title={t('accounts')}
+          description={t('shownCount', { count: users.length })}
           action={
             <form method="get" className="flex gap-2">
               <select name="role" defaultValue={params.role ?? 'all'} className="input !w-32 !py-1 text-xs">
-                <option value="all">All roles</option>
-                <option value="ADMIN">Admin</option>
-                <option value="ANALYTICS">Analytics</option>
-                <option value="FINANCE">Finance</option>
-                <option value="USER">Employee</option>
+                <option value="all">{t('allRoles')}</option>
+                <option value="ADMIN">{t('roleAdmin')}</option>
+                <option value="ANALYTICS">{t('roleAnalytics')}</option>
+                <option value="FINANCE">{t('roleFinance')}</option>
+                <option value="USER">{t('roleEmployee')}</option>
               </select>
               <input
                 name="q"
                 defaultValue={params.q ?? ''}
-                placeholder="Name, email, staff ID"
+                placeholder={t('searchPlaceholder')}
                 className="input !w-44 !py-1 text-xs"
               />
               <button type="submit" className="btn-secondary btn-sm">
-                Filter
+                {t('filter')}
               </button>
             </form>
           }
         >
           {users.length === 0 ? (
-            <EmptyState title="No accounts match" hint="Try clearing the filters." />
+            <EmptyState title={t('noAccountsMatch')} hint={t('noAccountsMatchHint')} />
           ) : (
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Staff ID</th>
-                    <th>Department</th>
-                    <th>Role</th>
-                    <th>Sign-in</th>
-                    <th>Last seen</th>
+                    <th>{t('name')}</th>
+                    <th>{t('staffId')}</th>
+                    <th>{t('department')}</th>
+                    <th>{t('role')}</th>
+                    <th>{t('signIn')}</th>
+                    <th>{t('lastSeen')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -110,7 +107,7 @@ export default async function UsersPage({
                       <td>
                         <div className="font-medium text-slate-900">
                           {u.name}
-                          {u.id === me.id ? <span className="ml-1 text-xs text-slate-400">(you)</span> : null}
+                          {u.id === me.id ? <span className="ml-1 text-xs text-slate-400">{t('you')}</span> : null}
                         </div>
                         <div className="text-xs text-slate-500">{u.email}</div>
                       </td>
@@ -121,7 +118,7 @@ export default async function UsersPage({
                       </td>
                       <td className="text-xs text-slate-500">{u.authProvider}</td>
                       <td className="text-xs text-slate-500">
-                        {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Never'}
+                        {u.lastLoginAt ? formatDateTime(u.lastLoginAt, locale) : t('never')}
                       </td>
                       <td>
                         <div className="flex justify-end gap-1.5">
@@ -142,7 +139,7 @@ export default async function UsersPage({
                             <form action={toggleUserActive}>
                               <input type="hidden" name="id" value={u.id} />
                               <InlineSubmit
-                                label={u.active ? 'Deactivate' : 'Activate'}
+                                label={u.active ? t('deactivate') : t('activate')}
                                 variant={u.active ? 'danger' : 'secondary'}
                               />
                             </form>

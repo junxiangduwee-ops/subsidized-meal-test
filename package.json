@@ -23,7 +23,7 @@
     "date-fns": "^4.1.0",
     "jose": "^5.9.6",
     "next": "^15.1.6",
-    "postgres": "^3.4.9",
+    "next-intl": "^4.13.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0",

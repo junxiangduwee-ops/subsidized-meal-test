@@ -1,10 +1,10 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { formatSen } from '@/lib/money';
 import {
-  CYCLE_PHASE_LABEL,
   cyclePhase,
   formatDateTime,
   formatWeekRange,
@@ -20,6 +20,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function CyclesPage() {
   await requireCapability('menu:plan');
+  const t = await getTranslations('cyclesAdmin');
+  const locale = await getLocale();
 
   const cycles = await prisma.menuCycle.findMany({
     orderBy: { serviceWeekStart: 'desc' },
@@ -32,7 +34,9 @@ export default async function CyclesPage() {
 
   const suggested = nextPlannableWeekStart();
   const suggestedKey = toDateKey(suggested);
-  const alreadyPlanned = cycles.some((c) => toDateKey(c.serviceWeekStart) === suggestedKey);
+  const alreadyPlanned = cycles.some(
+    (c) => toDateKey(c.serviceWeekStart) === suggestedKey && c.status !== 'CANCELLED',
+  );
 
   const paidTotals = await prisma.order.groupBy({
     by: ['cycleId'],
@@ -44,36 +48,30 @@ export default async function CyclesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Weekly menus"
-        subtitle="Plan two weeks ahead, publish, then let staff order until the Wednesday cutoff."
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
 
       {!alreadyPlanned ? (
         <div className="mb-6">
-          <Alert tone="warning">
-            <strong>{formatWeekRange(suggested)}</strong> has no menu yet. Create it now so it can be
-            published on schedule at the start of next week.
-          </Alert>
+          <Alert tone="warning">{t('noMenuYetWarning', { week: formatWeekRange(suggested, locale) })}</Alert>
         </div>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <Section title="Cycles" description="Most recent service weeks first">
+        <Section title={t('cycles')} description={t('cyclesDescription')}>
           {cycles.length === 0 ? (
-            <EmptyState title="No weekly menus yet" hint="Create the first one using the form on the right." />
+            <EmptyState title={t('noCyclesYet')} hint={t('noCyclesHint')} />
           ) : (
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Service week</th>
-                    <th>Status</th>
-                    <th className="num">Dishes</th>
-                    <th className="num">Paid orders</th>
-                    <th className="num">Staff pays</th>
-                    <th className="num">Company pays</th>
-                    <th>Cutoff</th>
+                    <th>{t('serviceWeek')}</th>
+                    <th className="!text-center">{t('status')}</th>
+                    <th className="num">{t('dishes')}</th>
+                    <th className="num">{t('paidOrders')}</th>
+                    <th className="num">{t('staffPays')}</th>
+                    <th className="num">{t('companyPays')}</th>
+                    <th>{t('cutoff')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -89,22 +87,22 @@ export default async function CyclesPage() {
                             href={`/admin/cycles/${c.id}`}
                             className="font-medium text-slate-900 hover:text-brand-700"
                           >
-                            {formatWeekRange(c.serviceWeekStart)}
+                            {formatWeekRange(c.serviceWeekStart, locale)}
                           </Link>
                           {c.title ? <div className="text-xs text-slate-500">{c.title}</div> : null}
                         </td>
-                        <td>
-                          <PhaseBadge phase={phase} label={CYCLE_PHASE_LABEL[phase]} />
+                        <td className="text-center">
+                          <PhaseBadge phase={phase} />
                         </td>
-                        <td className="num text-slate-600">{items}</td>
-                        <td className="num text-slate-600">{totals?._count._all ?? 0}</td>
-                        <td className="num text-slate-900">{formatSen(totals?._sum.netSen ?? 0)}</td>
-                        <td className="num text-emerald-700">{formatSen(totals?._sum.subsidySen ?? 0)}</td>
-                        <td className="text-xs text-slate-500">{formatDateTime(c.orderCutoffAt)}</td>
+                        <td className="num text-slate-600 text-left">{items}</td>
+                        <td className="num text-slate-600 text-left">{totals?._count._all ?? 0}</td>
+                        <td className="num text-slate-900 text-left">{formatSen(totals?._sum.netSen ?? 0)}</td>
+                        <td className="num text-emerald-700 text-left">{formatSen(totals?._sum.subsidySen ?? 0)}</td>
+                        <td className="text-xs text-slate-500">{formatDateTime(c.orderCutoffAt, locale)}</td>
                         <td>
                           <div className="flex justify-end">
-                            <Link href={`/admin/cycles/${c.id}`} className="btn-secondary btn-sm">
-                              Open
+                            <Link href={`/admin/cycles/${c.id}`} className="btn-secondary btn-sm whitespace-nowrap">
+                              {t('open')}
                             </Link>
                           </div>
                         </td>
@@ -117,12 +115,12 @@ export default async function CyclesPage() {
           )}
         </Section>
 
-        <Section title="Plan a new week">
+        <Section title={t('planNewWeek')}>
           <div className="p-5">
-            <ActionForm action={createCycle} submitLabel="Create draft" className="space-y-3">
+            <ActionForm action={createCycle} submitLabel={t('createDraft')} className="space-y-3">
               <div>
                 <label className="label" htmlFor="weekOf">
-                  Service week
+                  {t('serviceWeekLabel')}
                 </label>
                 <input
                   id="weekOf"
@@ -132,25 +130,19 @@ export default async function CyclesPage() {
                   defaultValue={suggestedKey}
                   className="input"
                 />
-                <p className="mt-1 text-xs text-slate-500">
-                  Any date in the week the food is served — it snaps to that Monday. Mon–Fri days are
-                  created automatically.
-                </p>
+                <p className="mt-1 text-xs text-slate-500">{t('serviceWeekHint')}</p>
               </div>
               <div>
                 <label className="label" htmlFor="title">
-                  Title (optional)
+                  {t('titleOptional')}
                 </label>
-                <input id="title" name="title" className="input" placeholder="Merdeka week specials" />
+                <input id="title" name="title" className="input" placeholder={t('titlePlaceholder')} />
               </div>
             </ActionForm>
 
             <div className="mt-5 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
-              <p className="mb-1 font-semibold text-slate-700">How the schedule works</p>
-              <p>
-                Draft this week → publish on Monday of next week → staff order until{' '}
-                <strong>Wednesday 5:00 pm</strong> → food served the week after.
-              </p>
+              <p className="mb-1 font-semibold text-slate-700">{t('howScheduleWorks')}</p>
+              <p>{t('scheduleExplainer', { cutoff: t('wednesdayCutoff') })}</p>
             </div>
           </div>
         </Section>

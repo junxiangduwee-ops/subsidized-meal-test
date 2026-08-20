@@ -197,11 +197,11 @@ async function exportKitchen(actorId: string, cycleId: string | null) {
     r.restaurantName,
     toDateKey(r.serviceDate),
     r.dishName,
+    r.deliverySiteName,
     r.quantity,
   ]);
 
-  const csv = toCsv(['Restaurant', 'Service date', 'Dish', 'Portions'], rows);
-
+  const csv = toCsv(['Restaurant', 'Service date', 'Dish', 'Delivery site', 'Portions'], rows);
   await audit(actorId, 'export.kitchen', 'MenuCycle', cycleId, { rows: rows.length });
   return csvResponse(`kitchen-counts-${toDateKey(cycle.serviceWeekStart)}.csv`, csv);
 }

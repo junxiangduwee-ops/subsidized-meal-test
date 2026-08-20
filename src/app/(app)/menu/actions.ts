@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
-import { audit, clearMeal, repriceOrder, selectMeal, validateForCheckout } from '@/lib/orders';
+import { audit, clearMeal, repriceOrder, selectMeal, setDeliverySite, validateForCheckout } from '@/lib/orders';
 import { createPaymentRequest, hitpayConfigured } from '@/lib/hitpay';
 import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
@@ -37,15 +37,27 @@ export async function removeMeal(menuItemId: string): Promise<MealResult> {
   return { ok: true };
 }
 
+/** Set (or change) the delivery site for the current week's cart. */
+export async function chooseDeliverySite(cycleId: string, deliverySiteId: string): Promise<MealResult> {
+  const user = await assertCapability('order:place');
+
+  const result = await setDeliverySite(user.id, cycleId, deliverySiteId);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath('/menu');
+  return { ok: true };
+}
+
 export async function clearCart(formData: FormData): Promise<void> {
   const user = await assertCapability('order:place');
   const cycleId = String(formData.get('cycleId') ?? '');
   if (!cycleId) return;
 
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId: user.id, cycleId } },
-  });
-  if (!order || order.status !== 'CART') return;
+  const order = await prisma.order.findFirst({
+    where: { userId: user.id, cycleId, status: 'CART' }
+  },
+  );
+  if (!order) return;
 
   await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
   await repriceOrder(order.id);
@@ -64,8 +76,8 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   const cycleId = String(formData.get('cycleId') ?? '');
   if (!cycleId) return { error: 'Missing week.' };
 
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId: user.id, cycleId } },
+  const order = await prisma.order.findFirst({
+    where: { userId: user.id, cycleId, status: 'CART' },
     include: { cycle: true },
   });
   if (!order) return { error: 'You have no cart for this week.' };

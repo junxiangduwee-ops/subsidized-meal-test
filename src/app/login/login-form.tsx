@@ -1,20 +1,23 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import { loginAction, type LoginState } from './actions';
 
 function SubmitButton() {
+  const t = useTranslations('login');
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
-      {pending ? 'Signing in...' : 'Sign in'}
+      {pending ? t('signingIn') : t('signIn')}
     </button>
   );
 }
 
 export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ldapEnabled: boolean }) {
+  const t = useTranslations('login');
   const [state, formAction] = useActionState<LoginState, FormData>(loginAction, {});
 
   return (
@@ -28,7 +31,7 @@ export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ld
 
         <div>
           <label htmlFor="email" className="label">
-            Work email
+            {t('workEmail')}
           </label>
           <input
             id="email"
@@ -43,7 +46,7 @@ export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ld
 
         <div>
           <label htmlFor="password" className="label">
-            Password
+            {t('password')}
           </label>
           <input
             id="password"
@@ -59,21 +62,17 @@ export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ld
         <SubmitButton />
       </form>
 
-      {ldapEnabled ? (
-        <p className="text-center text-xs text-slate-500">
-          Your MR DIY directory password works here.
-        </p>
-      ) : null}
+      {ldapEnabled ? <p className="text-center text-xs text-slate-500">{t('ldapHint')}</p> : null}
 
       {ssoEnabled ? (
         <>
           <div className="flex items-center gap-3">
             <span className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs uppercase tracking-wide text-slate-400">or</span>
+            <span className="text-xs uppercase tracking-wide text-slate-400">{t('or')}</span>
             <span className="h-px flex-1 bg-slate-200" />
           </div>
           <a href="/api/auth/oidc/start" className="btn-secondary w-full">
-            Sign in with company SSO
+            {t('ssoButton')}
           </a>
         </>
       ) : null}

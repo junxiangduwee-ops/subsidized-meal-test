@@ -156,54 +156,6 @@ async function main() {
     },
   ];
 
-  // --- Bulk employees ----------------------------------------------------
-  // Tune these two constants for a bigger or smaller demo dataset. Every
-  // extra employee here automatically gets orders in every historical week
-  // below - the order-generation loop just iterates whatever is in `users`.
-  const BULK_EMPLOYEE_COUNT = 150;
-  const BULK_DEPARTMENTS = ['Operations', 'Merchandising', 'Warehouse', 'IT', 'Finance', 'Strategy'];
-
-  const FIRST_NAMES = [
-    'Ahmad', 'Aiman', 'Amirah', 'Azlan', 'Balqis', 'Danish', 'Farah', 'Hasnah',
-    'Idris', 'Iskandar', 'Junaidi', 'Khadijah', 'Mahathir', 'Nabila', 'Nazrin', 'Rosnah',
-    'Syafiq', 'Zulaikha', 'Wei Ling', 'Jia Hao', 'Mei Xin', 'Kok Wei', 'Shu Fen', 'Chee Keong',
-    'Yee Ting', 'Boon Hui', 'Sze Ming', 'Wai Kit', 'Li Wen', 'Cheng Yee',
-    'Kamala', 'Suresh', 'Priyanka', 'Ravindran', 'Deepa', 'Anand', 'Meera', 'Vignesh',
-    'Lakshmi', 'Kumaran', 'Shalini', 'Ganesh',
-  ];
-  const LAST_NAMES = [
-    'bin Abdullah', 'bin Ismail', 'binti Rahman', 'binti Yusof', 'bin Hashim', 'binti Kassim',
-    'bin Salleh', 'binti Zainal', 'bin Hamid', 'binti Aziz',
-    'Tan', 'Lim', 'Wong', 'Lee', 'Ng', 'Chan', 'Ong', 'Chong', 'Yap', 'Goh',
-    'a/l Muthu', 'a/p Raman', 'a/l Subramaniam', 'a/p Krishnan', 'a/l Perumal',
-  ];
-
-  const bulkEmployees: typeof staffSpec = [];
-  const usedEmails = new Set(staffSpec.map((s) => s.email));
-  for (let i = 0; i < BULK_EMPLOYEE_COUNT; i++) {
-    const first = pick(FIRST_NAMES);
-    const last = pick(LAST_NAMES);
-    const name = `${first} ${last}`;
-    const staffId = `EMP-${String(staffSpec.length + i + 1).padStart(5, '0')}`;
-
-    let email = `${first}.${last}`
-      .toLowerCase()
-      .replace(/[^a-z.]/g, '')
-      .replace(/\.+/g, '.') + '@mrdiy.com';
-    // Common names collide once name pools repeat - fall back to staffId.
-    if (usedEmails.has(email)) email = `${staffId.toLowerCase()}@mrdiy.com`;
-    usedEmails.add(email);
-
-    bulkEmployees.push({
-      email,
-      name,
-      role: 'USER' as const,
-      department: pick(BULK_DEPARTMENTS),
-      staffId,
-    });
-  }
-  staffSpec.push(...bulkEmployees);
-
   const users: User[] = [];
   for (const spec of staffSpec) {
     users.push(
@@ -315,202 +267,6 @@ async function main() {
           { name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
         ],
       },
-      {
-        restaurant: {
-          name: 'Restoran Sri Ananda Bahwan',
-          cuisine: 'Indian',
-          contactName: 'Muthu Kumar',
-          contactPhone: '03-4256 7890',
-        },
-        dishes: [
-          { name: 'Banana Leaf Rice', priceSen: 1250, category: 'Main', tags: ['halal', 'vegetarian option'] },
-          { name: 'Chicken Briyani', priceSen: 1400, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Fish Head Curry', priceSen: 1800, category: 'Main', tags: ['halal', 'contains-fish', 'spicy'] },
-          { name: 'Teh Tarik', priceSen: 350, category: 'Drink', tags: ['halal', 'vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Sakura Japanese Kitchen',
-          cuisine: 'Japanese',
-          contactName: 'Kenji Tanaka',
-          contactPhone: '03-9012 3456',
-        },
-        dishes: [
-          { name: 'Chicken Katsu Curry', priceSen: 1650, category: 'Main', tags: [] },
-          { name: 'Salmon Teriyaki Bento', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
-          { name: 'Vegetable Gyoza', priceSen: 950, category: 'Side', tags: ['vegetarian'] },
-          { name: 'Miso Soup', priceSen: 500, category: 'Side', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Seoul Garden Express',
-          cuisine: 'Korean',
-          contactName: 'Park Min-jun',
-          contactPhone: '03-6234 5678',
-        },
-        dishes: [
-          { name: 'Bibimbap', priceSen: 1550, category: 'Main', tags: ['halal option'] },
-          { name: 'Korean Fried Chicken', priceSen: 1750, category: 'Main', tags: ['spicy'] },
-          { name: 'Kimchi Jjigae', priceSen: 1400, category: 'Main', tags: ['spicy'] },
-          { name: 'Japchae', priceSen: 1150, category: 'Side', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Restoran Yut Kee',
-          cuisine: 'Hainanese',
-          contactName: 'David Yong',
-          contactPhone: '03-2691 1054',
-        },
-        dishes: [
-          { name: 'Hainanese Chicken Chop', priceSen: 1450, category: 'Main', tags: [] },
-          { name: 'Roti Babi', priceSen: 1050, category: 'Main', tags: ['contains-pork'] },
-          { name: 'Curry Debal', priceSen: 1550, category: 'Main', tags: ['spicy'] },
-          { name: 'Iced Milo', priceSen: 400, category: 'Drink', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Subway Sandwiches',
-          cuisine: 'Western',
-          contactName: 'Store Manager',
-          contactPhone: '03-7801 2345',
-        },
-        dishes: [
-          { name: 'Chicken Teriyaki Sub', priceSen: 1650, category: 'Main', tags: ['halal'] },
-          { name: 'Tuna Sub', priceSen: 1550, category: 'Main', tags: ['halal', 'contains-fish'] },
-          { name: 'Veggie Delite Sub', priceSen: 1350, category: 'Main', tags: ['halal', 'vegetarian'] },
-          { name: 'Cookies (2pc)', priceSen: 550, category: 'Side', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Pizza Corner PJ',
-          cuisine: 'Italian',
-          contactName: 'Marco Rossi',
-          contactPhone: '03-7955 6677',
-        },
-        dishes: [
-          { name: 'Margherita Pizza Slice', priceSen: 1200, category: 'Main', tags: ['halal', 'vegetarian'] },
-          { name: 'Chicken Pepperoni Pizza Slice', priceSen: 1400, category: 'Main', tags: ['halal'] },
-          { name: 'Chicken Alfredo Pasta', priceSen: 1650, category: 'Main', tags: ['halal'] },
-          { name: 'Garlic Bread', priceSen: 700, category: 'Side', tags: ['halal', 'vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Nasi Lemak Antarabangsa',
-          cuisine: 'Malay',
-          contactName: 'Kak Yah',
-          contactPhone: '03-2273 8899',
-        },
-        dishes: [
-          { name: 'Nasi Lemak Ayam Rendang', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Nasi Lemak Sotong Sambal', priceSen: 1300, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Nasi Lemak Biasa', priceSen: 700, category: 'Main', tags: ['halal', 'vegetarian option'] },
-          { name: 'Kuih-Muih Assorted', priceSen: 450, category: 'Side', tags: ['halal', 'vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'The Chicken Rice Shop',
-          cuisine: 'Chinese',
-          contactName: 'Outlet Manager',
-          contactPhone: '03-7873 4455',
-        },
-        dishes: [
-          { name: 'Steamed Chicken Rice Set', priceSen: 1250, category: 'Main', tags: [] },
-          { name: 'Roasted Chicken Rice Set', priceSen: 1300, category: 'Main', tags: [] },
-          { name: 'Herbal Chicken Soup', priceSen: 1100, category: 'Side', tags: [] },
-          { name: 'Barley Drink', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Mynt Cafe',
-          cuisine: 'Western',
-          contactName: 'Aina Zulkifli',
-          contactPhone: '03-2145 9988',
-        },
-        dishes: [
-          { name: 'Beef Lasagna', priceSen: 1750, category: 'Main', tags: ['contains-beef'] },
-          { name: 'Grilled Chicken Chop', priceSen: 1650, category: 'Main', tags: ['halal'] },
-          { name: 'Carbonara Pasta', priceSen: 1550, category: 'Main', tags: ['contains-pork option'] },
-          { name: 'Iced Lemon Tea', priceSen: 400, category: 'Drink', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Restoran Nasi Kukus Bunga Tanjung',
-          cuisine: 'Malay',
-          contactName: 'Pak Long',
-          contactPhone: '019-345 6721',
-        },
-        dishes: [
-          { name: 'Nasi Kukus Ayam Berempah', priceSen: 1300, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Nasi Kukus Daging', priceSen: 1450, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Ayam Golek', priceSen: 1550, category: 'Main', tags: ['halal'] },
-          { name: 'Air Sirap', priceSen: 300, category: 'Drink', tags: ['halal', 'vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: "Papparich",
-          cuisine: 'Malaysian',
-          contactName: 'Outlet Manager',
-          contactPhone: '03-7845 2211',
-        },
-        dishes: [
-          { name: 'Nasi Lemak Papparich', priceSen: 1450, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Curry Mee', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Roti Telur Bawang', priceSen: 850, category: 'Light', tags: ['halal', 'vegetarian'] },
-          { name: 'Papparich White Coffee', priceSen: 450, category: 'Drink', tags: ['halal', 'vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Vegetarian Delight',
-          cuisine: 'Vegetarian',
-          contactName: 'Ms. Tan',
-          contactPhone: '012-987 6543',
-        },
-        dishes: [
-          { name: 'Mock Meat Rice', priceSen: 1050, category: 'Main', tags: ['vegetarian', 'vegan'] },
-          { name: 'Yong Tau Foo (Vegetarian)', priceSen: 950, category: 'Main', tags: ['vegetarian'] },
-          { name: 'Buddhist Delight', priceSen: 1100, category: 'Main', tags: ['vegetarian', 'vegan'] },
-          { name: 'Soy Milk', priceSen: 300, category: 'Drink', tags: ['vegetarian', 'vegan'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Bakerzin',
-          cuisine: 'Bakery & Cafe',
-          contactName: 'Outlet Manager',
-          contactPhone: '03-2168 7733',
-        },
-        dishes: [
-          { name: 'Chicken Chop Sandwich', priceSen: 1550, category: 'Main', tags: ['halal'] },
-          { name: 'Mushroom Soup', priceSen: 900, category: 'Side', tags: ['vegetarian'] },
-          { name: 'Chocolate Croissant', priceSen: 650, category: 'Side', tags: ['vegetarian'] },
-          { name: 'Cappuccino', priceSen: 500, category: 'Drink', tags: ['vegetarian'] },
-        ],
-      },
-      {
-        restaurant: {
-          name: 'Restoran Kari Bawang Kajang',
-          cuisine: 'Malay',
-          contactName: 'Pak Man',
-          contactPhone: '03-8736 4521',
-        },
-        dishes: [
-          { name: 'Nasi Kari Bawang Ayam', priceSen: 1250, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Nasi Kari Bawang Daging', priceSen: 1450, category: 'Main', tags: ['halal', 'spicy'] },
-          { name: 'Sup Tulang', priceSen: 1350, category: 'Side', tags: ['halal'] },
-          { name: 'Air Bandung', priceSen: 350, category: 'Drink', tags: ['halal', 'vegetarian'] },
-        ],
-      },
     ];
 
   const allDishes: Dish[] = [];
@@ -575,25 +331,6 @@ async function main() {
         priority: 10,
         active: true,
       },
-      {
-        name: 'Merchandising travel meal top-up',
-        type: 'FIXED_PER_ITEM',
-        value: 300, // an extra RM 3.00 off, on top of the standard subsidy
-        scope: 'DEPARTMENT',
-        department: 'Merchandising',
-        priority: 10,
-        active: true,
-      },
-      {
-        name: 'IT on-call allowance',
-        type: 'PERCENTAGE',
-        value: 40,
-        capSen: 600, // 40% off, capped at RM 6.00 per item
-        scope: 'DEPARTMENT',
-        department: 'IT',
-        priority: 10,
-        active: true,
-      },
     ],
   });
   const rules: SubsidyRule[] = await prisma.subsidyRule.findMany({ where: { active: true } });
@@ -603,11 +340,8 @@ async function main() {
   const thisMonday = mondayOf(todayInAppTz());
   const now = new Date();
 
-  // Past service weeks, already delivered. Tune WEEKS_OF_HISTORY for a
-  // bigger or smaller demo dataset - each week seeds a full menu plus
-  // orders for every employee, so this scales seeding time linearly.
-  const WEEKS_OF_HISTORY = 16;
-  for (let back = WEEKS_OF_HISTORY; back >= 1; back--) {
+  // Past service weeks, already delivered.
+  for (let back = 3; back >= 1; back--) {
     const weekStart = addWeeks(thisMonday, -back);
     await buildCycle({
       weekStart,

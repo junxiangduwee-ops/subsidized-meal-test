@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useRef, type ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -14,12 +15,13 @@ function Submit({
   label: string;
   variant?: 'primary' | 'secondary' | 'danger';
 }) {
+  const t = useTranslations('common');
   const { pending } = useFormStatus();
   const cls =
     variant === 'danger' ? 'btn-danger' : variant === 'secondary' ? 'btn-secondary' : 'btn-primary';
   return (
     <button type="submit" className={cls} disabled={pending}>
-      {pending ? 'Working...' : label}
+      {pending ? t('working') : label}
     </button>
   );
 }
@@ -89,6 +91,7 @@ export function InlineSubmit({
   variant?: 'secondary' | 'danger' | 'primary';
   confirm?: string;
 }) {
+  const t = useTranslations('common');
   const { pending } = useFormStatus();
   const cls =
     variant === 'danger' ? 'btn-danger' : variant === 'primary' ? 'btn-primary' : 'btn-secondary';
@@ -101,7 +104,7 @@ export function InlineSubmit({
         if (confirm && !window.confirm(confirm)) e.preventDefault();
       }}
     >
-      {pending ? '...' : label}
+      {pending ? t('ellipsis') : label}
     </button>
   );
 }

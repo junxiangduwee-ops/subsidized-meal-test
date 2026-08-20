@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -19,6 +20,8 @@ export default async function DishesPage({
 }) {
   await requireCapability('catalogue:manage');
   const params = await searchParams;
+  const t = await getTranslations('dishesAdmin');
+  const c = await getTranslations('adminCommon');
 
   const restaurants = await prisma.restaurant.findMany({
     orderBy: [{ active: 'desc' }, { name: 'asc' }],
@@ -39,30 +42,26 @@ export default async function DishesPage({
 
   return (
     <>
-      <PageHeader
-        title="Dishes & prices"
-        subtitle="The catalogue admins pick from when planning a week. Editing a price here never changes a menu that is already published."
-        action={<AddDishButton restaurants={restaurants} />}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddDishButton restaurants={restaurants} />} />
 
       {restaurants.length === 0 ? (
         <EmptyState
-          title="Add a restaurant first"
-          hint="Dishes belong to a restaurant, so start there."
+          title={t('addRestaurantFirst')}
+          hint={t('addRestaurantFirstHint')}
           action={
             <Link href="/admin/restaurants" className="btn-primary">
-              Go to restaurants
+              {t('goToRestaurants')}
             </Link>
           }
         />
       ) : (
         <Section
-            title="Catalogue"
-            description={`${rows.length} dish${rows.length === 1 ? '' : 'es'}`}
+            title={t('catalogue')}
+            description={t('dishCount', { count: rows.length })}
             action={
               <form method="get" className="flex gap-2">
                 <select name="restaurant" defaultValue={params.restaurant ?? ''} className="input !w-44 !py-1 text-xs">
-                  <option value="">All restaurants</option>
+                  <option value="">{t('allRestaurantsOption')}</option>
                   {restaurants.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
@@ -72,27 +71,27 @@ export default async function DishesPage({
                 <input
                   name="q"
                   defaultValue={params.q ?? ''}
-                  placeholder="Search dish"
+                  placeholder={t('searchPlaceholder')}
                   className="input !w-36 !py-1 text-xs"
                 />
                 <button type="submit" className="btn-secondary btn-sm">
-                  Filter
+                  {t('filter')}
                 </button>
               </form>
             }
           >
             {rows.length === 0 ? (
-              <EmptyState title="No dishes match" hint="Try clearing the filters, or add a dish on the right." />
+              <EmptyState title={t('noDishesMatch')} hint={t('noDishesMatchHint')} />
             ) : (
               <div className="overflow-x-auto">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Dish</th>
-                      <th>Restaurant</th>
-                      <th>Category</th>
-                      <th className="num">Price</th>
-                      <th>Status</th>
+                      <th>{t('dish')}</th>
+                      <th>{t('restaurant')}</th>
+                      <th>{t('category')}</th>
+                      <th className="num">{t('price')}</th>
+                      <th>{c('status')}</th>
                       <th />
                     </tr>
                   </thead>
@@ -103,9 +102,9 @@ export default async function DishesPage({
                           <div className="font-medium text-slate-900">{d.name}</div>
                           {d.tags.length > 0 ? (
                             <div className="mt-0.5 flex flex-wrap gap-1">
-                              {d.tags.map((t) => (
-                                <span key={t} className="badge bg-slate-100 text-slate-600">
-                                  {t}
+                              {d.tags.map((tag) => (
+                                <span key={tag} className="badge bg-slate-100 text-slate-600">
+                                  {tag}
                                 </span>
                               ))}
                             </div>
@@ -113,14 +112,14 @@ export default async function DishesPage({
                         </td>
                         <td className="text-slate-600">{d.restaurant.name}</td>
                         <td className="text-slate-600">{d.category ?? '—'}</td>
-                        <td className="num font-medium text-slate-900">{formatSen(d.priceSen)}</td>
+                        <td className="num font-medium text-slate-900 text-left">{formatSen(d.priceSen)}</td>
                         <td>
                           <span
                             className={`badge ${
                               d.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
                             }`}
                           >
-                            {d.active ? 'Active' : 'Inactive'}
+                            {d.active ? c('active') : c('inactive')}
                           </span>
                         </td>
                         <td>
@@ -128,14 +127,14 @@ export default async function DishesPage({
                             <EditDishDialog dish={d} restaurants={restaurants} />
                             <form action={toggleDishActive}>
                               <input type="hidden" name="id" value={d.id} />
-                              <InlineSubmit label={d.active ? 'Disable' : 'Enable'} />
+                              <InlineSubmit label={d.active ? c('disable') : c('enable')} />
                             </form>
                             <form action={deleteDish}>
                               <input type="hidden" name="id" value={d.id} />
                               <InlineSubmit
-                                label="Delete"
+                                label={c('delete')}
                                 variant="danger"
-                                confirm={`Delete ${d.name}? If it has ever been on a menu it will be deactivated instead.`}
+                                confirm={t('deleteConfirm', { name: d.name })}
                               />
                             </form>
                           </div>

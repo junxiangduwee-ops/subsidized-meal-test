@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type ReactNode } from 'react';
 
 /**
@@ -17,6 +18,7 @@ export function Dialog({
   children: (close: () => void) => ReactNode;
   width?: string;
 }) {
+  const t = useTranslations('common');
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export function Dialog({
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close"
+                aria-label={t('close')}
               >
                 ✕
               </button>

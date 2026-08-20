@@ -175,8 +175,12 @@ model Dish {
 
 model MenuCycle {
   id               String      @id @default(cuid())
-  /// Monday 00:00 of the week the food is *served*. Uniquely identifies a cycle.
-  serviceWeekStart DateTime    @unique @db.Date
+  /// Monday 00:00 of the week the food is *served*. Identifies a cycle -
+  /// but no longer a hard unique constraint. A CANCELLED cycle keeps its
+  /// row (audit trail, refund note) without permanently occupying the
+  /// week; only one non-cancelled cycle may exist per week, enforced in
+  /// createCycle rather than the database.
+  serviceWeekStart DateTime    @db.Date
   title            String?
   status           CycleStatus @default(DRAFT)
 
@@ -200,6 +204,7 @@ model MenuCycle {
 
   @@index([status])
   @@index([orderOpenAt, orderCutoffAt])
+  @@index([serviceWeekStart])
 }
 
 model MenuDay {
@@ -262,6 +267,21 @@ model SubsidyRule {
   @@index([active, scope])
 }
 
+/// Where an order's food physically gets sent - one per Order, chosen at
+/// checkout. A managed list (not free text) so it can't accumulate typo'd
+/// duplicates like "Warehouse A" / "warehouse a".
+model DeliverySite {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+
+  @@index([active])
+}
+
 // ---------------------------------------------------------------------------
 // Orders
 //
@@ -290,6 +310,12 @@ model Order {
   cancelledAt    DateTime?
   cancelReason   String?
 
+  /// Where this order's food goes. Nullable here only so existing rows
+  /// don't break the migration - validateForCheckout requires it before
+  /// payment is allowed, so every real (paid) order has one in practice.
+  deliverySiteId String?
+  deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -298,10 +324,11 @@ model Order {
   items          OrderItem[]
   payments       Payment[]
 
-  @@unique([userId, cycleId])
+  @@index([userId, cycleId])
   @@index([status])
   @@index([cycleId, status])
   @@index([paidAt])
+  @@index([deliverySiteId])
 }
 
 model OrderItem {

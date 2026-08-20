@@ -13,7 +13,7 @@
  * Date-only columns are stored as UTC midnight, matching Prisma's `@db.Date`.
  */
 
-import type { CycleStatus, MenuCycle } from '@prisma/client';
+import type { MenuCycle } from '@prisma/client';
 
 export const APP_TIMEZONE = process.env.APP_TIMEZONE ?? 'Asia/Kuala_Lumpur';
 
@@ -236,16 +236,23 @@ export function timeUntil(target: Date, now: Date = new Date()): string {
 // Formatting
 // ---------------------------------------------------------------------------
 
+/** Maps our app locales to the Intl locale tag that renders them correctly. */
+const INTL_LOCALE: Record<string, string> = { en: 'en-GB', ms: 'ms-MY', zh: 'zh-CN' };
+function intlLocale(locale?: string): string {
+  return (locale && INTL_LOCALE[locale]) || 'en-GB';
+}
+
 export function formatDate(
   date: Date | string,
   style: 'short' | 'long' | 'weekday' | 'full' = 'short',
+  locale?: string,
 ): string {
   const d = typeof date === 'string' ? new Date(date) : date;
+  const loc = intlLocale(locale);
   const base: Intl.DateTimeFormatOptions = { timeZone: 'UTC' };
-  if (style === 'weekday')
-    return new Intl.DateTimeFormat('en-GB', { ...base, weekday: 'long' }).format(d);
+  if (style === 'weekday') return new Intl.DateTimeFormat(loc, { ...base, weekday: 'long' }).format(d);
   if (style === 'full')
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat(loc, {
       ...base,
       weekday: 'long',
       day: 'numeric',
@@ -253,19 +260,19 @@ export function formatDate(
       year: 'numeric',
     }).format(d);
   if (style === 'long')
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat(loc, {
       ...base,
       weekday: 'short',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     }).format(d);
-  return new Intl.DateTimeFormat('en-GB', { ...base, day: 'numeric', month: 'short' }).format(d);
+  return new Intl.DateTimeFormat(loc, { ...base, day: 'numeric', month: 'short' }).format(d);
 }
 
-export function formatDateTime(date: Date | string): string {
+export function formatDateTime(date: Date | string, locale?: string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     timeZone: APP_TIMEZONE,
     day: 'numeric',
     month: 'short',
@@ -296,29 +303,11 @@ export function toLocalInputValue(date: Date | string): string {
 }
 
 /** "4 Aug - 8 Aug 2026" */
-export function formatWeekRange(serviceWeekStart: Date | string): string {
+export function formatWeekRange(serviceWeekStart: Date | string, locale?: string): string {
   const start = dateOnly(
     typeof serviceWeekStart === 'string' ? new Date(serviceWeekStart) : serviceWeekStart,
   );
   const end = addDays(start, SERVICE_DAYS_PER_WEEK - 1);
-  const y = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', year: 'numeric' }).format(end);
-  return `${formatDate(start)} - ${formatDate(end)} ${y}`;
+  const y = new Intl.DateTimeFormat(intlLocale(locale), { timeZone: 'UTC', year: 'numeric' }).format(end);
+  return `${formatDate(start, 'short', locale)} - ${formatDate(end, 'short', locale)} ${y}`;
 }
-
-export const CYCLE_PHASE_LABEL: Record<CyclePhase, string> = {
-  DRAFT: 'Draft',
-  SCHEDULED: 'Scheduled',
-  OPEN: 'Ordering open',
-  CLOSED: 'Ordering closed',
-  SERVING: 'Being served',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-};
-
-export const CYCLE_STATUS_LABEL: Record<CycleStatus, string> = {
-  DRAFT: 'Draft',
-  PUBLISHED: 'Published',
-  CLOSED: 'Closed',
-  FULFILLED: 'Fulfilled',
-  CANCELLED: 'Cancelled',
-};

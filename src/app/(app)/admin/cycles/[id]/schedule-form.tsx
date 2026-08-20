@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { ActionForm } from '@/components/action-form';
 
 import { updateCycleWindow } from '../actions';
@@ -19,23 +21,24 @@ export function ScheduleForm({
   orderCutoffAt: string;
   disabled: boolean;
 }) {
+  const t = useTranslations('cyclesAdmin');
   return (
     <ActionForm
       action={updateCycleWindow}
-      submitLabel="Save schedule"
+      submitLabel={t('saveSchedule')}
       resetOnSuccess={false}
       className="space-y-3"
     >
       <input type="hidden" name="id" value={cycleId} />
 
       <div>
-        <label className="label">Title</label>
+        <label className="label">{t('scheduleTitle')}</label>
         <input name="title" defaultValue={title ?? ''} className="input" disabled={disabled} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="label">Ordering opens</label>
+          <label className="label">{t('orderingOpens')}</label>
           <input
             name="orderOpenAt"
             type="datetime-local"
@@ -46,7 +49,7 @@ export function ScheduleForm({
           />
         </div>
         <div>
-          <label className="label">Ordering cutoff</label>
+          <label className="label">{t('orderingCloses')}</label>
           <input
             name="orderCutoffAt"
             type="datetime-local"
@@ -59,14 +62,14 @@ export function ScheduleForm({
       </div>
 
       <div>
-        <label className="label">Notes for staff</label>
+        <label className="label">{t('notesForStaff')}</label>
         <textarea
           name="notes"
           rows={2}
           defaultValue={notes ?? ''}
           className="input"
           disabled={disabled}
-          placeholder="Collection point is Level 3 pantry from 12:15 pm."
+          placeholder={t('notesPlaceholder')}
         />
       </div>
     </ActionForm>

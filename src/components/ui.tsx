@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 import type { CyclePhase } from '@/lib/cycle';
 
+import { getTranslations } from 'next-intl/server';
+
 export function PageHeader({
   title,
   subtitle,
@@ -62,24 +64,28 @@ const PHASE_STYLES: Record<CyclePhase, string> = {
   CANCELLED: 'bg-red-100 text-red-800',
 };
 
-export function PhaseBadge({ phase, label }: { phase: CyclePhase; label: string }) {
-  return <span className={`badge ${PHASE_STYLES[phase]}`}>{label}</span>;
+export async function PhaseBadge({ phase }: { phase: CyclePhase }) {
+  const t = await getTranslations('cyclePhase');
+  return <span className={`badge ${PHASE_STYLES[phase]}`}>{t(phase)}</span>;
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    PAID: 'bg-emerald-100 text-emerald-800',
-    SUCCEEDED: 'bg-emerald-100 text-emerald-800',
-    AWAITING_PAYMENT: 'bg-amber-100 text-amber-800',
-    PENDING: 'bg-amber-100 text-amber-800',
-    CART: 'bg-slate-100 text-slate-700',
-    CANCELLED: 'bg-red-100 text-red-800',
-    FAILED: 'bg-red-100 text-red-800',
-    REFUNDED: 'bg-purple-100 text-purple-800',
-  };
+const STATUS_STYLES: Record<string, string> = {
+  PAID: 'bg-emerald-100 text-emerald-800',
+  SUCCEEDED: 'bg-emerald-100 text-emerald-800',
+  AWAITING_PAYMENT: 'bg-amber-100 text-amber-800',
+  PENDING: 'bg-amber-100 text-amber-800',
+  CART: 'bg-slate-100 text-slate-700',
+  CANCELLED: 'bg-red-100 text-red-800',
+  FAILED: 'bg-red-100 text-red-800',
+  REFUNDED: 'bg-purple-100 text-purple-800',
+};
+
+export async function StatusBadge({ status }: { status: string }) {
+  const t = await getTranslations('orderStatus');
+  const label = t.has(status) ? t(status) : status.replace(/_/g, ' ').toLowerCase();
   return (
-    <span className={`badge ${map[status] ?? 'bg-slate-100 text-slate-700'}`}>
-      {status.replace(/_/g, ' ').toLowerCase()}
+    <span className={`badge ${STATUS_STYLES[status] ?? 'bg-slate-100 text-slate-700'}`}>
+      {label}
     </span>
   );
 }

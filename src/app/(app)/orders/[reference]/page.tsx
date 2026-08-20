@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/session';
@@ -18,6 +19,8 @@ export default async function OrderDetailPage({
   searchParams: Promise<{ status?: string; from?: string }>;
 }) {
   const user = await requireUser();
+  const t = await getTranslations('orderDetail');
+  const locale = await getLocale();
   const { reference } = await params;
   const query = await searchParams;
 
@@ -54,7 +57,7 @@ export default async function OrderDetailPage({
     <>
       <div className="mb-4">
         <Link href={isOwner ? '/orders' : '/finance'} className="text-sm text-slate-500 hover:text-slate-800">
-          ← Back
+          ← {t('back')}
         </Link>
       </div>
 
@@ -63,7 +66,7 @@ export default async function OrderDetailPage({
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge status={order.status} />
-            <span>{formatWeekRange(order.cycle.serviceWeekStart)}</span>
+            <span>{formatWeekRange(order.cycle.serviceWeekStart, locale)}</span>
             {!isOwner ? <span>· {order.user.name}</span> : null}
           </span>
         }
@@ -71,23 +74,18 @@ export default async function OrderDetailPage({
 
       {query.status === 'confirmed' ? (
         <div className="mb-6">
-          <Alert tone="success">
-            Order confirmed — there is nothing to pay for this week.
-          </Alert>
+          <Alert tone="success">{t('orderConfirmed')}</Alert>
         </div>
       ) : null}
 
       {awaiting ? (
         <div className="mb-6">
           <Alert tone="warning">
-            <p>
-              We are waiting for your payment of <strong>{formatSen(order.netSen)}</strong> to be
-              confirmed. This usually takes a few seconds — refresh the page shortly.
-            </p>
+            <p>{t('awaitingPayment', { amount: formatSen(order.netSen) })}</p>
             {latestPayment?.checkoutUrl ? (
               <p className="mt-2">
                 <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
-                  Continue to payment
+                  {t('continueToPayment')}
                 </a>
               </p>
             ) : null}
@@ -98,18 +96,19 @@ export default async function OrderDetailPage({
       {order.status === 'CANCELLED' ? (
         <div className="mb-6">
           <Alert tone="error">
-            This order was cancelled{order.cancelReason ? `: ${order.cancelReason}` : '.'}
+            {t('cancelled')}
+            {order.cancelReason ? `: ${order.cancelReason}` : '.'}
           </Alert>
         </div>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <Section title="Meals" description={`${order.items.length} line item(s)`}>
+        <Section title={t('meals')} description={t('lineItems', { count: order.items.length })}>
           <div className="divide-y divide-slate-100">
             {[...byDay.entries()].map(([dateKey, items]) => (
               <div key={dateKey} className="px-5 py-3">
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {formatDate(items[0].serviceDate, 'weekday')} · {formatDate(items[0].serviceDate, 'long')}
+                  {formatDate(items[0].serviceDate, 'weekday', locale)} · {formatDate(items[0].serviceDate, 'long', locale)}
                 </div>
                 <ul className="space-y-1">
                   {items.map((item) => (
@@ -123,7 +122,7 @@ export default async function OrderDetailPage({
                         <div className="tabular-nums text-slate-900">{formatSen(item.netSen)}</div>
                         {showSubsidy && item.subsidySen > 0 ? (
                           <div className="text-xs tabular-nums text-emerald-700">
-                            {formatSen(item.grossSen)} − {formatSen(item.subsidySen)} subsidy
+                            {formatSen(item.grossSen)} − {formatSen(item.subsidySen)} {t('subsidyInline')}
                           </div>
                         ) : null}
                       </div>
@@ -136,20 +135,31 @@ export default async function OrderDetailPage({
         </Section>
 
         <div className="space-y-4">
-          <Section title="Summary">
+          <Section title={t('summary')}>
             <dl className="divide-y divide-slate-100 text-sm">
-              {showSubsidy ? <Row label="Food total" value={formatSen(order.grossSen)} /> : null}
+              {showSubsidy ? <Row label={t('foodTotal')} value={formatSen(order.grossSen)} /> : null}
               {showSubsidy ? (
-                <Row label="Company subsidy" value={`− ${formatSen(order.subsidySen)}`} tone="positive" />
+                <Row
+                  label={t('companySubsidy')}
+                  value={`− ${formatSen(order.subsidySen)}`}
+                  tone="positive"
+                />
               ) : null}
-              <Row label={isOwner ? 'You pay' : 'Staff pays'} value={formatSen(order.netSen)} strong />
-              <Row label="Submitted" value={order.submittedAt ? formatDateTime(order.submittedAt) : '—'} />
-              <Row label="Paid" value={order.paidAt ? formatDateTime(order.paidAt) : '—'} />
+              <Row
+                label={isOwner ? t('youPay') : t('staffPays')}
+                value={formatSen(order.netSen)}
+                strong
+              />
+              <Row
+                label={t('submitted')}
+                value={order.submittedAt ? formatDateTime(order.submittedAt, locale) : '—'}
+              />
+              <Row label={t('paid')} value={order.paidAt ? formatDateTime(order.paidAt, locale) : '—'} />
             </dl>
           </Section>
 
           {order.payments.length > 0 ? (
-            <Section title="Payments">
+            <Section title={t('payments')}>
               <div className="divide-y divide-slate-100 text-sm">
                 {order.payments.map((p) => (
                   <div key={p.id} className="px-5 py-3">
@@ -158,12 +168,12 @@ export default async function OrderDetailPage({
                       <span className="tabular-nums text-slate-900">{formatSen(p.amountSen)}</span>
                     </div>
                     <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-                      <div>{formatDateTime(p.createdAt)}</div>
-                      {p.paymentMethod ? <div>via {p.paymentMethod}</div> : null}
+                      <div>{formatDateTime(p.createdAt, locale)}</div>
+                      {p.paymentMethod ? <div>{t('via', { method: p.paymentMethod })}</div> : null}
                       {p.paymentId ? (
                         // Safe to show: it is the payer's own reference, and
                         // Finance needs it to reconcile.
-                        <div className="font-mono">Ref {p.paymentId}</div>
+                        <div className="font-mono">{t('ref', { id: p.paymentId })}</div>
                       ) : null}
                       {p.failureReason ? <div className="text-red-600">{p.failureReason}</div> : null}
                     </div>
@@ -174,11 +184,11 @@ export default async function OrderDetailPage({
           ) : null}
 
           {!isOwner ? (
-            <Section title="Employee">
+            <Section title={t('employee')}>
               <dl className="divide-y divide-slate-100 text-sm">
-                <Row label="Name" value={order.user.name} />
-                <Row label="Staff ID" value={order.user.staffId ?? '—'} />
-                <Row label="Department" value={order.user.department ?? '—'} />
+                <Row label={t('name')} value={order.user.name} />
+                <Row label={t('staffId')} value={order.user.staffId ?? '—'} />
+                <Row label={t('department')} value={order.user.department ?? '—'} />
               </dl>
             </Section>
           ) : null}

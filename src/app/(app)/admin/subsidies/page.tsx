@@ -1,3 +1,5 @@
+import { getLocale, getTranslations } from 'next-intl/server';
+
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { describeRule } from '@/lib/subsidy';
@@ -10,14 +12,17 @@ import { AddRuleButton, EditRuleDialog } from './rule-form';
 
 export const dynamic = 'force-dynamic';
 
-const TYPE_LABEL = {
-  PERCENTAGE: 'Percentage',
-  FIXED_PER_ITEM: 'Per item',
-  FIXED_PER_DAY: 'Daily cap',
-} as const;
-
 export default async function SubsidiesPage() {
   await requireCapability('subsidy:manage');
+  const t = await getTranslations('subsidiesAdmin');
+  const c = await getTranslations('adminCommon');
+  const locale = await getLocale();
+
+  const TYPE_LABEL = {
+    PERCENTAGE: t('typePercentage'),
+    FIXED_PER_ITEM: t('typePerItem'),
+    FIXED_PER_DAY: t('typeDailyCap'),
+  } as const;
 
   const rules = await prisma.subsidyRule.findMany({
     orderBy: [{ active: 'desc' }, { priority: 'desc' }, { name: 'asc' }],
@@ -35,25 +40,19 @@ export default async function SubsidiesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Company subsidies"
-        subtitle="What MR DIY contributes towards each meal. Staff only ever see the price they pay."
-        action={<AddRuleButton departments={departments} />}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddRuleButton departments={departments} />} />
 
       {activeCount === 0 ? (
         <div className="mb-6">
-          <Alert tone="warning">
-            No active subsidy rules — staff currently pay the full menu price.
-          </Alert>
+          <Alert tone="warning">{t('noActiveRules')}</Alert>
         </div>
       ) : null}
 
-      <Section title="Rules" description={`${activeCount} active of ${rules.length}`}>
+      <Section title={t('rules')} description={t('activeOfTotal', { active: activeCount, total: rules.length })}>
           {rules.length === 0 ? (
           <EmptyState
-            title="No subsidy rules"
-            hint="Add one — for example RM 5.00 off each meal for everyone."
+            title={t('noRules')}
+            hint={t('noRulesHint')}
             action={<AddRuleButton departments={departments} />}
           />
           ) : (
@@ -61,13 +60,13 @@ export default async function SubsidiesPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Rule</th>
-                    <th>Type</th>
-                    <th>Benefit</th>
-                    <th>Applies to</th>
-                    <th className="num">Priority</th>
-                    <th>Window</th>
-                    <th>Status</th>
+                    <th>{t('rule')}</th>
+                    <th>{t('type')}</th>
+                    <th>{t('benefit')}</th>
+                    <th>{t('appliesTo')}</th>
+                    <th className="num">{t('priority')}</th>
+                    <th>{t('window')}</th>
+                    <th>{c('status')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -78,15 +77,15 @@ export default async function SubsidiesPage() {
                       <td className="text-slate-600">{TYPE_LABEL[r.type]}</td>
                       <td className="text-slate-900">{describeRule(r)}</td>
                       <td className="text-slate-600">
-                        {r.scope === 'ALL' ? 'Everyone' : (r.department ?? '—')}
+                        {r.scope === 'ALL' ? t('everyone') : (r.department ?? '—')}
                       </td>
-                      <td className="num text-slate-600">{r.priority}</td>
+                      <td className="num text-slate-600 text-left">{r.priority}</td>
                       <td className="text-xs text-slate-500">
                         {r.effectiveFrom || r.effectiveTo
-                          ? `${r.effectiveFrom ? formatDate(r.effectiveFrom, 'long') : 'any'} → ${
-                              r.effectiveTo ? formatDate(r.effectiveTo, 'long') : 'open'
+                          ? `${r.effectiveFrom ? formatDate(r.effectiveFrom, 'long', locale) : t('windowAny')} → ${
+                              r.effectiveTo ? formatDate(r.effectiveTo, 'long', locale) : t('windowOpen')
                             }`
-                          : 'Always'}
+                          : t('windowAlways')}
                       </td>
                       <td>
                         <span
@@ -94,7 +93,7 @@ export default async function SubsidiesPage() {
                             r.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
                           }`}
                         >
-                          {r.active ? 'Active' : 'Inactive'}
+                          {r.active ? c('active') : c('inactive')}
                         </span>
                       </td>
                       <td>
@@ -116,14 +115,14 @@ export default async function SubsidiesPage() {
                           />
                           <form action={toggleSubsidyRule}>
                             <input type="hidden" name="id" value={r.id} />
-                            <InlineSubmit label={r.active ? 'Disable' : 'Enable'} />
+                            <InlineSubmit label={r.active ? c('disable') : c('enable')} />
                           </form>
                           <form action={deleteSubsidyRule}>
                             <input type="hidden" name="id" value={r.id} />
                             <InlineSubmit
-                              label="Delete"
+                              label={c('delete')}
                               variant="danger"
-                              confirm={`Delete "${r.name}"? Orders already paid are unaffected.`}
+                              confirm={t('deleteConfirm', { name: r.name })}
                             />
                           </form>
                         </div>

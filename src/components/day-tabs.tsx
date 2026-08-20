@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, useTransition } from 'react';
 
 export type DayTab = {
@@ -40,6 +41,7 @@ export function DayTabs({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const t = useTranslations('common');
   const [isPending, startTransition] = useTransition();
   const [optimistic, setOptimistic] = useState(active);
 
@@ -57,7 +59,7 @@ export function DayTabs({
   return (
     <div
       role="tablist"
-      aria-label="Service days"
+      aria-label={t('serviceDaysAriaLabel')}
       className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((tab) => {
@@ -128,9 +130,10 @@ export function DayTabs({
 }
 
 function Spinner() {
+  const t = useTranslations('common');
   return (
     <span
-      aria-label="Loading"
+      aria-label={t('loadingAriaLabel')}
       className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600"
     />
   );

@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { formatSen } from '@/lib/money';
 import {
-  CYCLE_PHASE_LABEL,
   addWeeks,
   cyclePhase,
   dateOnly,
@@ -36,6 +36,8 @@ export default async function CycleDetailPage({
   await requireCapability('menu:plan');
   const { id } = await params;
   const { day: requestedDay } = await searchParams;
+  const t = await getTranslations('cyclesAdmin');
+  const locale = await getLocale();
 
   const cycle = await prisma.menuCycle.findUnique({ where: { id } });
   if (!cycle) notFound();
@@ -62,8 +64,11 @@ export default async function CycleDetailPage({
     prisma.order.count({
       where: { cycleId: id, status: { in: ['AWAITING_PAYMENT', 'PAID'] } },
     }),
-    prisma.menuCycle.findUnique({
-      where: { serviceWeekStart: addWeeks(dateOnly(cycle.serviceWeekStart), -1) },
+    prisma.menuCycle.findFirst({
+      where: {
+        serviceWeekStart: addWeeks(dateOnly(cycle.serviceWeekStart), -1),
+        status: { not: 'CANCELLED' },
+      },
       select: { id: true },
     }),
   ]);
@@ -72,19 +77,19 @@ export default async function CycleDetailPage({
     <>
       <div className="mb-4">
         <Link href="/admin/cycles" className="text-sm text-slate-500 hover:text-slate-800">
-          ← All weekly menus
+          {t('allWeeklyMenus')}
         </Link>
       </div>
 
       <PageHeader
-        title={formatWeekRange(cycle.serviceWeekStart)}
+        title={formatWeekRange(cycle.serviceWeekStart, locale)}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
-            <PhaseBadge phase={phase} label={CYCLE_PHASE_LABEL[phase]} />
+            <PhaseBadge phase={phase} />
             {cycle.title ? <span>{cycle.title}</span> : null}
             {phase === 'OPEN' ? (
               <span className="font-medium text-emerald-700">
-                Cutoff {timeUntil(cycle.orderCutoffAt)}
+                {t('cutoffIn', { time: timeUntil(cycle.orderCutoffAt) })}
               </span>
             ) : null}
           </span>
@@ -94,7 +99,7 @@ export default async function CycleDetailPage({
             {editable && previousWeek ? (
               <form action={copyPreviousWeek}>
                 <input type="hidden" name="id" value={cycle.id} />
-                <InlineSubmit label="Copy last week" />
+                <InlineSubmit label={t('copyLastWeek')} />
               </form>
             ) : null}
 
@@ -102,7 +107,7 @@ export default async function CycleDetailPage({
               <form action={publishCycle}>
                 <input type="hidden" name="id" value={cycle.id} />
                 <button type="submit" className="btn-primary btn-sm" disabled={totalItems === 0}>
-                  Publish menu
+                  {t('publishMenu')}
                 </button>
               </form>
             ) : null}
@@ -110,17 +115,14 @@ export default async function CycleDetailPage({
             {cycle.status === 'PUBLISHED' && committedOrders === 0 ? (
               <form action={unpublishCycle}>
                 <input type="hidden" name="id" value={cycle.id} />
-                <InlineSubmit label="Unpublish" confirm="Pull this menu back to draft?" />
+                <InlineSubmit label={t('unpublish')} confirm={t('unpublishConfirm')} />
               </form>
             ) : null}
 
             {cycle.status === 'PUBLISHED' ? (
               <form action={closeCycle}>
                 <input type="hidden" name="id" value={cycle.id} />
-                <InlineSubmit
-                  label="Close ordering now"
-                  confirm="Close ordering early? Unsubmitted carts will be discarded."
-                />
+                <InlineSubmit label={t('closeOrderingNow')} confirm={t('closeOrderingConfirm')} />
               </form>
             ) : null}
 
@@ -128,9 +130,9 @@ export default async function CycleDetailPage({
               <form action={cancelCycle}>
                 <input type="hidden" name="id" value={cycle.id} />
                 <InlineSubmit
-                  label="Cancel week"
+                  label={t('cancelWeek')}
                   variant="danger"
-                  confirm="Cancel this whole week? Paid orders will need manual refunds in HitPay."
+                  confirm={t('cancelWeekConfirm')}
                 />
               </form>
             ) : null}
@@ -144,7 +146,7 @@ export default async function CycleDetailPage({
     return (
       <>
         {header}
-        <Alert tone="warning">This cycle has no service days. Recreate it from the cycles list.</Alert>
+        <Alert tone="warning">{t('noServiceDays')}</Alert>
       </>
     );
   }
@@ -155,8 +157,8 @@ export default async function CycleDetailPage({
 
   const tabs: DayTab[] = days.map((d) => ({
     key: toDateKey(d.serviceDate),
-    label: formatDate(d.serviceDate, 'weekday').slice(0, 3),
-    sublabel: formatDate(d.serviceDate),
+    label: formatDate(d.serviceDate, 'weekday', locale).slice(0, 3),
+    sublabel: formatDate(d.serviceDate, undefined, locale),
     badge: d._count.items || null,
     muted: d._count.items === 0,
   }));
@@ -211,34 +213,36 @@ export default async function CycleDetailPage({
 
       <div className="mb-6 space-y-3">
         {editable && totalItems === 0 ? (
-          <Alert>Add at least one dish before this menu can be published.</Alert>
+          <Alert>{t('addDishBeforePublish')}</Alert>
         ) : null}
 
         {editable && totalItems > 0 && emptyDays.length > 0 ? (
           <Alert tone="warning">
-            Nothing planned for{' '}
-            {emptyDays.map((d) => formatDate(d.serviceDate, 'weekday')).join(', ')}. Staff will see
-            those days as unavailable.
+            {t('nothingPlannedFor', {
+              days: emptyDays.map((d) => formatDate(d.serviceDate, 'weekday', locale)).join(', '),
+            })}
           </Alert>
         ) : null}
 
         {!editable ? (
           <Alert tone="info">
-            This menu is {cycle.status.toLowerCase()}. Dishes and prices are locked
-            {committedOrders > 0 ? ` — ${committedOrders} order(s) already committed.` : '.'}
+            {t('menuLockedNotice', {
+              status: cycle.status.toLowerCase(),
+              committed: committedOrders > 0 ? t('ordersAlreadyCommitted', { count: committedOrders }) : '.',
+            })}
           </Alert>
         ) : null}
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Dishes planned" value={totalItems} hint={`across ${days.length} days`} />
-        <Stat label="Paid orders" value={orderStats._count._all} hint={`${committedOrders} committed`} />
-        <Stat label="Staff pays" value={formatSen(orderStats._sum.netSen ?? 0)} />
+        <Stat label={t('dishesPlanned')} value={totalItems} hint={t('acrossDays', { count: days.length })} />
+        <Stat label={t('paidOrders')} value={orderStats._count._all} hint={t('committedCount', { count: committedOrders })} />
+        <Stat label={t('staffPays')} value={formatSen(orderStats._sum.netSen ?? 0)} />
         <Stat
-          label="Company subsidy"
+          label={t('companySubsidy')}
           value={formatSen(orderStats._sum.subsidySen ?? 0)}
           tone="positive"
-          hint={`of ${formatSen(orderStats._sum.grossSen ?? 0)} gross`}
+          hint={t('ofGross', { amount: formatSen(orderStats._sum.grossSen ?? 0) })}
         />
       </div>
 
@@ -246,7 +250,7 @@ export default async function CycleDetailPage({
         <DayPlanner
           tabs={tabs}
           activeDay={activeDayKey}
-          dayHeading={formatDate(activeDay.serviceDate, 'full')}
+          dayHeading={formatDate(activeDay.serviceDate, 'full', locale)}
           menuDayId={activeDay.id}
           items={items}
           dishes={dishOptions}
@@ -254,7 +258,7 @@ export default async function CycleDetailPage({
         />
 
         <div className="space-y-4">
-          <Section title="Schedule">
+          <Section title={t('schedule')}>
             <div className="p-5">
               <ScheduleForm
                 cycleId={cycle.id}
@@ -267,13 +271,13 @@ export default async function CycleDetailPage({
             </div>
           </Section>
 
-          <Section title="Timeline">
+          <Section title={t('timeline')}>
             <dl className="divide-y divide-slate-100 text-sm">
-              <Row label="Ordering opens" value={formatDateTime(cycle.orderOpenAt)} />
-              <Row label="Ordering closes" value={formatDateTime(cycle.orderCutoffAt)} />
-              <Row label="First service day" value={formatDate(days[0].serviceDate, 'long')} />
-              <Row label="Published" value={cycle.publishedAt ? formatDateTime(cycle.publishedAt) : 'Not yet'} />
-              <Row label="Closed" value={cycle.closedAt ? formatDateTime(cycle.closedAt) : '—'} />
+              <Row label={t('orderingOpens')} value={formatDateTime(cycle.orderOpenAt, locale)} />
+              <Row label={t('orderingCloses')} value={formatDateTime(cycle.orderCutoffAt, locale)} />
+              <Row label={t('firstServiceDay')} value={formatDate(days[0].serviceDate, 'long', locale)} />
+              <Row label={t('published')} value={cycle.publishedAt ? formatDateTime(cycle.publishedAt, locale) : t('notYet')} />
+              <Row label={t('closed')} value={cycle.closedAt ? formatDateTime(cycle.closedAt, locale) : '—'} />
             </dl>
           </Section>
         </div>

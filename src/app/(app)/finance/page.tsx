@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -20,13 +21,15 @@ export default async function FinancePage({
 }) {
   const user = await requireCapability('finance:view');
   const params = await searchParams;
+  const t = await getTranslations('financeAdmin');
+  const locale = await getLocale();
 
   const requested = Number.parseInt(params.weeks ?? '', 10);
   const weeks = (RANGES as readonly number[]).includes(requested) ? requested : 12;
   const window = trailingWeeks(weeks);
 
   const [weekly, departments, pending, recentPayments, failedCount] = await Promise.all([
-    weeklyTotals(window),
+    weeklyTotals(window, locale),
     departmentBreakdown(window),
     prisma.order.aggregate({
       where: { status: 'AWAITING_PAYMENT' },
@@ -62,68 +65,58 @@ export default async function FinancePage({
       <select name="weeks" defaultValue={String(weeks)} className="input !w-32 !py-1 text-xs">
         {RANGES.map((r) => (
           <option key={r} value={r}>
-            Last {r} weeks
+            {t('lastNWeeks', { count: r })}
           </option>
         ))}
       </select>
       <button type="submit" className="btn-secondary btn-sm">
-        Apply
+        {t('apply')}
       </button>
     </form>
   );
 
   return (
     <>
-      <PageHeader
-        title="Finance"
-        subtitle={`Meal spend, company subsidy cost and HitPay reconciliation over the last ${weeks} weeks.`}
-        action={rangeSwitcher}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle', { weeks })} action={rangeSwitcher} />
 
       <div className="mb-6 space-y-3">
         {!hitpayConfigured() ? (
           <Alert tone="warning">
-            HitPay is not configured, so staff cannot pay online. Add <code>HITPAY_API_KEY</code> and{' '}
-            <code>HITPAY_SALT</code> to the environment.
+            {t('hitpayNotConfigured', { apiKey: 'HITPAY_API_KEY', salt: 'HITPAY_SALT' })}
           </Alert>
         ) : null}
 
-        {exportable ? (
-          <Alert tone="info">
-            Exports include employee names and staff IDs. Keep them on approved systems and share only
-            within Finance and HR.
-          </Alert>
-        ) : null}
+        {exportable ? <Alert tone="info">{t('exportWarning')}</Alert> : null}
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Food value" value={formatSen(gross)} hint={`${orders} paid orders`} />
+        <Stat label={t('foodValue')} value={formatSen(gross)} hint={t('paidOrdersHint', { count: orders })} />
         <Stat
-          label="Company subsidy cost"
+          label={t('companySubsidyCost')}
           value={formatSen(subsidy)}
           tone="positive"
-          hint={gross ? `${Math.round((subsidy / gross) * 100)}% of food value` : undefined}
+          hint={gross ? t('percentOfFoodValue', { percent: Math.round((subsidy / gross) * 100) }) : undefined}
         />
-        <Stat label="Collected from staff" value={formatSen(net)} hint="via HitPay" />
+        <Stat label={t('collectedFromStaff')} value={formatSen(net)} hint={t('viaHitpay')} />
         <Stat
-          label="Awaiting payment"
+          label={t('awaitingPayment')}
           value={formatSen(pending._sum.netSen ?? 0)}
           tone={pending._count._all > 0 ? 'warning' : 'default'}
-          hint={`${pending._count._all} order(s) not settled`}
+          hint={t('ordersNotSettled', { count: pending._count._all })}
         />
       </div>
 
       {weekly.length === 0 ? (
-        <EmptyState title="No service weeks in this range" hint="Try a longer range." />
+        <EmptyState title={t('noWeeksInRange')} hint={t('tryLongerRange')} />
       ) : (
         <div className="grid gap-6">
           <Section
-            title="By service week"
-            description="Paid orders only"
+            title={t('byServiceWeek')}
+            description={t('paidOrdersOnly')}
             action={
               exportable ? (
                 <a href={`/api/exports/subsidy?weeks=${weeks}`} className="btn-secondary btn-sm">
-                  Export summary CSV
+                  {t('exportSummaryCsv')}
                 </a>
               ) : null
             }
@@ -132,14 +125,14 @@ export default async function FinancePage({
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Service week</th>
-                    <th>Status</th>
-                    <th className="num">Orders</th>
-                    <th className="num">Meals</th>
-                    <th className="num">Food value</th>
-                    <th className="num">Company pays</th>
-                    <th className="num">Staff pays</th>
-                    <th className="num">Subsidy %</th>
+                    <th>{t('serviceWeek')}</th>
+                    <th>{t('status')}</th>
+                    <th className="num">{t('orders')}</th>
+                    <th className="num">{t('meals')}</th>
+                    <th className="num">{t('foodValue')}</th>
+                    <th className="num">{t('companyPays')}</th>
+                    <th className="num">{t('staffPays')}</th>
+                    <th className="num">{t('subsidyPercent')}</th>
                     {exportable ? <th /> : null}
                   </tr>
                 </thead>
@@ -148,22 +141,22 @@ export default async function FinancePage({
                     <tr key={w.cycleId}>
                       <td className="font-medium text-slate-900">{w.label}</td>
                       <td className="text-xs text-slate-500">{w.status}</td>
-                      <td className="num text-slate-600">{w.orders}</td>
-                      <td className="num text-slate-600">{w.meals}</td>
-                      <td className="num text-slate-900">{formatSen(w.grossSen)}</td>
-                      <td className="num text-emerald-700">{formatSen(w.subsidySen)}</td>
-                      <td className="num text-slate-900">{formatSen(w.netSen)}</td>
-                      <td className="num text-slate-600">
+                      <td className="num text-slate-600 text-left">{w.orders}</td>
+                      <td className="num text-slate-600 text-left">{w.meals}</td>
+                      <td className="num text-slate-900 text-left">{formatSen(w.grossSen)}</td>
+                      <td className="num text-emerald-700 text-left">{formatSen(w.subsidySen)}</td>
+                      <td className="num text-slate-900 text-left">{formatSen(w.netSen)}</td>
+                      <td className="num text-slate-600 text-left">
                         {w.grossSen ? `${Math.round((w.subsidySen / w.grossSen) * 100)}%` : '—'}
                       </td>
                       {exportable ? (
                         <td>
                           <div className="flex justify-end gap-1.5">
                             <a href={`/api/exports/orders?cycle=${w.cycleId}`} className="btn-secondary btn-sm">
-                              Orders
+                              {t('ordersColumn')}
                             </a>
                             <a href={`/api/exports/payments?cycle=${w.cycleId}`} className="btn-secondary btn-sm">
-                              Payments
+                              {t('paymentsColumn')}
                             </a>
                           </div>
                         </td>
@@ -176,26 +169,26 @@ export default async function FinancePage({
           </Section>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <Section title="Subsidy cost by department" description="Where the company contribution goes">
+            <Section title={t('subsidyByDepartment')} description={t('subsidyByDepartmentDesc')}>
               <div className="overflow-x-auto">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Department</th>
-                      <th className="num">People</th>
-                      <th className="num">Orders</th>
-                      <th className="num">Company pays</th>
-                      <th className="num">Staff pays</th>
+                      <th>{t('department')}</th>
+                      <th className="num">{t('people')}</th>
+                      <th className="num">{t('orders')}</th>
+                      <th className="num">{t('companyPays')}</th>
+                      <th className="num">{t('staffPays')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {departments.map((d) => (
                       <tr key={d.department}>
                         <td className="font-medium text-slate-900">{d.department}</td>
-                        <td className="num text-slate-600">{d.people}</td>
-                        <td className="num text-slate-600">{d.orders}</td>
-                        <td className="num text-emerald-700">{formatSen(d.subsidySen)}</td>
-                        <td className="num text-slate-900">{formatSen(d.netSen)}</td>
+                        <td className="num text-slate-600 text-left">{d.people}</td>
+                        <td className="num text-slate-600 text-left">{d.orders}</td>
+                        <td className="num text-emerald-700 text-left">{formatSen(d.subsidySen)}</td>
+                        <td className="num text-slate-900 text-left">{formatSen(d.netSen)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -204,28 +197,28 @@ export default async function FinancePage({
             </Section>
 
             <Section
-              title="Recent HitPay activity"
-              description={failedCount > 0 ? `${failedCount} failed attempt(s) on record` : 'Last 15 transactions'}
+              title={t('recentActivity')}
+              description={failedCount > 0 ? t('failedAttempts', { count: failedCount }) : t('last15Transactions')}
               action={
                 exportable ? (
                   <a href="/api/exports/payments" className="btn-secondary btn-sm">
-                    Export all
+                    {t('exportAll')}
                   </a>
                 ) : null
               }
             >
               {recentPayments.length === 0 ? (
-                <EmptyState title="No payments yet" />
+                <EmptyState title={t('noPaymentsYet')} />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>Reference</th>
-                        <th>Employee</th>
-                        <th className="num">Amount</th>
-                        <th>Status</th>
-                        <th>When</th>
+                        <th>{t('reference')}</th>
+                        <th>{t('employee')}</th>
+                        <th className="num">{t('amount')}</th>
+                        <th>{t('status')}</th>
+                        <th>{t('when')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -239,7 +232,7 @@ export default async function FinancePage({
                               {p.order.reference}
                             </Link>
                             <div className="text-xs text-slate-400">
-                              {formatWeekRange(p.order.cycle.serviceWeekStart)}
+                              {formatWeekRange(p.order.cycle.serviceWeekStart, locale)}
                             </div>
                           </td>
                           <td className="text-slate-700">
@@ -248,14 +241,14 @@ export default async function FinancePage({
                               <div className="text-xs text-slate-400">{p.order.user.staffId}</div>
                             ) : null}
                           </td>
-                          <td className="num text-slate-900">{formatSen(p.amountSen)}</td>
+                          <td className="num text-slate-900 text-left">{formatSen(p.amountSen)}</td>
                           <td>
                             <StatusBadge status={p.status} />
                             {p.failureReason ? (
                               <div className="mt-0.5 text-xs text-red-600">{p.failureReason}</div>
                             ) : null}
                           </td>
-                          <td className="text-xs text-slate-500">{formatDateTime(p.createdAt)}</td>
+                          <td className="text-xs text-slate-500">{formatDateTime(p.createdAt, locale)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -268,10 +261,7 @@ export default async function FinancePage({
       )}
 
       {latestCycle && exportable ? (
-        <p className="mt-6 text-xs text-slate-500">
-          Tip: the per-week <strong>Orders</strong> export is the file to hand to payroll or to
-          reconcile against a HitPay settlement report.
-        </p>
+        <p className="mt-6 text-xs text-slate-500">{t('tip')}</p>
       ) : null}
     </>
   );

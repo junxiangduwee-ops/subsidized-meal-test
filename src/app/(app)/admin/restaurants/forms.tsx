@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Dialog } from '@/components/dialog';
 import { ActionForm } from '@/components/action-form';
 
@@ -16,30 +18,32 @@ type RestaurantFields = {
 };
 
 function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
+  const t = useTranslations('restaurantsAdmin');
+  const c = useTranslations('adminCommon');
   return (
     <>
       <div>
-        <label className="label">Name</label>
+        <label className="label">{c('name')}</label>
         <input
           name="name"
           required
           defaultValue={restaurant?.name}
           className="input"
-          placeholder="Nasi Kandar Pelita"
+          placeholder={t('namePlaceholder')}
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="label">Cuisine</label>
+          <label className="label">{t('cuisine')}</label>
           <input
             name="cuisine"
             defaultValue={restaurant?.cuisine ?? ''}
             className="input"
-            placeholder="Mamak"
+            placeholder={t('cuisinePlaceholder')}
           />
         </div>
         <div>
-          <label className="label">Contact</label>
+          <label className="label">{t('contact')}</label>
           <input
             name="contactName"
             defaultValue={restaurant?.contactName ?? ''}
@@ -48,16 +52,16 @@ function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
         </div>
       </div>
       <div>
-        <label className="label">Phone</label>
+        <label className="label">{t('phone')}</label>
         <input
           name="contactPhone"
           defaultValue={restaurant?.contactPhone ?? ''}
           className="input"
-          placeholder="03-1234 5678"
+          placeholder={t('phonePlaceholder')}
         />
       </div>
       <div>
-        <label className="label">Description</label>
+        <label className="label">{t('description')}</label>
         <textarea
           name="description"
           rows={2}
@@ -66,7 +70,7 @@ function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
         />
       </div>
       <div>
-        <label className="label">Address</label>
+        <label className="label">{t('address')}</label>
         <textarea
           name="address"
           rows={2}
@@ -79,19 +83,20 @@ function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
 }
 
 export function AddRestaurantButton() {
+  const t = useTranslations('restaurantsAdmin');
   return (
     <Dialog
-      title="Add a restaurant"
+      title={t('addARestaurant')}
       trigger={(open) => (
         <button type="button" className="btn-primary" onClick={open}>
-          Add restaurant
+          {t('addRestaurant')}
         </button>
       )}
     >
       {(close) => (
         <ActionForm
           action={createRestaurant}
-          submitLabel="Add restaurant"
+          submitLabel={t('addRestaurant')}
           className="space-y-3"
           onSuccess={close}
         >
@@ -103,19 +108,21 @@ export function AddRestaurantButton() {
 }
 
 export function EditRestaurantDialog({ restaurant }: { restaurant: RestaurantFields }) {
+  const t = useTranslations('restaurantsAdmin');
+  const c = useTranslations('adminCommon');
   return (
     <Dialog
-      title={`Edit ${restaurant.name}`}
+      title={t('editRestaurant', { name: restaurant.name })}
       trigger={(open) => (
         <button type="button" className="btn-secondary btn-sm" onClick={open}>
-          Edit
+          {c('edit')}
         </button>
       )}
     >
       {(close) => (
         <ActionForm
           action={updateRestaurant}
-          submitLabel="Save changes"
+          submitLabel={c('saveChanges')}
           resetOnSuccess={false}
           className="space-y-3"
           onSuccess={close}

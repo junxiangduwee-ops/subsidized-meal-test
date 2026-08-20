@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -19,6 +20,8 @@ export default async function MenuPage({
   searchParams: Promise<{ day?: string }>;
 }) {
   const user = await requireCapability('order:place');
+  const t = await getTranslations('menu');
+  const locale = await getLocale();
   const { day: requestedDay } = await searchParams;
   const now = new Date();
 
@@ -36,19 +39,20 @@ export default async function MenuPage({
 
     return (
       <>
-        <PageHeader title="Next week's menu" />
+        <PageHeader title={t('nextWeeksMenu')} />
         <EmptyState
-          title="Ordering is closed right now"
+          title={t('closedTitle')}
           hint={
             upcoming
-              ? `The menu for ${formatWeekRange(upcoming.serviceWeekStart)} opens on ${formatDateTime(
-                  upcoming.orderOpenAt,
-                )}.`
-              : 'Ordering opens on Monday and closes Wednesday at 5:00 pm for the following week.'
+              ? t('closedHintWithUpcoming', {
+                  week: formatWeekRange(upcoming.serviceWeekStart, locale),
+                  date: formatDateTime(upcoming.orderOpenAt, locale),
+                })
+              : t('closedHintDefault')
           }
           action={
             <Link href="/orders" className="btn-secondary">
-              View my past orders
+              {t('viewPastOrders')}
             </Link>
           }
         />
@@ -56,14 +60,30 @@ export default async function MenuPage({
     );
   }
 
-  // The cart is created on first add, not on first view, so browsing does
-  // not litter the table with empty orders.
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId: user.id, cycleId: cycle.id } },
+  // A person may have several orders for this cycle - the open cart, plus
+  // any earlier ones they already paid for. Pulling all of them, rather than
+  // assuming there is exactly one, is what lets a paid Mon-Wed order sit
+  // alongside an untouched Thu/Fri instead of locking the whole week.
+  const orders = await prisma.order.findMany({
+    where: { userId: user.id, cycleId: cycle.id },
     include: { items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] } },
+    orderBy: { createdAt: 'asc' },
   });
 
-  const submitted = Boolean(order && order.status !== 'CART');
+  const deliverySites = await prisma.deliverySite.findMany({
+    where: { active: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
+
+  // The cart is created on first add, not on first view, so browsing alone
+  // does not litter the table with empty orders.
+  const cart = orders.find((o) => o.status === 'CART');
+  const settledOrders = orders.filter((o) => o.status !== 'CART');
+
+  const orderItems = orders.flatMap((o) =>
+    o.items.map((item) => ({ ...item, orderStatus: o.status, orderReference: o.reference })),
+  );
 
   // Day tabs: dates and per-day dish counts only - not the dishes themselves.
   const days = await prisma.menuDay.findMany({
@@ -72,18 +92,48 @@ export default async function MenuPage({
     select: { id: true, serviceDate: true, _count: { select: { items: true } } },
   });
 
+  if (days.length === 0) {
+    return (
+      <>
+        <PageHeader
+          title={t('title', { range: formatWeekRange(cycle.serviceWeekStart, locale) })}
+          action={
+            <Link href="/orders" className="btn-secondary">
+              {t('myOrdersLink')}
+            </Link>
+          }
+        />
+        <EmptyState title={t('noDays')} />
+      </>
+    );
+  }
+
+  // Per-day state, derived from every order rather than one. A day is
+  // "locked" once a submitted (non-CART) order already has an item for it -
+  // that item is paid for and done. A day with no item at all is always
+  // still open, regardless of how many other days are locked.
+  const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
+  const lockedDayKeys = new Set(
+    orderItems.filter((item) => item.orderStatus !== 'CART').map((item) => toDateKey(item.serviceDate)),
+  );
+  const chosenDayKeys = new Set(orderItems.map((item) => toDateKey(item.serviceDate)));
+
+  const allOrderableDaysLocked = days
+    .filter((d) => d._count.items > 0)
+    .every((d) => lockedDayKeys.has(toDateKey(d.serviceDate)));
+
   const header = (
     <PageHeader
-      title={`Menu for ${formatWeekRange(cycle.serviceWeekStart)}`}
+      title={t('title', { range: formatWeekRange(cycle.serviceWeekStart, locale) })}
       subtitle={
         <span className="flex flex-wrap items-center gap-2">
-          {submitted ? (
-            <span className="badge bg-emerald-100 text-emerald-800">Order placed</span>
+          {allOrderableDaysLocked ? (
+            <span className="badge bg-emerald-100 text-emerald-800">{t('orderPlaced')}</span>
           ) : (
             <>
-              <span className="badge bg-emerald-100 text-emerald-800">Ordering open</span>
+              <span className="badge bg-emerald-100 text-emerald-800">{t('orderingOpen')}</span>
               <span>
-                Closes {formatDateTime(cycle.orderCutoffAt)} ·{' '}
+                {t('closes', { date: formatDateTime(cycle.orderCutoffAt, locale) })} ·{' '}
                 <span className="font-medium text-slate-700">{timeUntil(cycle.orderCutoffAt)}</span>
               </span>
             </>
@@ -92,39 +142,27 @@ export default async function MenuPage({
       }
       action={
         <Link href="/orders" className="btn-secondary">
-          My orders
+          {t('myOrdersLink')}
         </Link>
       }
     />
   );
 
-  if (days.length === 0) {
-    return (
-      <>
-        {header}
-        <EmptyState title="No days have been set up for this week yet" />
-      </>
-    );
-  }
-
-  const orderItems = order?.items ?? [];
-  const chosenDays = new Set(orderItems.map((item) => toDateKey(item.serviceDate)));
-  const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
-
-  // Honour ?day= when it names a real day, otherwise open the first day that
-  // has dishes - or, once submitted, the first day they actually ordered.
+  // Honour ?day= when it names a real day, otherwise land on the first day
+  // that still needs a choice, or failing that the first day with dishes.
   const fallback =
-    (submitted ? days.find((d) => chosenDays.has(toDateKey(d.serviceDate))) : undefined) ??
+    days.find((d) => d._count.items > 0 && !lockedDayKeys.has(toDateKey(d.serviceDate))) ??
     days.find((d) => d._count.items > 0) ??
     days[0];
   const activeDay = days.find((d) => toDateKey(d.serviceDate) === requestedDay) ?? fallback;
   const activeDayKey = toDateKey(activeDay.serviceDate);
+  const activeDayLocked = lockedDayKeys.has(activeDayKey);
 
   const tabs: DayTab[] = days.map((d) => ({
     key: toDateKey(d.serviceDate),
-    label: formatDate(d.serviceDate, 'weekday').slice(0, 3),
-    sublabel: formatDate(d.serviceDate),
-    check: chosenDays.has(toDateKey(d.serviceDate)),
+    label: formatDate(d.serviceDate, 'weekday', locale).slice(0, 3),
+    sublabel: formatDate(d.serviceDate, undefined, locale),
+    check: chosenDayKeys.has(toDateKey(d.serviceDate)),
     muted: d._count.items === 0,
   }));
 
@@ -135,12 +173,12 @@ export default async function MenuPage({
     include: { dish: { include: { restaurant: { select: { name: true } } } } },
   });
 
-  // Stock only matters while they can still change their mind.
-  const remaining = submitted
+  // Stock only matters while this specific day can still be changed.
+  const remaining = activeDayLocked
     ? new Map<string, number | null>()
     : await remainingCapacityMap(
         menuItems.map((i) => ({ id: i.id, capacity: i.capacity })),
-        order?.id,
+        cart?.id,
       );
 
   // Employees see their own price, never the list price or the company's
@@ -161,21 +199,21 @@ export default async function MenuPage({
   const cartLines: CartLine[] = orderItems.map((item) => ({
     id: item.id,
     dayKey: toDateKey(item.serviceDate),
-    dayLabel: `${formatDate(item.serviceDate, 'weekday')} · ${formatDate(item.serviceDate)}`,
+    dayLabel: `${formatDate(item.serviceDate, 'weekday', locale)} · ${formatDate(item.serviceDate, undefined, locale)}`,
     dishName: item.dishName,
     netSen: item.netSen,
+    locked: item.orderStatus !== 'CART',
   }));
+
+  const awaitingPayment = settledOrders.some((o) => o.status === 'AWAITING_PAYMENT');
 
   return (
     <>
       {header}
 
-      {submitted && order?.status === 'AWAITING_PAYMENT' ? (
+      {awaitingPayment ? (
         <div className="mb-4">
-          <Alert tone="warning">
-            We are waiting for your payment to be confirmed. Refresh shortly, or open the receipt to
-            continue paying.
-          </Alert>
+          <Alert tone="warning">{t('awaitingPaymentBanner')}</Alert>
         </div>
       ) : null}
 
@@ -183,14 +221,15 @@ export default async function MenuPage({
         cycleId={cycle.id}
         tabs={tabs}
         activeDay={activeDayKey}
-        dayHeading={formatDate(activeDay.serviceDate, 'full')}
+        dayHeading={formatDate(activeDay.serviceDate, 'full', locale)}
         dishes={dishes}
         cartLines={cartLines}
         notes={cycle.notes}
-        totalSen={order?.netSen ?? 0}
-        readOnly={submitted}
-        orderReference={order?.reference}
-        orderStatus={order?.status}
+        totalSen={cart?.netSen ?? 0}
+        readOnly={activeDayLocked}
+        hasSettledOrders={settledOrders.length > 0}
+        deliverySites={deliverySites}
+        selectedDeliverySiteId={cart?.deliverySiteId ?? null}
       />
     </>
   );

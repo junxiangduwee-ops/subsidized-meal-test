@@ -1,3 +1,5 @@
+import { getTranslations } from 'next-intl/server';
+
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
@@ -10,6 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function RestaurantsPage() {
   await requireCapability('catalogue:manage');
+  const t = await getTranslations('restaurantsAdmin');
+  const c = await getTranslations('adminCommon');
 
   const restaurants = await prisma.restaurant.findMany({
     orderBy: [{ active: 'desc' }, { name: 'asc' }],
@@ -18,17 +22,13 @@ export default async function RestaurantsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Restaurants"
-        subtitle="Vendors that supply the weekly staff menu."
-        action={<AddRestaurantButton />}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddRestaurantButton />} />
 
-      <Section title="All restaurants" description={`${restaurants.length} total`}>
+      <Section title={t('allRestaurants')} description={t('totalCount', { count: restaurants.length })}>
         {restaurants.length === 0 ? (
           <EmptyState
-            title="No restaurants yet"
-            hint="Add your first vendor, then create dishes for it."
+            title={t('noRestaurantsYet')}
+            hint={t('noRestaurantsHint')}
             action={<AddRestaurantButton />}
           />
         ) : (
@@ -36,11 +36,11 @@ export default async function RestaurantsPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Cuisine</th>
-                  <th>Contact</th>
-                  <th className="num">Dishes</th>
-                  <th>Status</th>
+                  <th>{c('name')}</th>
+                  <th>{t('cuisine')}</th>
+                  <th>{t('contact')}</th>
+                  <th className="num">{t('dishes')}</th>
+                  <th>{c('status')}</th>
                   <th />
                 </tr>
               </thead>
@@ -60,7 +60,7 @@ export default async function RestaurantsPage() {
                         <div className="text-xs text-slate-400">{r.contactPhone}</div>
                       ) : null}
                     </td>
-                    <td className="num text-slate-600">{r._count.dishes}</td>
+                    <td className="num text-slate-600 text-left">{r._count.dishes}</td>
                     <td>
                       <span
                         className={`badge ${
@@ -69,7 +69,7 @@ export default async function RestaurantsPage() {
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {r.active ? 'Active' : 'Inactive'}
+                        {r.active ? c('active') : c('inactive')}
                       </span>
                     </td>
                     <td>
@@ -77,14 +77,14 @@ export default async function RestaurantsPage() {
                         <EditRestaurantDialog restaurant={r} />
                         <form action={toggleRestaurantActive}>
                           <input type="hidden" name="id" value={r.id} />
-                          <InlineSubmit label={r.active ? 'Disable' : 'Enable'} />
+                          <InlineSubmit label={r.active ? c('disable') : c('enable')} />
                         </form>
                         <form action={deleteRestaurant}>
                           <input type="hidden" name="id" value={r.id} />
                           <InlineSubmit
-                            label="Delete"
+                            label={c('delete')}
                             variant="danger"
-                            confirm={`Delete ${r.name}? If it has order history it will be deactivated instead.`}
+                            confirm={t('deleteConfirm', { name: r.name })}
                           />
                         </form>
                       </div>

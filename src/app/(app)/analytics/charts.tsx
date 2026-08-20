@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import {
   Bar,
   BarChart,
@@ -40,6 +41,7 @@ export function WeeklyDemandChart({
 }: {
   data: Array<{ label: string; meals: number; orders: number }>;
 }) {
+  const t = useTranslations('charts');
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
@@ -48,8 +50,8 @@ export function WeeklyDemandChart({
         <YAxis {...axis} tickLine={false} axisLine={false} allowDecimals={false} />
         <Tooltip {...tooltipStyle()} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="meals" name="Meals" stroke={SERIES[0]} strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="orders" name="Orders" stroke={SERIES[1]} strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="meals" name={t('meals')} stroke={SERIES[0]} strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="orders" name={t('orders')} stroke={SERIES[1]} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -60,6 +62,7 @@ export function SpendChart({
 }: {
   data: Array<{ label: string; staff: number; company: number }>;
 }) {
+  const t = useTranslations('charts');
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
@@ -73,14 +76,15 @@ export function SpendChart({
         />
         <Tooltip {...tooltipStyle()} formatter={(v) => formatSen(Number(v))} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="staff" name="Staff paid" stackId="a" fill={SERIES[1]} radius={[0, 0, 0, 0]} />
-        <Bar dataKey="company" name="Company subsidy" stackId="a" fill={SERIES[2]} radius={[3, 3, 0, 0]} />
+        <Bar dataKey="staff" name={t('staffPaid')} stackId="a" fill={SERIES[1]} radius={[0, 0, 0, 0]} />
+        <Bar dataKey="company" name={t('companySubsidy')} stackId="a" fill={SERIES[2]} radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
 export function WeekdayChart({ data }: { data: Array<{ weekday: string; meals: number }> }) {
+  const t = useTranslations('charts');
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: -16 }}>
@@ -88,7 +92,7 @@ export function WeekdayChart({ data }: { data: Array<{ weekday: string; meals: n
         <XAxis dataKey="weekday" {...axis} tickLine={false} />
         <YAxis {...axis} tickLine={false} axisLine={false} allowDecimals={false} />
         <Tooltip {...tooltipStyle()} />
-        <Bar dataKey="meals" name="Meals" fill={SERIES[0]} radius={[3, 3, 0, 0]} />
+        <Bar dataKey="meals" name={t('meals')} fill={SERIES[0]} radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

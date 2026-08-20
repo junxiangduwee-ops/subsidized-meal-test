@@ -44,7 +44,10 @@ export async function createCycle(_prev: ActionState, formData: FormData): Promi
     return { error: 'Service week must start after the current week.' };
   }
 
-  const existing = await prisma.menuCycle.findUnique({ where: { serviceWeekStart } });
+  // A cancelled week doesn't block re-planning - only a still-live cycle does.
+  const existing = await prisma.menuCycle.findFirst({
+    where: { serviceWeekStart, status: { not: 'CANCELLED' } },
+  });
   if (existing) {
     return { error: `A menu for ${formatWeekRange(serviceWeekStart)} already exists.` };
   }
@@ -366,8 +369,11 @@ export async function copyPreviousWeek(formData: FormData): Promise<void> {
   });
   if (!target || target.status !== 'DRAFT') return;
 
-  const source = await prisma.menuCycle.findUnique({
-    where: { serviceWeekStart: addWeeks(dateOnly(target.serviceWeekStart), -1) },
+  const source = await prisma.menuCycle.findFirst({
+    where: {
+      serviceWeekStart: addWeeks(dateOnly(target.serviceWeekStart), -1),
+      status: { not: 'CANCELLED' },
+    },
     include: { days: { orderBy: { serviceDate: 'asc' }, include: { items: true } } },
   });
   if (!source) return;

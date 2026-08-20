@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { ActionForm } from '@/components/action-form';
@@ -21,6 +22,7 @@ type RuleFields = {
 };
 
 function Fields({ rule, departments }: { rule?: RuleFields; departments: string[] }) {
+  const t = useTranslations('subsidiesAdmin');
   const [type, setType] = useState<RuleFields['type']>(rule?.type ?? 'FIXED_PER_ITEM');
   const [scope, setScope] = useState<RuleFields['scope']>(rule?.scope ?? 'ALL');
 
@@ -34,33 +36,33 @@ function Fields({ rule, departments }: { rule?: RuleFields; departments: string[
   return (
     <>
       <div>
-        <label className="label">Rule name</label>
+        <label className="label">{t('ruleName')}</label>
         <input
           name="name"
           required
           defaultValue={rule?.name}
           className="input"
-          placeholder="Standard lunch subsidy"
+          placeholder={t('ruleNamePlaceholder')}
         />
       </div>
 
       <div>
-        <label className="label">Type</label>
+        <label className="label">{t('type')}</label>
         <select
           name="type"
           value={type}
           onChange={(e) => setType(e.target.value as RuleFields['type'])}
           className="input"
         >
-          <option value="FIXED_PER_ITEM">Fixed amount off each item</option>
-          <option value="PERCENTAGE">Percentage off each item</option>
-          <option value="FIXED_PER_DAY">Daily cap — total company spend per day</option>
+          <option value="FIXED_PER_ITEM">{t('typeFixedPerItemOption')}</option>
+          <option value="PERCENTAGE">{t('typePercentageOption')}</option>
+          <option value="FIXED_PER_DAY">{t('typeDailyCapOption')}</option>
         </select>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="label">{isPercent ? 'Percentage (%)' : 'Amount (RM)'}</label>
+          <label className="label">{isPercent ? t('percentageLabel') : t('amountLabel')}</label>
           <input
             name="value"
             required
@@ -71,13 +73,13 @@ function Fields({ rule, departments }: { rule?: RuleFields; departments: string[
           />
         </div>
         <div>
-          <label className="label">Per-item cap (RM)</label>
+          <label className="label">{t('perItemCap')}</label>
           <input
             name="cap"
             inputMode="decimal"
             defaultValue={rule?.capSen != null ? (rule.capSen / 100).toFixed(2) : ''}
             className="input"
-            placeholder="Optional"
+            placeholder={t('optional')}
             disabled={type === 'FIXED_PER_DAY'}
           />
         </div>
@@ -85,19 +87,19 @@ function Fields({ rule, departments }: { rule?: RuleFields; departments: string[
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="label">Applies to</label>
+          <label className="label">{t('appliesTo')}</label>
           <select
             name="scope"
             value={scope}
             onChange={(e) => setScope(e.target.value as RuleFields['scope'])}
             className="input"
           >
-            <option value="ALL">Everyone</option>
-            <option value="DEPARTMENT">One department</option>
+            <option value="ALL">{t('scopeAll')}</option>
+            <option value="DEPARTMENT">{t('scopeDepartment')}</option>
           </select>
         </div>
         <div>
-          <label className="label">Department</label>
+          <label className="label">{t('department')}</label>
           <input
             name="department"
             list="department-list"
@@ -116,7 +118,7 @@ function Fields({ rule, departments }: { rule?: RuleFields; departments: string[
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="label">Priority</label>
+          <label className="label">{t('priority')}</label>
           <input
             name="priority"
             inputMode="numeric"
@@ -125,37 +127,35 @@ function Fields({ rule, departments }: { rule?: RuleFields; departments: string[
           />
         </div>
         <div>
-          <label className="label">From</label>
+          <label className="label">{t('from')}</label>
           <input name="effectiveFrom" type="date" defaultValue={rule?.effectiveFrom ?? ''} className="input" />
         </div>
         <div>
-          <label className="label">To</label>
+          <label className="label">{t('to')}</label>
           <input name="effectiveTo" type="date" defaultValue={rule?.effectiveTo ?? ''} className="input" />
         </div>
       </div>
 
-      <p className="text-xs text-slate-500">
-        When several rules could apply, the highest priority wins; a department rule beats an
-        everyone rule at equal priority. A daily cap is applied on top of the per-item rule.
-      </p>
+      <p className="text-xs text-slate-500">{t('priorityHint')}</p>
     </>
   );
 }
 
 export function AddRuleButton({ departments }: { departments: string[] }) {
+  const t = useTranslations('subsidiesAdmin');
   return (
     <Dialog
-      title="Add a subsidy rule"
+      title={t('addARule')}
       trigger={(open) => (
         <button type="button" className="btn-primary" onClick={open}>
-          Add rule
+          {t('addRule')}
         </button>
       )}
     >
       {(close) => (
         <ActionForm
           action={createSubsidyRule}
-          submitLabel="Create rule"
+          submitLabel={t('createRule')}
           className="space-y-3"
           onSuccess={close}
         >
@@ -167,19 +167,21 @@ export function AddRuleButton({ departments }: { departments: string[] }) {
 }
 
 export function EditRuleDialog({ rule, departments }: { rule: RuleFields; departments: string[] }) {
+  const t = useTranslations('subsidiesAdmin');
+  const c = useTranslations('adminCommon');
   return (
     <Dialog
-      title={`Edit ${rule.name}`}
+      title={t('editRule', { name: rule.name })}
       trigger={(open) => (
         <button type="button" className="btn-secondary btn-sm" onClick={open}>
-          Edit
+          {c('edit')}
         </button>
       )}
     >
       {(close) => (
         <ActionForm
           action={updateSubsidyRule}
-          submitLabel="Save changes"
+          submitLabel={c('saveChanges')}
           resetOnSuccess={false}
           className="space-y-3"
           onSuccess={close}
