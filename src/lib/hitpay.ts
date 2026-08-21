@@ -43,15 +43,35 @@ export function paymentMethods(): string[] {
 }
 
 function baseUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'http://localhost:3000';
+  return process.env.HITPAY_MODE === 'live' ? LIVE_BASE : SANDBOX_BASE;
 }
 
 function appUrl(): string {
+  // Explicit override always wins - e.g. pin a custom domain even though
+  // Vercel would also work, or use a different tunnel URL for local testing.
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+
+  // Vercel sets this automatically on every deployment (preview or
+  // production) with that deployment's real hostname - no redeploy-for-a-
+  // config-change dance needed, since Vercel itself refreshes it each time.
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
   return 'http://localhost:3000';
+}
+
+/**
+ * The webhook URL, with Vercel's "Protection Bypass for Automation" secret
+ * attached if one is configured. Deployment Protection blocks server-to-
+ * server calls (like this webhook) the same as any other request, and this
+ * is Vercel's own supported way to let a specific automated caller through
+ * without disabling protection for everyone else. Generate the secret under
+ * Project Settings -> Deployment Protection -> Protection Bypass for
+ * Automation - Vercel then auto-populates this env var for you.
+ */
+function webhookUrl(): string {
+  const base = `${appUrl()}/api/webhooks/hitpay`;
+  const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  return secret ? `${base}?x-vercel-protection-bypass=${secret}` : base;
 }
 
 export type CreatePaymentRequestInput = {
@@ -83,15 +103,10 @@ export async function createPaymentRequest(
     purpose: input.purpose,
     reference_number: input.reference,
     redirect_url: `${appUrl()}/orders/${encodeURIComponent(input.reference)}?from=hitpay`,
-    webhook: webhookUrl(),    // One-shot link: HitPay must not let the same link be paid twice.
+    webhook: webhookUrl(),
+    // One-shot link: HitPay must not let the same link be paid twice.
     allow_repeated_payments: 'false',
   });
-
-  function webhookUrl(): string {
-    const base = `${appUrl()}/api/webhooks/hitpay`;
-    const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-    return secret ? `${base}?x-vercel-protection-bypass=${secret}` : base;
-  }
 
   // Repeated `payment_methods[]` keys - HitPay rejects a comma-joined string.
   for (const method of paymentMethods()) {
@@ -102,6 +117,7 @@ export async function createPaymentRequest(
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
       'X-BUSINESS-API-KEY': process.env.HITPAY_API_KEY!,
       'X-Requested-With': 'XMLHttpRequest',
     },
@@ -112,6 +128,25 @@ export async function createPaymentRequest(
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`HitPay rejected the payment request (${res.status}): ${text.slice(0, 500)}`);
+  }
+
+  // A 2xx with an HTML body means something other than the API answered -
+  // a gateway/CDN page, a maintenance screen, a login wall - not HitPay's
+  // JSON API. JSON.parse's own SyntaxError only shows the first ~30
+  // characters, which is nearly useless for diagnosing which of those it
+  // was, so surface the real content here instead of parsing blind.
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    console.error('[hitpay] Non-JSON response from HitPay:', {
+      status: res.status,
+      contentType,
+      bodySnippet: text.slice(0, 1000),
+    });
+    throw new Error(
+      `HitPay returned a non-JSON response (content-type: ${contentType || 'unknown'}). ` +
+        `This usually means the request never reached HitPay's API - check HITPAY_MODE, ` +
+        `the API base URL, and outbound network access.`,
+    );
   }
 
   const json = JSON.parse(text) as { id: string; url: string; status: string };
