@@ -7,25 +7,26 @@ import { containsInsensitive, decodeTags } from '@/lib/db-compat';
 import { formatSen } from '@/lib/money';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
-import { Pagination, parsePage } from '@/components/pagination';
+import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
 import { deleteDish, toggleDishActive } from './actions';
 import { AddDishButton, EditDishDialog } from './dish-form';
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 
 export default async function DishesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ restaurant?: string; q?: string; page?: string }>;
+  searchParams: Promise<{ restaurant?: string; q?: string; page?: string; pageSize?: string; }>;
 }) {
   await requireCapability('catalogue:manage');
   const params = await searchParams;
   const t = await getTranslations('dishesAdmin');
   const c = await getTranslations('adminCommon');
   const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
   const restaurants = await prisma.restaurant.findMany({
     orderBy: [{ active: 'desc' }, { name: 'asc' }],
@@ -43,8 +44,8 @@ export default async function DishesPage({
       where,
       orderBy: [{ active: 'desc' }, { restaurant: { name: 'asc' } }, { name: 'asc' }],
       include: { restaurant: { select: { name: true, active: true } } },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
 
@@ -158,7 +159,7 @@ export default async function DishesPage({
                 <Pagination
                   basePath="/admin/dishes"
                   page={page}
-                  pageSize={PAGE_SIZE}
+                  pageSize={pageSize}
                   total={total}
                   searchParams={{ restaurant: params.restaurant, q: params.q }}
                 />

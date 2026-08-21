@@ -159,7 +159,8 @@
     "pagerShowing": "Menunjukkan {from}-{to} daripada {total}",
     "pagerPrevious": "Sebelumnya",
     "pagerNext": "Seterusnya",
-    "pagerPageOf": "Halaman {page} daripada {totalPages}"
+    "pagerPageOf": "Halaman {page} daripada {totalPages}",
+    "pagerPerPage": "Setiap halaman"
   },
   "restaurantsAdmin": {
     "title": "Restoran",

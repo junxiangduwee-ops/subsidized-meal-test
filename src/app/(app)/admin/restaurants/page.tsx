@@ -4,33 +4,34 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
-import { Pagination, parsePage } from '@/components/pagination';
+import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
 import { deleteRestaurant, toggleRestaurantActive } from './actions';
 import { AddRestaurantButton, EditRestaurantDialog } from './forms';
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 
 export default async function RestaurantsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; pageSize?: string; }>;
 }) {
   await requireCapability('catalogue:manage');
   const params = await searchParams;
   const t = await getTranslations('restaurantsAdmin');
   const c = await getTranslations('adminCommon');
   const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
   const [total, restaurants] = await Promise.all([
     prisma.restaurant.count(),
     prisma.restaurant.findMany({
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
       include: { _count: { select: { dishes: true } } },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
 
@@ -108,7 +109,7 @@ export default async function RestaurantsPage({
               </tbody>
             </table>
 
-            <Pagination basePath="/admin/restaurants" page={page} pageSize={PAGE_SIZE} total={total} />
+            <Pagination basePath="/admin/restaurants" page={page} pageSize={pageSize} total={total} />
           </div>
         )}
       </Section>

@@ -7,7 +7,7 @@ import { ROLE_LABEL } from '@/lib/rbac';
 import { formatDateTime } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
-import { Pagination, parsePage } from '@/components/pagination';
+import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
 import { toggleUserActive } from './actions';
 import { AddUserButton, EditUserDialog, ResetPasswordDialog } from './user-forms';
@@ -21,18 +21,19 @@ const ROLE_STYLE: Record<string, string> = {
   USER: 'bg-slate-100 text-slate-700',
 };
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; page?: string; pageSize?: string }>;
 }) {
   const me = await requireCapability('users:manage');
   const params = await searchParams;
   const t = await getTranslations('usersAdmin');
   const locale = await getLocale();
   const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
   const where = {
     role: params.role && params.role !== 'all' ? (params.role as never) : undefined,
@@ -50,8 +51,8 @@ export default async function UsersPage({
     prisma.user.findMany({
       where,
       orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
 
@@ -164,7 +165,7 @@ export default async function UsersPage({
               <Pagination
                 basePath="/admin/users"
                 page={page}
-                pageSize={PAGE_SIZE}
+                pageSize={pageSize}
                 total={total}
                 searchParams={{ q: params.q, role: params.role }}
               />

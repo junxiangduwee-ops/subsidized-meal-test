@@ -159,7 +159,8 @@
     "pagerShowing": "Showing {from}-{to} of {total}",
     "pagerPrevious": "Previous",
     "pagerNext": "Next",
-    "pagerPageOf": "Page {page} of {totalPages}"
+    "pagerPageOf": "Page {page} of {totalPages}",
+    "pagerPerPage": "Per page"
   },
   "restaurantsAdmin": {
     "title": "Restaurants",

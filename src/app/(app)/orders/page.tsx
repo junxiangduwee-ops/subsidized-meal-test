@@ -7,31 +7,53 @@ import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
 import { formatWeekRange, formatDateTime } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, StatusBadge, Stat } from '@/components/ui';
+import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OrdersPage() {
+const DEFAULT_PAGE_SIZE = 25;
+
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
+}) {
   const user = await requireCapability('order:place');
+  const params = await searchParams;
   const t = await getTranslations('orders');
   const locale = await getLocale();
+  const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
-  const orders = await prisma.order.findMany({
-    where: { userId: user.id, status: { not: 'CART' } },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-    include: {
-      cycle: { select: { serviceWeekStart: true } },
-      _count: { select: { items: true } },
-    },
-  });
+  const where = { userId: user.id, status: { not: 'CART' as const } };
 
-  const paid = orders.filter((o) => o.status === 'PAID');
-  const spent = paid.reduce((s, o) => s + o.netSen, 0);
+  // The three summary stats (orders placed / paid / saved) always reflect
+  // the employee's whole history, not just the current page, so they're
+  // counted separately from the paginated table rows below.
+  const [total, allPaid, orders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where: { ...where, status: 'PAID' },
+      select: { netSen: true, subsidySen: true },
+    }),
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        cycle: { select: { serviceWeekStart: true } },
+        _count: { select: { items: true } },
+      },
+    }),
+  ]);
+
+  const spent = allPaid.reduce((s, o) => s + o.netSen, 0);
 
   // The company's contribution is not the employee's business - only roles
   // that already have finance access see it.
   const showSubsidy = can(user.role, 'finance:view');
-  const saved = paid.reduce((s, o) => s + o.subsidySen, 0);
+  const saved = allPaid.reduce((s, o) => s + o.subsidySen, 0);
 
   return (
     <>
@@ -46,7 +68,7 @@ export default async function OrdersPage() {
       />
 
       <div className={`mb-6 grid gap-4 ${showSubsidy ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-        <Stat label={t('ordersPlaced')} value={paid.length} />
+        <Stat label={t('ordersPlaced')} value={allPaid.length} />
         <Stat label={t('youHavePaid')} value={formatSen(spent)} />
         {showSubsidy ? (
           <Stat label={t('companyCovered')} value={formatSen(saved)} tone="positive" />
@@ -110,6 +132,8 @@ export default async function OrdersPage() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination basePath="/orders" page={page} pageSize={pageSize} total={total} />
           </div>
         )}
       </Section>

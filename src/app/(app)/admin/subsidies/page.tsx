@@ -6,19 +6,19 @@ import { describeRule } from '@/lib/subsidy';
 import { formatDate, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
-import { Pagination, parsePage } from '@/components/pagination';
+import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
 import { deleteSubsidyRule, toggleSubsidyRule } from './actions';
 import { AddRuleButton, EditRuleDialog } from './rule-form';
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 
 export default async function SubsidiesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; pageSize?: string; }>;
 }) {
   await requireCapability('subsidy:manage');
   const params = await searchParams;
@@ -26,6 +26,7 @@ export default async function SubsidiesPage({
   const c = await getTranslations('adminCommon');
   const locale = await getLocale();
   const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
   const TYPE_LABEL = {
     PERCENTAGE: t('typePercentage'),
@@ -39,8 +40,8 @@ export default async function SubsidiesPage({
     prisma.subsidyRule.count({ where: { active: true } }),
     prisma.subsidyRule.findMany({
       orderBy: [{ active: 'desc' }, { priority: 'desc' }, { name: 'asc' }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
 
@@ -146,7 +147,7 @@ export default async function SubsidiesPage({
                 </tbody>
               </table>
 
-              <Pagination basePath="/admin/subsidies" page={page} pageSize={PAGE_SIZE} total={total} />
+              <Pagination basePath="/admin/subsidies" page={page} pageSize={pageSize} total={total} />
             </div>
           )}
         </Section>
