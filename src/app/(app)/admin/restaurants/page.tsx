@@ -4,27 +4,41 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
+import { Pagination, parsePage } from '@/components/pagination';
 
 import { deleteRestaurant, toggleRestaurantActive } from './actions';
 import { AddRestaurantButton, EditRestaurantDialog } from './forms';
 
 export const dynamic = 'force-dynamic';
 
-export default async function RestaurantsPage() {
+const PAGE_SIZE = 25;
+
+export default async function RestaurantsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireCapability('catalogue:manage');
+  const params = await searchParams;
   const t = await getTranslations('restaurantsAdmin');
   const c = await getTranslations('adminCommon');
+  const page = parsePage(params.page);
 
-  const restaurants = await prisma.restaurant.findMany({
-    orderBy: [{ active: 'desc' }, { name: 'asc' }],
-    include: { _count: { select: { dishes: true } } },
-  });
+  const [total, restaurants] = await Promise.all([
+    prisma.restaurant.count(),
+    prisma.restaurant.findMany({
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { dishes: true } } },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   return (
     <>
       <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddRestaurantButton />} />
 
-      <Section title={t('allRestaurants')} description={t('totalCount', { count: restaurants.length })}>
+      <Section title={t('allRestaurants')} description={t('totalCount', { count: total })}>
         {restaurants.length === 0 ? (
           <EmptyState
             title={t('noRestaurantsYet')}
@@ -93,6 +107,8 @@ export default async function RestaurantsPage() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination basePath="/admin/restaurants" page={page} pageSize={PAGE_SIZE} total={total} />
           </div>
         )}
       </Section>

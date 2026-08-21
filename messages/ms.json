@@ -155,7 +155,11 @@
     "delete": "Padam",
     "saveChanges": "Simpan perubahan",
     "name": "Nama",
-    "status": "Status"
+    "status": "Status",
+    "pagerShowing": "Menunjukkan {from}-{to} daripada {total}",
+    "pagerPrevious": "Sebelumnya",
+    "pagerNext": "Seterusnya",
+    "pagerPageOf": "Halaman {page} daripada {totalPages}"
   },
   "restaurantsAdmin": {
     "title": "Restoran",

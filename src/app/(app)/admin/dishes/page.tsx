@@ -7,35 +7,46 @@ import { containsInsensitive, decodeTags } from '@/lib/db-compat';
 import { formatSen } from '@/lib/money';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
+import { Pagination, parsePage } from '@/components/pagination';
 
 import { deleteDish, toggleDishActive } from './actions';
 import { AddDishButton, EditDishDialog } from './dish-form';
 
 export const dynamic = 'force-dynamic';
 
+const PAGE_SIZE = 25;
+
 export default async function DishesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ restaurant?: string; q?: string }>;
+  searchParams: Promise<{ restaurant?: string; q?: string; page?: string }>;
 }) {
   await requireCapability('catalogue:manage');
   const params = await searchParams;
   const t = await getTranslations('dishesAdmin');
   const c = await getTranslations('adminCommon');
+  const page = parsePage(params.page);
 
   const restaurants = await prisma.restaurant.findMany({
     orderBy: [{ active: 'desc' }, { name: 'asc' }],
     select: { id: true, name: true, active: true },
   });
 
-  const dishes = await prisma.dish.findMany({
-    where: {
-      restaurantId: params.restaurant || undefined,
-      name: params.q ? containsInsensitive(params.q) : undefined,
-    },
-    orderBy: [{ active: 'desc' }, { restaurant: { name: 'asc' } }, { name: 'asc' }],
-    include: { restaurant: { select: { name: true, active: true } } },
-  });
+  const where = {
+    restaurantId: params.restaurant || undefined,
+    name: params.q ? containsInsensitive(params.q) : undefined,
+  };
+
+  const [total, dishes] = await Promise.all([
+    prisma.dish.count({ where }),
+    prisma.dish.findMany({
+      where,
+      orderBy: [{ active: 'desc' }, { restaurant: { name: 'asc' } }, { name: 'asc' }],
+      include: { restaurant: { select: { name: true, active: true } } },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   // tags are a scalar list on Postgres and a delimited string on SQLite
   const rows = dishes.map((d) => ({ ...d, tags: decodeTags(d.tags) }));
@@ -57,7 +68,7 @@ export default async function DishesPage({
       ) : (
         <Section
             title={t('catalogue')}
-            description={t('dishCount', { count: rows.length })}
+            description={t('dishCount', { count: total })}
             action={
               <form method="get" className="flex gap-2">
                 <select name="restaurant" defaultValue={params.restaurant ?? ''} className="input !w-44 !py-1 text-xs">
@@ -143,6 +154,14 @@ export default async function DishesPage({
                     ))}
                   </tbody>
                 </table>
+
+                <Pagination
+                  basePath="/admin/dishes"
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  total={total}
+                  searchParams={{ restaurant: params.restaurant, q: params.q }}
+                />
               </div>
             )}
           </Section>

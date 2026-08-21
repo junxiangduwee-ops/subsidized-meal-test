@@ -155,7 +155,11 @@
     "delete": "删除",
     "saveChanges": "保存更改",
     "name": "名称",
-    "status": "状态"
+    "status": "状态",
+    "pagerShowing": "显示第 {from}-{to} 项，共 {total} 项",
+    "pagerPrevious": "上一页",
+    "pagerNext": "下一页",
+    "pagerPageOf": "第 {page} / {totalPages} 页"
   },
   "restaurantsAdmin": {
     "title": "餐厅",

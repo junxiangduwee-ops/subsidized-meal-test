@@ -13,24 +13,37 @@ import {
 } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, PhaseBadge, Alert } from '@/components/ui';
 import { ActionForm } from '@/components/action-form';
+import { Pagination, parsePage } from '@/components/pagination';
 
 import { createCycle } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function CyclesPage() {
+const PAGE_SIZE = 15;
+
+export default async function CyclesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireCapability('menu:plan');
+  const params = await searchParams;
   const t = await getTranslations('cyclesAdmin');
   const locale = await getLocale();
+  const page = parsePage(params.page);
 
-  const cycles = await prisma.menuCycle.findMany({
-    orderBy: { serviceWeekStart: 'desc' },
-    take: 30,
-    include: {
-      days: { include: { _count: { select: { items: true } } } },
-      _count: { select: { orders: true } },
-    },
-  });
+  const [total, cycles] = await Promise.all([
+    prisma.menuCycle.count(),
+    prisma.menuCycle.findMany({
+      orderBy: { serviceWeekStart: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        days: { include: { _count: { select: { items: true } } } },
+        _count: { select: { orders: true } },
+      },
+    }),
+  ]);
 
   const suggested = nextPlannableWeekStart();
   const suggestedKey = toDateKey(suggested);
@@ -111,6 +124,8 @@ export default async function CyclesPage() {
                   })}
                 </tbody>
               </table>
+
+              <Pagination basePath="/admin/cycles" page={page} pageSize={PAGE_SIZE} total={total} />
             </div>
           )}
         </Section>

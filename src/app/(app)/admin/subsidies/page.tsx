@@ -6,17 +6,26 @@ import { describeRule } from '@/lib/subsidy';
 import { formatDate, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
+import { Pagination, parsePage } from '@/components/pagination';
 
 import { deleteSubsidyRule, toggleSubsidyRule } from './actions';
 import { AddRuleButton, EditRuleDialog } from './rule-form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SubsidiesPage() {
+const PAGE_SIZE = 25;
+
+export default async function SubsidiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireCapability('subsidy:manage');
+  const params = await searchParams;
   const t = await getTranslations('subsidiesAdmin');
   const c = await getTranslations('adminCommon');
   const locale = await getLocale();
+  const page = parsePage(params.page);
 
   const TYPE_LABEL = {
     PERCENTAGE: t('typePercentage'),
@@ -24,9 +33,16 @@ export default async function SubsidiesPage() {
     FIXED_PER_DAY: t('typeDailyCap'),
   } as const;
 
-  const rules = await prisma.subsidyRule.findMany({
-    orderBy: [{ active: 'desc' }, { priority: 'desc' }, { name: 'asc' }],
-  });
+  // Total and active counts span *all* rules, not just the current page.
+  const [total, activeCount, rules] = await Promise.all([
+    prisma.subsidyRule.count(),
+    prisma.subsidyRule.count({ where: { active: true } }),
+    prisma.subsidyRule.findMany({
+      orderBy: [{ active: 'desc' }, { priority: 'desc' }, { name: 'asc' }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   const departmentRows = await prisma.user.findMany({
     where: { department: { not: null } },
@@ -35,8 +51,6 @@ export default async function SubsidiesPage() {
     orderBy: { department: 'asc' },
   });
   const departments = departmentRows.map((r) => r.department!).filter(Boolean);
-
-  const activeCount = rules.filter((r) => r.active).length;
 
   return (
     <>
@@ -48,7 +62,7 @@ export default async function SubsidiesPage() {
         </div>
       ) : null}
 
-      <Section title={t('rules')} description={t('activeOfTotal', { active: activeCount, total: rules.length })}>
+      <Section title={t('rules')} description={t('activeOfTotal', { active: activeCount, total })}>
           {rules.length === 0 ? (
           <EmptyState
             title={t('noRules')}
@@ -131,6 +145,8 @@ export default async function SubsidiesPage() {
                   ))}
                 </tbody>
               </table>
+
+              <Pagination basePath="/admin/subsidies" page={page} pageSize={PAGE_SIZE} total={total} />
             </div>
           )}
         </Section>

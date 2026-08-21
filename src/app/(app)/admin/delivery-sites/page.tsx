@@ -4,27 +4,41 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
+import { Pagination, parsePage } from '@/components/pagination';
 
 import { deleteDeliverySite, toggleDeliverySiteActive } from './actions';
 import { AddDeliverySiteButton, EditDeliverySiteDialog } from './site-form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DeliverySitesPage() {
+const PAGE_SIZE = 25;
+
+export default async function DeliverySitesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireCapability('catalogue:manage');
+  const params = await searchParams;
   const t = await getTranslations('deliverySitesAdmin');
   const c = await getTranslations('adminCommon');
+  const page = parsePage(params.page);
 
-  const sites = await prisma.deliverySite.findMany({
-    orderBy: [{ active: 'desc' }, { name: 'asc' }],
-    include: { _count: { select: { orders: true } } },
-  });
+  const [total, sites] = await Promise.all([
+    prisma.deliverySite.count(),
+    prisma.deliverySite.findMany({
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { orders: true } } },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   return (
     <>
       <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddDeliverySiteButton />} />
 
-      <Section title={t('allSites')} description={t('totalCount', { count: sites.length })}>
+      <Section title={t('allSites')} description={t('totalCount', { count: total })}>
         {sites.length === 0 ? (
           <EmptyState
             title={t('noSitesYet')}
@@ -77,6 +91,8 @@ export default async function DeliverySitesPage() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination basePath="/admin/delivery-sites" page={page} pageSize={PAGE_SIZE} total={total} />
           </div>
         )}
       </Section>
