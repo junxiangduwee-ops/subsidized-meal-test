@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
-import { mapPaymentStatus, parseAmountToSen, verifyWebhookSignature } from '@/lib/hitpay';
+import { mapPaymentStatus, parseAmountToSen, verifyWebhookSignature, fetchPaymentType } from '@/lib/hitpay';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -64,6 +64,14 @@ export async function POST(request: Request) {
   const status = mapPaymentStatus(fields.status ?? '');
   const paidSen = parseAmountToSen(fields.amount ?? '');
 
+  // The webhook body itself never carries the channel used - it has to be
+  // looked up separately. Only bother when the field genuinely isn't there
+  // (future-proofs against HitPay adding it later) and there's a request id
+  // to look it up with. A failed lookup falls back to null rather than
+  // blocking the payment from being recorded.
+  const paymentType =
+    fields.payment_type ?? (requestId ? await fetchPaymentType(requestId, paymentId) : null);
+
   // Underpayment must never confirm an order.
   if (status === 'SUCCEEDED' && (!Number.isFinite(paidSen) || paidSen < order.netSen)) {
     console.error('[hitpay] Amount mismatch', {
@@ -77,6 +85,7 @@ export async function POST(request: Request) {
         data: {
           status: 'FAILED',
           paymentId,
+          paymentMethod: paymentType,
           failureReason: `Amount mismatch: expected ${order.netSen} sen, received ${paidSen} sen`,
           rawPayload: fields,
         },
@@ -100,7 +109,7 @@ export async function POST(request: Request) {
         data: {
           status,
           paymentId: paymentId ?? payment.paymentId,
-          paymentMethod: fields.payment_type ?? payment.paymentMethod,
+          paymentMethod: paymentType ?? payment.paymentMethod,
           rawPayload: fields,
         },
       });
@@ -113,7 +122,7 @@ export async function POST(request: Request) {
           status,
           amountSen: Number.isFinite(paidSen) ? paidSen : order.netSen,
           currency: (fields.currency ?? 'MYR').toUpperCase(),
-          paymentMethod: fields.payment_type ?? null,
+          paymentMethod: paymentType,
           rawPayload: fields,
         },
       });

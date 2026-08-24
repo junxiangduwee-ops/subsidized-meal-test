@@ -215,3 +215,48 @@ export function parseAmountToSen(amount: string): number {
   if (!Number.isFinite(n)) return NaN;
   return Math.round(n * 100);
 }
+
+/**
+ * Looks up the payment channel actually used (e.g. `card`, `duitnow`,
+ * `touch_n_go`) for a payment request.
+ *
+ * HitPay's webhook POST body is a slim form-encoded payload - it never
+ * includes which channel was used, for any payment method, regardless of
+ * what `payment_methods[]` were offered at checkout. The channel only shows
+ * up per sub-payment in the fuller JSON response from
+ * `GET /v1/payment-requests/{id}`. This is a best-effort enrichment call
+ * made from the webhook handler after the payment is already verified and
+ * recorded - if it fails or times out, the caller should fall back to
+ * `null` rather than let it block recording the payment itself.
+ */
+export async function fetchPaymentType(
+  paymentRequestId: string,
+  paymentId: string | undefined,
+): Promise<string | null> {
+  if (!hitpayConfigured()) return null;
+
+  try {
+    const res = await fetch(`${baseUrl()}/payment-requests/${paymentRequestId}`, {
+      headers: {
+        Accept: 'application/json',
+        'X-BUSINESS-API-KEY': process.env.HITPAY_API_KEY!,
+      },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.warn('[hitpay] Payment status lookup failed', paymentRequestId, res.status);
+      return null;
+    }
+
+    const json = (await res.json()) as { payments?: Array<{ id: string; payment_type?: string }> };
+    const payments = json.payments ?? [];
+    // Prefer the sub-payment matching this webhook's payment_id; fall back
+    // to the most recent one if the id isn't present for some reason.
+    const match = paymentId ? payments.find((p) => p.id === paymentId) : undefined;
+    return (match ?? payments[payments.length - 1])?.payment_type ?? null;
+  } catch (err) {
+    console.warn('[hitpay] Payment status lookup errored', paymentRequestId, err);
+    return null;
+  }
+}
+
