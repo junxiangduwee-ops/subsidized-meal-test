@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { can } from '@/lib/rbac';
 import { csvAmount, csvResponse, toCsv } from '@/lib/csv';
-import { formatWeekRange, toDateKey } from '@/lib/cycle';
+import { formatWeekRange, toDateKey, zonedToUtc } from '@/lib/cycle';
 import { kitchenSheet, trailingWeeks, weeklyTotals } from '@/lib/reporting';
 import { audit } from '@/lib/orders';
 
@@ -12,11 +12,12 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * CSV exports for Finance and Kitchen.
+ * CSV exports for Finance, Kitchen, and employees' own order history.
  *
- * These files contain employee names and staff IDs. They are personal data:
- * store them on approved systems only and do not forward them outside
- * Finance/HR.
+ * The Finance/Kitchen exports contain other employees' names and staff IDs.
+ * They are personal data: store them on approved systems only and do not
+ * forward them outside Finance/HR. `my-orders` is scoped to the signed-in
+ * user's own orders only, so no extra capability is required for it.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ type: string }> }) {
   const user = await getCurrentUser();
@@ -43,6 +44,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportSubsidy(user.id, url.searchParams.get('weeks'));
     case 'kitchen':
       return exportKitchen(user.id, cycleId);
+    case 'my-orders':
+      return exportMyOrders(user.id, url.searchParams.get('month'));
     default:
       return NextResponse.json({ error: 'Unknown export' }, { status: 404 });
   }
@@ -211,3 +214,69 @@ function clampWeeks(raw: string | null): number {
   if (!Number.isFinite(n)) return 12;
   return Math.min(52, Math.max(1, n));
 }
+
+/** Parses a `?month=YYYY-MM` param into a [start, end) UTC instant range in APP_TIMEZONE. */
+function parseMonth(raw: string | null): { year: number; month1: number; start: Date; end: Date } | null {
+  const match = raw?.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month1 = Number(match[2]);
+  if (month1 < 1 || month1 > 12) return null;
+
+  const start = zonedToUtc(year, month1, 1);
+  const end = month1 === 12 ? zonedToUtc(year + 1, 1, 1) : zonedToUtc(year, month1 + 1, 1);
+  return { year, month1, start, end };
+}
+
+async function exportMyOrders(userId: string, monthRaw: string | null) {
+  const month = parseMonth(monthRaw);
+  if (!month) {
+    return NextResponse.json({ error: 'Missing or invalid month (expected YYYY-MM)' }, { status: 400 });
+  }
+
+  const orders = await prisma.order.findMany({
+    where: {
+      userId,
+      status: { not: 'CART' },
+      createdAt: { gte: month.start, lt: month.end },
+    },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      cycle: { select: { serviceWeekStart: true } },
+      payments: { where: { status: 'SUCCEEDED' }, orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+  });
+
+  const rows = orders.map((o) => [
+    o.reference,
+    formatWeekRange(o.cycle.serviceWeekStart),
+    o.status,
+    csvAmount(o.grossSen),
+    csvAmount(o.subsidySen),
+    csvAmount(o.netSen),
+    o.payments[0]?.paymentMethod ?? '',
+    o.submittedAt ? o.submittedAt.toISOString() : '',
+    o.paidAt ? o.paidAt.toISOString() : '',
+  ]);
+
+  const csv = toCsv(
+    [
+      'Order reference',
+      'Service week',
+      'Status',
+      'Food total (RM)',
+      'Company subsidy (RM)',
+      'You paid (RM)',
+      'Payment method',
+      'Placed at (UTC)',
+      'Paid at (UTC)',
+    ],
+    rows,
+  );
+
+  const monthKey = `${month.year}-${String(month.month1).padStart(2, '0')}`;
+  await audit(userId, 'export.my-orders', 'Order', null, { month: monthKey, rows: rows.length });
+  return csvResponse(`my-orders-${monthKey}.csv`, csv);
+}
+

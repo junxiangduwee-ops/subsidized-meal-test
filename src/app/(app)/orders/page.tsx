@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
-import { formatWeekRange, formatDateTime } from '@/lib/cycle';
+import { formatWeekRange, formatDateTime, todayInAppTz } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, StatusBadge, Stat } from '@/components/ui';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
@@ -54,6 +54,7 @@ export default async function OrdersPage({
   // that already have finance access see it.
   const showSubsidy = can(user.role, 'finance:view');
   const saved = allPaid.reduce((s, o) => s + o.subsidySen, 0);
+  const currentMonth = todayInAppTz().toISOString().slice(0, 7);
 
   return (
     <>
@@ -75,7 +76,28 @@ export default async function OrdersPage({
         ) : null}
       </div>
 
-      <Section title={t('history')}>
+      <Section
+        title={t('history')}
+        action={
+          <form method="get" action="/api/exports/my-orders" className="flex items-center gap-2">
+            <label htmlFor="export-month" className="text-xs text-slate-500">
+              {t('exportMonthLabel')}
+            </label>
+            <input
+              id="export-month"
+              type="month"
+              name="month"
+              defaultValue={currentMonth}
+              max={currentMonth}
+              required
+              className="input !w-36 !py-1 text-xs"
+            />
+            <button type="submit" className="btn-secondary btn-sm">
+              {t('exportMonth')}
+            </button>
+          </form>
+        }
+      >
         {orders.length === 0 ? (
           <EmptyState
             title={t('noOrdersYet')}
