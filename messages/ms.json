@@ -530,14 +530,17 @@
     "save": "Simpan perubahan",
     "siteName": "Nama laman",
     "siteNameHint": "Dipaparkan pada pengepala, tajuk tab pelayar, dan skrin log masuk.",
-    "logoUrl": "URL logo",
-    "logoUrlHint": "Imej segi empat sama lebih sesuai. Dipaparkan pada pengepala aplikasi dan skrin log masuk.",
-    "faviconUrl": "URL favicon",
-    "faviconUrlHint": "Dipaparkan sebagai ikon tab pelayar. PNG atau ICO, segi empat sama, sekurang-kurangnya 32×32.",
     "supportEmail": "E-mel sokongan",
     "supportEmailHint": "Dipaparkan pada skrin log masuk untuk pekerja yang menghadapi masalah.",
     "maintenanceMessage": "Sepanduk penyelenggaraan",
     "maintenanceMessagePlaceholder": "cth. Pesanan akan ditutup Jumaat ini 6–8 malam untuk penyelenggaraan.",
-    "maintenanceMessageHint": "Dipaparkan kepada setiap pengguna yang log masuk sehingga anda kosongkannya. Biarkan kosong untuk sembunyikan."
+    "maintenanceMessageHint": "Dipaparkan kepada setiap pengguna yang log masuk sehingga anda kosongkannya. Biarkan kosong untuk sembunyikan.",
+    "logo": "Logo",
+    "logoHint": "Dipaparkan pada pengepala aplikasi dan skrin log masuk. PNG, JPEG, atau WEBP, bawah 2 MB.",
+    "favicon": "Favicon",
+    "faviconHint": "Dipaparkan sebagai ikon tab pelayar. PNG atau ICO, segi empat sama, bawah 2 MB.",
+    "upload": "Muat naik",
+    "resetToDefault": "Set semula ke lalai",
+    "usingDefault": "Menggunakan imej lalai."
   }
 }

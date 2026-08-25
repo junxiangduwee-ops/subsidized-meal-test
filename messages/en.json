@@ -530,14 +530,17 @@
     "save": "Save changes",
     "siteName": "Site name",
     "siteNameHint": "Shown in the header, browser tab title, and sign-in screen.",
-    "logoUrl": "Logo URL",
-    "logoUrlHint": "Square image works best. Shown in the app header and sign-in screen.",
-    "faviconUrl": "Favicon URL",
-    "faviconUrlHint": "Shown as the browser tab icon. PNG or ICO, square, at least 32×32.",
     "supportEmail": "Support email",
     "supportEmailHint": "Shown on the sign-in screen for employees having trouble.",
     "maintenanceMessage": "Maintenance banner",
     "maintenanceMessagePlaceholder": "e.g. Ordering will be closed this Friday 6–8pm for maintenance.",
-    "maintenanceMessageHint": "Shown to every signed-in user until you clear it. Leave blank to hide."
+    "maintenanceMessageHint": "Shown to every signed-in user until you clear it. Leave blank to hide.",
+    "logo": "Logo",
+    "logoHint": "Shown in the app header and sign-in screen. PNG, JPEG, or WEBP, under 2 MB.",
+    "favicon": "Favicon",
+    "faviconHint": "Shown as the browser tab icon. PNG or ICO, square, under 2 MB.",
+    "upload": "Upload",
+    "resetToDefault": "Reset to default",
+    "usingDefault": "Using the default image."
   }
 }

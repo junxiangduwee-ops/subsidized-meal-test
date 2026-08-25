@@ -8,15 +8,15 @@ import './globals.css';
 
 /**
  * Title and favicon come from the admin-editable site settings (see
- * admin/settings) rather than being hardcoded, so a favicon/name change
- * there takes effect everywhere without a redeploy.
+ * admin/settings), defaulting to the shipped `public/mr-diy-logo.png` until
+ * an admin uploads a replacement.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   return {
     title: settings.siteName,
     description: 'Weekly staff meal planning and ordering',
-    icons: settings.faviconUrl ? { icon: settings.faviconUrl } : undefined,
+    icons: { icon: settings.faviconUrl },
   };
 }
 
