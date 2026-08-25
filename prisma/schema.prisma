@@ -113,6 +113,7 @@ model User {
   orders       Order[]
   createdCycles MenuCycle[] @relation("CycleCreatedBy")
   auditLogs    AuditLog[]
+  settingsUpdates AppSettings[] @relation("SettingsUpdatedBy")
 
   @@index([role])
   @@index([department])
@@ -390,6 +391,27 @@ model Payment {
   @@index([orderId])
   @@index([status])
   @@index([paymentId])
+}
+
+// ---------------------------------------------------------------------------
+// Site settings
+// ---------------------------------------------------------------------------
+
+/// Singleton row - always read/written by the fixed id in lib/settings.ts.
+/// One row for the whole deployment; there is no per-user settings concept.
+model AppSettings {
+  id                 String   @id
+  siteName           String   @default("MR DIY Food Ordering")
+  logoUrl            String?
+  faviconUrl         String?
+  supportEmail       String?
+  /// Optional banner shown to every signed-in user (e.g. planned downtime).
+  /// Null/empty means no banner.
+  maintenanceMessage String?
+  updatedAt          DateTime @updatedAt
+  updatedById        String?
+
+  updatedBy          User?    @relation("SettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }
 
 // ---------------------------------------------------------------------------

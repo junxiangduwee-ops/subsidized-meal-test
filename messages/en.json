@@ -116,7 +116,8 @@
     "insights": "Insights",
     "analytics": "Analytics",
     "finance": "Finance",
-    "kitchenCounts": "Kitchen counts"
+    "kitchenCounts": "Kitchen counts",
+    "settings": "Settings"
   },
   "login": {
     "title": "Food Ordering",
@@ -138,7 +139,8 @@
     "ssoDisabled": "Single sign-on is not enabled for this environment.",
     "ssoStateExpired": "That sign-in link expired. Please try again.",
     "ssoFailed": "Single sign-on failed. Try again, or use your email and password.",
-    "ssoInactive": "This account has been deactivated. Contact your administrator."
+    "ssoInactive": "This account has been deactivated. Contact your administrator.",
+    "contactCustom": "Having trouble? Contact {email}"
   },
   "forbidden": {
     "title": "Not available for your role",
@@ -519,5 +521,23 @@
     "CANCELLED": "Cancelled",
     "FAILED": "Failed",
     "REFUNDED": "Refunded"
+  },
+  "settingsAdmin": {
+    "title": "Settings",
+    "subtitle": "Manage how the site looks and identifies itself.",
+    "branding": "Branding",
+    "brandingHint": "Shown in the browser tab, the app header, and the sign-in screen.",
+    "save": "Save changes",
+    "siteName": "Site name",
+    "siteNameHint": "Shown in the header, browser tab title, and sign-in screen.",
+    "logoUrl": "Logo URL",
+    "logoUrlHint": "Square image works best. Shown in the app header and sign-in screen.",
+    "faviconUrl": "Favicon URL",
+    "faviconUrlHint": "Shown as the browser tab icon. PNG or ICO, square, at least 32×32.",
+    "supportEmail": "Support email",
+    "supportEmailHint": "Shown on the sign-in screen for employees having trouble.",
+    "maintenanceMessage": "Maintenance banner",
+    "maintenanceMessagePlaceholder": "e.g. Ordering will be closed this Friday 6–8pm for maintenance.",
+    "maintenanceMessageHint": "Shown to every signed-in user until you clear it. Leave blank to hide."
   }
 }

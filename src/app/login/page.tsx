@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { getCurrentUser } from '@/lib/session';
 import { landingPathFor } from '@/lib/rbac';
 import { isLdapEnabled, isOidcEnabled } from '@/lib/auth';
+import { getSiteSettings } from '@/lib/settings';
 
 import { LoginForm } from './login-form';
 
@@ -18,6 +19,7 @@ export default async function LoginPage({
   if (user) redirect(landingPathFor(user.role));
 
   const t = await getTranslations('login');
+  const settings = await getSiteSettings();
 
   /** Error codes the OIDC routes redirect back with. */
   const ssoErrors: Record<string, string> = {
@@ -34,9 +36,22 @@ export default async function LoginPage({
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
-            MR
-          </div>
+          {settings.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={settings.logoUrl}
+              alt=""
+              className="mx-auto mb-3 h-12 w-12 rounded-xl object-contain"
+            />
+          ) : (
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
+              {settings.siteName
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((w) => w[0]?.toUpperCase() ?? '')
+                .join('')}
+            </div>
+          )}
           <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
           <p className="mt-1 text-sm text-slate-500">{t('subtitle')}</p>
         </div>
@@ -50,7 +65,9 @@ export default async function LoginPage({
           <LoginForm ssoEnabled={isOidcEnabled()} ldapEnabled={isLdapEnabled()} />
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-400">{t('contact')}</p>
+        <p className="mt-6 text-center text-xs text-slate-400">
+          {settings.supportEmail ? t('contactCustom', { email: settings.supportEmail }) : t('contact')}
+        </p>
       </div>
     </main>
   );

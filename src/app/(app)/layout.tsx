@@ -3,8 +3,10 @@ import { getTranslations } from 'next-intl/server';
 
 import { requireUser } from '@/lib/session';
 import { can, ROLE_LABEL } from '@/lib/rbac';
+import { getSiteSettings } from '@/lib/settings';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
 import { UserMenu } from '@/components/user-menu';
+import { Alert } from '@/components/ui';
 import { logoutAction } from '@/app/login/actions';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +14,7 @@ export const dynamic = 'force-dynamic';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const t = await getTranslations('nav');
+  const settings = await getSiteSettings();
 
   const groups: NavGroup[] = [];
 
@@ -35,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/admin/dishes', label: t('dishesPrices') },
         { href: '/admin/subsidies', label: t('subsidies') },
         { href: '/admin/users', label: t('usersRoles') },
+        ...(can(user.role, 'settings:manage') ? [{ href: '/admin/settings', label: t('settings') }] : []),
       ],
     });
   }
@@ -57,10 +61,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-              MR
-            </span>
-            <span className="text-sm font-semibold text-slate-900">{t('brand')}</span>
+            {settings.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={settings.logoUrl} alt="" className="h-8 w-8 rounded-lg object-contain" />
+            ) : (
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
+                {settings.siteName
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((w) => w[0]?.toUpperCase() ?? '')
+                  .join('')}
+              </span>
+            )}
+            <span className="text-sm font-semibold text-slate-900">{settings.siteName}</span>
           </Link>
 
           <div className="flex items-center gap-3">
@@ -77,6 +90,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         <MobileNav groups={groups} />
       </header>
+
+      {settings.maintenanceMessage ? (
+        <div className="mx-auto max-w-[1400px] px-4 pt-4">
+          <Alert tone="warning">{settings.maintenanceMessage}</Alert>
+        </div>
+      ) : null}
 
       <div className="mx-auto flex max-w-[1400px] gap-6 px-4 py-6">
         <aside className="hidden w-56 shrink-0 lg:block">

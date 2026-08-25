@@ -15,6 +15,7 @@ export const CAPABILITIES = [
   'finance:view', // revenue, subsidy cost, payment reconciliation
   'finance:export', // download settlement / payroll files
   'kitchen:view', // per-restaurant production counts after cutoff
+  'settings:manage', // site branding, favicon, support email, maintenance banner
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -30,6 +31,7 @@ const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'finance:view',
     'finance:export',
     'kitchen:view',
+    'settings:manage',
   ],
   ANALYTICS: ['analytics:view', 'kitchen:view', 'order:place'],
   FINANCE: ['finance:view', 'finance:export', 'analytics:view', 'order:place'],

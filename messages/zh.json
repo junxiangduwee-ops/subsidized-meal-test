@@ -116,7 +116,8 @@
     "insights": "洞察",
     "analytics": "数据分析",
     "finance": "财务",
-    "kitchenCounts": "厨房统计"
+    "kitchenCounts": "厨房统计",
+    "settings": "设置"
   },
   "login": {
     "title": "餐饮订购",
@@ -138,7 +139,8 @@
     "ssoDisabled": "此环境未启用单点登录。",
     "ssoStateExpired": "登录链接已过期，请重试。",
     "ssoFailed": "单点登录失败。请重试，或使用邮箱和密码登录。",
-    "ssoInactive": "此账户已停用，请联系您的管理员。"
+    "ssoInactive": "此账户已停用，请联系您的管理员。",
+    "contactCustom": "遇到问题？请联系 {email}"
   },
   "forbidden": {
     "title": "您的角色无法访问此页面",
@@ -519,5 +521,23 @@
     "CANCELLED": "已取消",
     "FAILED": "失败",
     "REFUNDED": "已退款"
+  },
+  "settingsAdmin": {
+    "title": "设置",
+    "subtitle": "管理网站的外观与身份标识。",
+    "branding": "品牌设置",
+    "brandingHint": "显示在浏览器标签、应用页眉和登录页面。",
+    "save": "保存更改",
+    "siteName": "网站名称",
+    "siteNameHint": "显示在页眉、浏览器标签标题和登录页面。",
+    "logoUrl": "标志图片链接",
+    "logoUrlHint": "建议使用正方形图片。显示在应用页眉和登录页面。",
+    "faviconUrl": "网站图标链接",
+    "faviconUrlHint": "显示为浏览器标签图标。PNG 或 ICO 格式，正方形，至少 32×32。",
+    "supportEmail": "支持邮箱",
+    "supportEmailHint": "显示在登录页面，供遇到问题的员工联系。",
+    "maintenanceMessage": "维护公告",
+    "maintenanceMessagePlaceholder": "例如：本周五 6–8 点将暂停下单以进行维护。",
+    "maintenanceMessageHint": "显示给每位已登录用户，直到你清空此内容。留空则不显示。"
   }
 }
