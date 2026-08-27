@@ -230,6 +230,7 @@
     "priceRm": "价格（令吉）",
     "tagsLabel": "标签（以逗号分隔）",
     "tagsPlaceholder": "halal, spicy",
+    "description": "描述",
     "imageUrl": "图片链接"
   },
   "subsidiesAdmin": {

@@ -230,6 +230,7 @@
     "priceRm": "Harga (RM)",
     "tagsLabel": "Tag (dipisah koma)",
     "tagsPlaceholder": "halal, pedas",
+    "description": "Penerangan",
     "imageUrl": "URL Imej"
   },
   "subsidiesAdmin": {
