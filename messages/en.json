@@ -99,7 +99,9 @@
     "working": "Working...",
     "ellipsis": "...",
     "serviceDaysAriaLabel": "Service days",
-    "loadingAriaLabel": "Loading"
+    "loadingAriaLabel": "Loading",
+    "scrollLeftAriaLabel": "Scroll left",
+    "scrollRightAriaLabel": "Scroll right"
   },
   "nav": {
     "brand": "Food Ordering",
@@ -228,7 +230,6 @@
     "priceRm": "Price (RM)",
     "tagsLabel": "Tags (comma separated)",
     "tagsPlaceholder": "halal, spicy",
-    "description": "Description",
     "imageUrl": "Image URL"
   },
   "subsidiesAdmin": {

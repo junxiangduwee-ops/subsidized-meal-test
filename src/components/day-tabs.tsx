@@ -4,6 +4,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState, useTransition } from 'react';
 
+import { ScrollFadeRow } from '@/components/scroll-fade-row';
+
 export type DayTab = {
   /** Value written to the query string - a YYYY-MM-DD date key. */
   key: string;
@@ -57,10 +59,11 @@ export function DayTabs({
   }
 
   return (
-    <div
+    <ScrollFadeRow
       role="tablist"
-      aria-label={t('serviceDaysAriaLabel')}
-      className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      ariaLabel={t('serviceDaysAriaLabel')}
+      innerClassName="gap-1.5 pb-1"
+      fadeColorClassName="from-slate-100"
     >
       {tabs.map((tab) => {
         const selected = tab.key === optimistic;
@@ -125,7 +128,7 @@ export function DayTabs({
           </button>
         );
       })}
-    </div>
+    </ScrollFadeRow>
   );
 }
 

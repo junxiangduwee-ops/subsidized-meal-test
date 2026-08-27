@@ -99,7 +99,9 @@
     "working": "处理中...",
     "ellipsis": "...",
     "serviceDaysAriaLabel": "供餐日",
-    "loadingAriaLabel": "加载中"
+    "loadingAriaLabel": "加载中",
+    "scrollLeftAriaLabel": "向左滚动",
+    "scrollRightAriaLabel": "向右滚动"
   },
   "nav": {
     "brand": "餐饮订购",

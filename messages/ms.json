@@ -99,7 +99,9 @@
     "working": "Sedang berjalan...",
     "ellipsis": "...",
     "serviceDaysAriaLabel": "Hari perkhidmatan",
-    "loadingAriaLabel": "Memuatkan"
+    "loadingAriaLabel": "Memuatkan",
+    "scrollLeftAriaLabel": "Tatal ke kiri",
+    "scrollRightAriaLabel": "Tatal ke kanan"
   },
   "nav": {
     "brand": "Pesanan Makanan",
