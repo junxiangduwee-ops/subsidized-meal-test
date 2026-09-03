@@ -20,7 +20,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://duweetest.on.joget.cloud/jw/web/userview/food_ordering/food_order/_/207E99C7BA2B462C77326485269E8382",
+            value: "frame-ancestors 'self' https://duweetest.on.joget.cloud",
           },
         ],
       },
