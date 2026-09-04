@@ -16,15 +16,7 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm({
-  ssoEnabled,
-  ldapEnabled,
-  jogetEnabled,
-}: {
-  ssoEnabled: boolean;
-  ldapEnabled: boolean;
-  jogetEnabled: boolean;
-}) {
+export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ldapEnabled: boolean }) {
   const t = useTranslations('login');
   const [state, formAction] = useActionState<LoginState, FormData>(loginAction, {});
 
@@ -71,7 +63,6 @@ export function LoginForm({
       </form>
 
       {ldapEnabled ? <p className="text-center text-xs text-slate-500">{t('ldapHint')}</p> : null}
-      {jogetEnabled ? <p className="text-center text-xs text-slate-500">{t('jogetHint')}</p> : null}
 
       {ssoEnabled ? (
         <>

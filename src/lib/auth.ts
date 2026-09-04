@@ -5,12 +5,10 @@ import type { User } from '@prisma/client';
 
 import { prisma } from './prisma';
 import { ldapProvider } from './auth/ldap';
-import { jogetProvider } from './auth/joget';
 import type { ExternalIdentity } from './auth/providers';
-import { isJogetEnabled, isLdapEnabled, isOidcEnabled } from './auth/providers';
-import { roleFromGroups } from './rbac';
+import { isLdapEnabled, isOidcEnabled } from './auth/providers';
 
-export { isJogetEnabled, isLdapEnabled, isOidcEnabled };
+export { isLdapEnabled, isOidcEnabled };
 
 const BCRYPT_ROUNDS = 12;
 
@@ -43,13 +41,6 @@ export async function authenticate(emailRaw: string, password: string): Promise<
     // directory while keeping a stale local hash.
   }
 
-  if (isJogetEnabled()) {
-    const identity = await jogetProvider.verify(email, password);
-    if (identity) {
-      return { ok: true, user: await provisionFromDirectory(identity) };
-    }
-  }
-
   if (isLdapEnabled()) {
     const identity = await ldapProvider.verify(email, password);
     if (identity) {
@@ -57,7 +48,7 @@ export async function authenticate(emailRaw: string, password: string): Promise<
     }
   }
 
-  if (existing && !existing.passwordHash && !isLdapEnabled() && !isJogetEnabled()) {
+  if (existing && !existing.passwordHash && !isLdapEnabled()) {
     // SSO-only account trying to use the password form.
     return { ok: false, reason: 'no-local-password' };
   }
@@ -73,21 +64,12 @@ export async function authenticate(emailRaw: string, password: string): Promise<
 const DUMMY_HASH = '$2a$12$C6UzMDM.H6dfI/f/IKcEe.7bJUmmnzHrJPcNPlQZfLBBFhVXjKQ4W';
 
 /**
- * Create or refresh the local mirror of a directory account.
- *
- * Role handling differs by provider:
- * - LDAP/OIDC: role is only assigned on creation - once an admin changes
- *   someone's role here, the directory must not silently overwrite it.
- * - Joget: role is *derived from group membership on every login*, per
- *   product requirement, so moving someone between Joget groups (e.g. into
- *   "Finance") takes effect the next time they sign in. A manual role
- *   override made in this app's admin UI will be overwritten on that
- *   user's next Joget login - if you need sticky manual overrides for
- *   Joget accounts too, drop the role line below and only set it on create.
+ * Create or refresh the local mirror of a directory account. Role is only
+ * assigned on creation - once an admin changes someone's role here, the
+ * directory must not silently overwrite it.
  */
 export async function provisionFromDirectory(identity: ExternalIdentity): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { email: identity.email } });
-  const groupRole = identity.provider === 'JOGET' ? roleFromGroups(identity.groups) : undefined;
 
   if (existing) {
     if (!existing.active) throw new Error('This account has been deactivated.');
@@ -99,7 +81,6 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
         department: identity.department ?? existing.department,
         authProvider: identity.provider,
         externalId: identity.externalId,
-        ...(groupRole ? { role: groupRole } : {}),
         lastLoginAt: new Date(),
       },
     });
@@ -113,7 +94,7 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
       department: identity.department ?? null,
       authProvider: identity.provider,
       externalId: identity.externalId,
-      role: groupRole ?? 'USER', // new directory accounts default to employee
+      role: 'USER', // new directory accounts always start as employees
       lastLoginAt: new Date(),
     },
   });

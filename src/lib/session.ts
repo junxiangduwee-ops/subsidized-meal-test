@@ -32,10 +32,7 @@ export type SessionUser = {
   staffId: string | null;
 };
 
-export async function createSession(
-  user: SessionUser,
-  options?: { crossSiteEmbed?: boolean },
-): Promise<void> {
+export async function createSession(user: SessionUser): Promise<void> {
   const expires = new Date(Date.now() + ttlHours() * 3600_000);
 
   const token = await new SignJWT({
@@ -50,15 +47,10 @@ export async function createSession(
     .sign(secret());
 
   const store = await cookies();
-  // A session created from inside the Joget iframe is a third-party cookie
-  // from the browser's point of view (this app's origin differs from
-  // Joget's) - it only survives if marked SameSite=None; Secure. Every other
-  // login path keeps the stricter Lax default.
-  const crossSite = options?.crossSiteEmbed ?? false;
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: crossSite ? true : process.env.NODE_ENV === 'production',
-    sameSite: crossSite ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     path: '/',
     expires,
   });
