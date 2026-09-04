@@ -15,6 +15,8 @@ export type ExternalIdentity = {
   name: string;
   staffId?: string | null;
   department?: string | null;
+  /** Group/role names from the source directory, e.g. Joget groups. */
+  groups?: string[];
 };
 
 export type CredentialProvider = {
@@ -33,5 +35,13 @@ export function isOidcEnabled(): boolean {
     process.env.AUTH_OIDC_ENABLED === 'true' &&
     Boolean(process.env.OIDC_ISSUER) &&
     Boolean(process.env.OIDC_CLIENT_ID)
+  );
+}
+
+export function isJogetEnabled(): boolean {
+  return (
+    process.env.AUTH_JOGET_ENABLED === 'true' &&
+    Boolean(process.env.JOGET_API_URL) &&
+    Boolean(process.env.JOGET_API_KEY)
   );
 }

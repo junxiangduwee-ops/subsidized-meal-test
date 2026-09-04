@@ -129,6 +129,7 @@
     "signIn": "Sign in",
     "signingIn": "Signing in...",
     "ldapHint": "Your MR DIY directory password works here.",
+    "jogetHint": "Sign in with your Joget account.",
     "or": "or",
     "ssoButton": "Sign in with company SSO",
     "contact": "Having trouble? Contact ai.automation@mrdiy.com",

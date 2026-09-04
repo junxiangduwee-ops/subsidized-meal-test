@@ -34,6 +34,7 @@ enum AuthProvider {
   LOCAL
   LDAP
   OIDC
+  JOGET
 }
 
 /// DRAFT      - admin is still planning; invisible to users
@@ -87,6 +88,22 @@ enum SubsidyType {
 enum SubsidyScope {
   ALL
   DEPARTMENT
+}
+
+// ---------------------------------------------------------------------------
+// Joget SSO handoff
+//
+// Each embed of the app inside Joget mints one short-lived token; a row here
+// is created the moment that token is redeemed so it can never be replayed,
+// even within its validity window (e.g. from a leaked referrer or log line).
+// ---------------------------------------------------------------------------
+
+model SsoNonce {
+  jti       String   @id
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 // ---------------------------------------------------------------------------
