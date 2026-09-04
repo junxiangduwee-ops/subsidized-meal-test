@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { Role, AuthProvider } from '@prisma/client';
 
 import { ActionForm } from '@/components/action-form';
 import { Dialog } from '@/components/dialog';
@@ -13,8 +14,8 @@ type UserFields = {
   email: string;
   staffId: string | null;
   department: string | null;
-  role: 'ADMIN' | 'ANALYTICS' | 'FINANCE' | 'USER';
-  authProvider: 'LOCAL' | 'LDAP' | 'OIDC';
+  role: Role;
+  authProvider: AuthProvider;
 };
 
 function useRoleOptions() {
