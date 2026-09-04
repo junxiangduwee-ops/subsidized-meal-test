@@ -129,6 +129,7 @@
     "signIn": "登录",
     "signingIn": "正在登录…",
     "ldapHint": "您的 MR DIY 目录密码可在此使用。",
+    "jogetHint": "使用您的 Joget 帐户登录。",
     "or": "或",
     "ssoButton": "使用公司单点登录",
     "contact": "遇到问题？请联系 ai.automation@mrdiy.com",
