@@ -41,14 +41,17 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   }
 
   const { user } = result;
-  await createSession({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    department: user.department,
-    staffId: user.staffId,
-  });
+  await createSession(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      department: user.department,
+      staffId: user.staffId,
+    },
+    { crossSiteEmbed: true },
+  );
   await audit(user.id, 'auth.login', 'User', user.id, { provider: user.authProvider });
 
   redirect(landingPathFor(user.role));
