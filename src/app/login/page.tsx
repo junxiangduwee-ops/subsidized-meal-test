@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; embed?: string }>;
 }) {
   const user = await getCurrentUser();
   if (user) redirect(landingPathFor(user.role));
@@ -27,9 +27,10 @@ export default async function LoginPage({
     sso_state: t('ssoStateExpired'),
     sso_failed: t('ssoFailed'),
     inactive: t('ssoInactive'),
+    not_provisioned: t('ssoNotProvisioned'),
   };
 
-  const { error } = await searchParams;
+  const { error, embed } = await searchParams;
   const ssoError = error ? ssoErrors[error] : undefined;
 
   return (
@@ -48,7 +49,12 @@ export default async function LoginPage({
               {ssoError}
             </div>
           ) : null}
-          <LoginForm ssoEnabled={isOidcEnabled()} ldapEnabled={isLdapEnabled()} jogetEnabled={isJogetEnabled()} />
+          <LoginForm
+            ssoEnabled={isOidcEnabled()}
+            ldapEnabled={isLdapEnabled()}
+            jogetEnabled={isJogetEnabled()}
+            embed={embed === '1'}
+          />
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400">

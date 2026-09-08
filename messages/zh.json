@@ -143,6 +143,7 @@
     "ssoStateExpired": "登录链接已过期，请重试。",
     "ssoFailed": "单点登录失败。请重试，或使用邮箱和密码登录。",
     "ssoInactive": "此账户已停用，请联系您的管理员。",
+    "ssoNotProvisioned": "您的帐户尚未设置，请联系管理员为您添加账户。",
     "contactCustom": "遇到问题？请联系 {email}"
   },
   "forbidden": {

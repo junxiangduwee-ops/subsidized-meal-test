@@ -143,6 +143,7 @@
     "ssoStateExpired": "That sign-in link expired. Please try again.",
     "ssoFailed": "Single sign-on failed. Try again, or use your email and password.",
     "ssoInactive": "This account has been deactivated. Contact your administrator.",
+    "ssoNotProvisioned": "Your account hasn't been set up yet. Ask your administrator to add you as a user.",
     "contactCustom": "Having trouble? Contact {email}"
   },
   "forbidden": {
