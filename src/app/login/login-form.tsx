@@ -20,10 +20,12 @@ export function LoginForm({
   ssoEnabled,
   ldapEnabled,
   jogetEnabled,
+  embed,
 }: {
   ssoEnabled: boolean;
   ldapEnabled: boolean;
   jogetEnabled: boolean;
+  embed: boolean;
 }) {
   const t = useTranslations('login');
   const [state, formAction] = useActionState<LoginState, FormData>(loginAction, {});
@@ -31,6 +33,7 @@ export function LoginForm({
   return (
     <div className="space-y-4">
       <form action={formAction} className="space-y-4">
+        {embed ? <input type="hidden" name="embed" value="1" /> : null}
         {state.error ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
             {state.error}
