@@ -61,7 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* The header (logo, site name, user menu) is Joget's own page chrome
           duplicated - hide it when the app is embedded inside a Joget
           iframe, since Joget already frames the page for the person. */}
-      {!user.embed ? (
+      {/* {!user.embed ? ( */}
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
             <Link href="/" className="flex items-center gap-2.5">
@@ -84,13 +84,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
           <MobileNav groups={groups} />
         </header>
-      ) : (
+      {/* ) : (
         // Still embedded, still needs to navigate between sections on
         // small screens - just without the branding bar above it.
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <MobileNav groups={groups} />
         </div>
-      )}
+      )} */}
 
       {settings.maintenanceMessage ? (
         <div className="mx-auto max-w-[1400px] px-4 pt-4">
