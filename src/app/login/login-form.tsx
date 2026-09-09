@@ -19,12 +19,10 @@ function SubmitButton() {
 export function LoginForm({
   ssoEnabled,
   ldapEnabled,
-  jogetEnabled,
   embed,
 }: {
   ssoEnabled: boolean;
   ldapEnabled: boolean;
-  jogetEnabled: boolean;
   embed: boolean;
 }) {
   const t = useTranslations('login');
@@ -74,7 +72,6 @@ export function LoginForm({
       </form>
 
       {ldapEnabled ? <p className="text-center text-xs text-slate-500">{t('ldapHint')}</p> : null}
-      {jogetEnabled ? <p className="text-center text-xs text-slate-500">{t('jogetHint')}</p> : null}
 
       {ssoEnabled ? (
         <>

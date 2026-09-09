@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { getCurrentUser } from '@/lib/session';
 import { landingPathFor } from '@/lib/rbac';
-import { isJogetEnabled, isLdapEnabled, isOidcEnabled } from '@/lib/auth';
+import { isLdapEnabled, isOidcEnabled } from '@/lib/auth';
 import { getSiteSettings } from '@/lib/settings';
 
 import { LoginForm } from './login-form';
@@ -52,7 +52,6 @@ export default async function LoginPage({
           <LoginForm
             ssoEnabled={isOidcEnabled()}
             ldapEnabled={isLdapEnabled()}
-            jogetEnabled={isJogetEnabled()}
             embed={embed === '1'}
           />
         </div>
