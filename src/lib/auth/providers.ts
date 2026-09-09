@@ -15,6 +15,7 @@ export type ExternalIdentity = {
   name: string;
   staffId?: string | null;
   department?: string | null;
+  groups?: string[];
 };
 
 export type CredentialProvider = {
