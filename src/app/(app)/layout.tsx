@@ -58,28 +58,39 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={settings.logoUrl} alt="" className="h-8 w-8 object-contain" />
-            <span className="text-sm font-semibold text-slate-900">{settings.siteName}</span>
-          </Link>
+      {/* The header (logo, site name, user menu) is Joget's own page chrome
+          duplicated - hide it when the app is embedded inside a Joget
+          iframe, since Joget already frames the page for the person. */}
+      {!user.embed ? (
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+          <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
+            <Link href="/" className="flex items-center gap-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={settings.logoUrl} alt="" className="h-8 w-8 object-contain" />
+              <span className="text-sm font-semibold text-slate-900">{settings.siteName}</span>
+            </Link>
 
-          <div className="flex items-center gap-3">
-            <UserMenu
-              name={user.name}
-              roleLabel={ROLE_LABEL[user.role]}
-              department={user.department}
-              initials={initials}
-              canViewOrders={can(user.role, 'order:place')}
-              onLogout={logoutAction}
-            />
+            <div className="flex items-center gap-3">
+              <UserMenu
+                name={user.name}
+                roleLabel={ROLE_LABEL[user.role]}
+                department={user.department}
+                initials={initials}
+                canViewOrders={can(user.role, 'order:place')}
+                onLogout={logoutAction}
+              />
+            </div>
           </div>
-        </div>
 
-        <MobileNav groups={groups} />
-      </header>
+          <MobileNav groups={groups} />
+        </header>
+      ) : (
+        // Still embedded, still needs to navigate between sections on
+        // small screens - just without the branding bar above it.
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+          <MobileNav groups={groups} />
+        </div>
+      )}
 
       {settings.maintenanceMessage ? (
         <div className="mx-auto max-w-[1400px] px-4 pt-4">

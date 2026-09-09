@@ -30,18 +30,23 @@ export type SessionUser = {
   role: Role;
   department: string | null;
   staffId: string | null;
+  /** True when this session was created via the Joget-embedded iframe flow -
+   * drives whether the app chrome (top menu) is shown. See layout.tsx. */
+  embed: boolean;
 };
 
 export async function createSession(
-  user: SessionUser,
+  user: Omit<SessionUser, 'embed'>,
   options?: { crossSiteEmbed?: boolean },
 ): Promise<void> {
   const expires = new Date(Date.now() + ttlHours() * 3600_000);
+  const embed = options?.crossSiteEmbed ?? false;
 
   const token = await new SignJWT({
     email: user.email,
     name: user.name,
     role: user.role,
+    embed,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
@@ -54,11 +59,10 @@ export async function createSession(
   // from the browser's point of view (this app's origin differs from
   // Joget's) - it only survives if marked SameSite=None; Secure. Every other
   // login path keeps the stricter Lax default.
-  const crossSite = options?.crossSiteEmbed ?? false;
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: crossSite ? true : process.env.NODE_ENV === 'production',
-    sameSite: crossSite ? 'none' : 'lax',
+    secure: embed ? true : process.env.NODE_ENV === 'production',
+    sameSite: embed ? 'none' : 'lax',
     path: '/',
     expires,
   });
@@ -80,9 +84,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!token) return null;
 
   let sub: string | undefined;
+  let embed = false;
   try {
     const { payload } = await jwtVerify(token, secret());
     sub = payload.sub;
+    embed = payload.embed === true;
   } catch {
     return null;
   }
@@ -103,7 +109,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
   if (!user || !user.active) return null;
   const { active: _active, ...session } = user;
-  return session;
+  return { ...session, embed };
 }
 
 /** Redirects to /login when signed out. Use at the top of protected pages. */
