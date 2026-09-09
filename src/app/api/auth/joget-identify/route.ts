@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
-import { createSession } from '@/lib/session';
+import { createSession, destroySession } from '@/lib/session';
 import { landingPathFor } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +31,12 @@ function base(): string {
  * notes) to add proper signature verification and auto-provisioning.
  */
 export async function GET(request: Request) {
+  // Always clear whatever session is currently sitting in the browser
+  // first - this endpoint represents "log in as whoever Joget says is
+  // currently active." If that fails below, the person should land on a
+  // real error, never silently keep seeing the PREVIOUS person's session.
+  await destroySession();
+
   const url = new URL(request.url);
   const email = (url.searchParams.get('email') ?? '').trim().toLowerCase();
 
