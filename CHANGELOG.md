@@ -109,6 +109,13 @@ The uploaded project already included:
 
 ---
 
-## 7 - Mobile Sliding UI 27 Aug 2026
+## 9 - Mobile Sliding UI 27 Aug 2026
 1. **Updated chevron and scrollbar in mobile ui to notify user it is scrollable**
    *File: `src/components/scroll-fade-row.tsx`*
+
+---
+
+## 10 - Integration with Joget 9 Sept 2026
+1. **Updated Integration with Joget throught IFrame**
+2. **Intergrated login function with Joget Sign In**
+   *File: `src/lib/session.ts` — createSession() now accepts a crossSiteEmbed option controlling the cookie's SameSite/Secure attributes, needed specifically for the iframe case.*
