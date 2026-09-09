@@ -34,6 +34,7 @@ enum AuthProvider {
   LOCAL
   LDAP
   OIDC
+  JOGET
 }
 
 /// DRAFT      - admin is still planning; invisible to users
