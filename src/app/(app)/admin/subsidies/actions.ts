@@ -1,12 +1,11 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
-import { CACHE_TAGS } from '@/lib/cache';
 import { ringgitToSen } from '@/lib/money';
 import { dateOnly } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
@@ -99,7 +98,6 @@ export async function createSubsidyRule(_prev: ActionState, formData: FormData):
   await audit(actor.id, 'subsidy.create', 'SubsidyRule', rule.id, { name: rule.name });
 
   revalidatePath('/admin/subsidies');
-  revalidateTag(CACHE_TAGS.subsidyRules);
   return { success: `Created "${rule.name}". It applies to carts priced from now on.` };
 }
 
@@ -119,7 +117,6 @@ export async function updateSubsidyRule(_prev: ActionState, formData: FormData):
   await audit(actor.id, 'subsidy.update', 'SubsidyRule', id);
 
   revalidatePath('/admin/subsidies');
-  revalidateTag(CACHE_TAGS.subsidyRules);
   return { success: 'Saved. Orders already paid keep the subsidy they were charged.' };
 }
 
@@ -134,7 +131,6 @@ export async function toggleSubsidyRule(formData: FormData): Promise<void> {
   await prisma.subsidyRule.update({ where: { id }, data: { active: !current.active } });
   await audit(actor.id, current.active ? 'subsidy.deactivate' : 'subsidy.activate', 'SubsidyRule', id);
   revalidatePath('/admin/subsidies');
-  revalidateTag(CACHE_TAGS.subsidyRules);
 }
 
 export async function deleteSubsidyRule(formData: FormData): Promise<void> {
@@ -145,5 +141,4 @@ export async function deleteSubsidyRule(formData: FormData): Promise<void> {
   await prisma.subsidyRule.delete({ where: { id } });
   await audit(actor.id, 'subsidy.delete', 'SubsidyRule', id);
   revalidatePath('/admin/subsidies');
-  revalidateTag(CACHE_TAGS.subsidyRules);
 }

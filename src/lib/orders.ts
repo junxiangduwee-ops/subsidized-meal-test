@@ -6,7 +6,6 @@ import type { Order, Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { isOrderingOpen, toDateKey } from './cycle';
 import { calculateSubsidy, type SubsidyLineInput } from './subsidy';
-import { getActiveSubsidyRules } from './cache';
 
 /** Statuses that hold a portion against a menu item's capacity. */
 const COMMITTED_STATUSES = ['AWAITING_PAYMENT', 'PAID'] as const;
@@ -215,7 +214,7 @@ export async function repriceOrder(orderId: string): Promise<Order> {
     include: { items: true, user: { select: { department: true } } },
   });
 
-  const rules = await getActiveSubsidyRules();
+  const rules = await prisma.subsidyRule.findMany({ where: { active: true } });
 
   const inputs: SubsidyLineInput[] = order.items.map((i) => ({
     key: i.id,
