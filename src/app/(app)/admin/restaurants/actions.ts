@@ -1,11 +1,12 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
+import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
 const restaurantSchema = z.object({
@@ -45,6 +46,7 @@ export async function createRestaurant(_prev: ActionState, formData: FormData): 
 
   await audit(actor.id, 'restaurant.create', 'Restaurant', created.id, { name: created.name });
   revalidatePath('/admin/restaurants');
+  revalidateTag(CACHE_TAGS.restaurants);
   return { success: `Added ${created.name}.` };
 }
 
@@ -75,6 +77,7 @@ export async function updateRestaurant(_prev: ActionState, formData: FormData): 
 
   await audit(actor.id, 'restaurant.update', 'Restaurant', id);
   revalidatePath('/admin/restaurants');
+  revalidateTag(CACHE_TAGS.restaurants);
   return { success: 'Saved.' };
 }
 
@@ -90,6 +93,7 @@ export async function toggleRestaurantActive(formData: FormData): Promise<void> 
   await audit(actor.id, current.active ? 'restaurant.deactivate' : 'restaurant.activate', 'Restaurant', id);
   revalidatePath('/admin/restaurants');
   revalidatePath('/admin/dishes');
+  revalidateTag(CACHE_TAGS.restaurants);
 }
 
 /**
@@ -112,4 +116,5 @@ export async function deleteRestaurant(formData: FormData): Promise<void> {
 
   revalidatePath('/admin/restaurants');
   revalidatePath('/admin/dishes');
+  revalidateTag(CACHE_TAGS.restaurants);
 }

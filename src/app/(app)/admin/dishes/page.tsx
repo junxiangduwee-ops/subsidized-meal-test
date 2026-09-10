@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { containsInsensitive, decodeTags } from '@/lib/db-compat';
+import { getRestaurantsForDropdown } from '@/lib/cache';
 import { formatSen } from '@/lib/money';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
@@ -28,10 +29,7 @@ export default async function DishesPage({
   const page = parsePage(params.page);
   const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
-  const restaurants = await prisma.restaurant.findMany({
-    orderBy: [{ active: 'desc' }, { name: 'asc' }],
-    select: { id: true, name: true, active: true },
-  });
+  const restaurants = await getRestaurantsForDropdown();
 
   const where = {
     restaurantId: params.restaurant || undefined,

@@ -7,6 +7,7 @@ import { decodeTags } from '@/lib/db-compat';
 import { employeePriceFor } from '@/lib/subsidy';
 import { formatDate, formatDateTime, formatWeekRange, timeUntil, toDateKey } from '@/lib/cycle';
 import { remainingCapacityMap } from '@/lib/orders';
+import { getActiveDeliverySites, getActiveSubsidyRules } from '@/lib/cache';
 import { PageHeader, EmptyState, Alert } from '@/components/ui';
 import type { DayTab } from '@/components/day-tabs';
 
@@ -70,11 +71,7 @@ export default async function MenuPage({
     orderBy: { createdAt: 'asc' },
   });
 
-  const deliverySites = await prisma.deliverySite.findMany({
-    where: { active: true },
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true },
-  });
+  const deliverySites = await getActiveDeliverySites();
 
   // The cart is created on first add, not on first view, so browsing alone
   // does not litter the table with empty orders.
@@ -183,7 +180,7 @@ export default async function MenuPage({
 
   // Employees see their own price, never the list price or the company's
   // contribution. Exact per dish because it is one meal per service day.
-  const rules = await prisma.subsidyRule.findMany({ where: { active: true } });
+  const rules = await getActiveSubsidyRules();
 
   const dishes: MenuDish[] = menuItems.map((item) => ({
     menuItemId: item.id,

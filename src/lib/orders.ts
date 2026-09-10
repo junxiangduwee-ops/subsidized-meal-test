@@ -6,6 +6,7 @@ import type { Order, Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { isOrderingOpen, toDateKey } from './cycle';
 import { calculateSubsidy, type SubsidyLineInput } from './subsidy';
+import { getActiveSubsidyRules } from './cache';
 
 /** Statuses that hold a portion against a menu item's capacity. */
 const COMMITTED_STATUSES = ['AWAITING_PAYMENT', 'PAID'] as const;
@@ -214,7 +215,11 @@ export async function repriceOrder(orderId: string): Promise<Order> {
     include: { items: true, user: { select: { department: true } } },
   });
 
-  const rules = await prisma.subsidyRule.findMany({ where: { active: true } });
+  // The only caching-related change kept here: subsidy rules rarely change,
+  // but repriceOrder runs on every single cart click, so this alone used to
+  // mean one extra DB round trip per click. Reading from cache.ts instead
+  // does not touch connections/transactions at all - it is safe on its own.
+  const rules = await getActiveSubsidyRules();
 
   const inputs: SubsidyLineInput[] = order.items.map((i) => ({
     key: i.id,

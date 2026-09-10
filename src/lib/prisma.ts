@@ -14,6 +14,17 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    // Prisma's default interactive-transaction timeout is 5s. On a
+    // connection with real round-trip latency to the DB (cross-region, or
+    // just a slow pooler hop), a handful of sequential queries inside one
+    // transaction (see selectMeal/clearMeal in lib/orders.ts) can blow past
+    // that even though nothing is actually stuck - it's queries that are
+    // each individually slow, not deadlocked. 15s gives real headroom while
+    // still failing fast if something is genuinely hung.
+    transactionOptions: {
+      maxWait: 10_000, // time allowed to acquire a connection before starting
+      timeout: 15_000, // time allowed for the whole transaction body to run
+    },
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
