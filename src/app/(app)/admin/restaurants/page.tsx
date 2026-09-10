@@ -1,10 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 
-import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
+import { getRestaurantsPage } from '@/lib/cache';
 
 import { deleteRestaurant, toggleRestaurantActive } from './actions';
 import { AddRestaurantButton, EditRestaurantDialog } from './forms';
@@ -25,15 +25,7 @@ export default async function RestaurantsPage({
   const page = parsePage(params.page);
   const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
-  const [total, restaurants] = await Promise.all([
-    prisma.restaurant.count(),
-    prisma.restaurant.findMany({
-      orderBy: [{ active: 'desc' }, { name: 'asc' }],
-      include: { _count: { select: { dishes: true } } },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
+  const { total, restaurants } = await getRestaurantsPage(page, pageSize);
 
   return (
     <>

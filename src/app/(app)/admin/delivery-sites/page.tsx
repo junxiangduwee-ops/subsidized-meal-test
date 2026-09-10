@@ -1,10 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 
-import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
+import { getDeliverySitesPage } from '@/lib/cache';
 
 import { deleteDeliverySite, toggleDeliverySiteActive } from './actions';
 import { AddDeliverySiteButton, EditDeliverySiteDialog } from './site-form';
@@ -25,15 +25,7 @@ export default async function DeliverySitesPage({
   const page = parsePage(params.page);
   const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
-  const [total, sites] = await Promise.all([
-    prisma.deliverySite.count(),
-    prisma.deliverySite.findMany({
-      orderBy: [{ active: 'desc' }, { name: 'asc' }],
-      include: { _count: { select: { orders: true } } },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
+  const { total, sites } = await getDeliverySitesPage(page, pageSize);
 
   return (
     <>

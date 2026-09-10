@@ -3,13 +3,14 @@
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import { DEFAULT_SETTINGS, SETTINGS_ID } from '@/lib/settings';
+import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
 // Uploaded files are written straight to disk under public/, which needs a
@@ -61,6 +62,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
   // The site name is read in the root layout, header, and login screen -
   // all need to reflect a change immediately, not just the settings page.
   revalidatePath('/', 'layout');
+  revalidateTag(CACHE_TAGS.siteSettings);
 
   return { success: 'Settings saved.' };
 }
@@ -126,6 +128,7 @@ export async function uploadBrandingImage(_prev: ActionState, formData: FormData
 
   await audit(actor.id, 'settings.upload_branding_image', 'AppSettings', SETTINGS_ID, { kind, filename });
   revalidatePath('/', 'layout');
+  revalidateTag(CACHE_TAGS.siteSettings);
 
   return { success: kind === 'logo' ? 'Logo updated.' : 'Favicon updated.' };
 }
@@ -157,4 +160,5 @@ export async function resetBrandingImage(formData: FormData): Promise<void> {
     defaultUrl: DEFAULT_SETTINGS[field],
   });
   revalidatePath('/', 'layout');
+  revalidateTag(CACHE_TAGS.siteSettings);
 }

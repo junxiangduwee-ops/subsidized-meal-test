@@ -1,12 +1,12 @@
 import { getLocale, getTranslations } from 'next-intl/server';
 
-import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { describeRule } from '@/lib/subsidy';
 import { formatDate, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
+import { getSubsidyRulesPage, getDepartments } from '@/lib/cache';
 
 import { deleteSubsidyRule, toggleSubsidyRule } from './actions';
 import { AddRuleButton, EditRuleDialog } from './rule-form';
@@ -35,23 +35,9 @@ export default async function SubsidiesPage({
   } as const;
 
   // Total and active counts span *all* rules, not just the current page.
-  const [total, activeCount, rules] = await Promise.all([
-    prisma.subsidyRule.count(),
-    prisma.subsidyRule.count({ where: { active: true } }),
-    prisma.subsidyRule.findMany({
-      orderBy: [{ active: 'desc' }, { priority: 'desc' }, { name: 'asc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
+  const { total, activeCount, rules } = await getSubsidyRulesPage(page, pageSize);
 
-  const departmentRows = await prisma.user.findMany({
-    where: { department: { not: null } },
-    distinct: ['department'],
-    select: { department: true },
-    orderBy: { department: 'asc' },
-  });
-  const departments = departmentRows.map((r) => r.department!).filter(Boolean);
+  const departments = await getDepartments();
 
   return (
     <>

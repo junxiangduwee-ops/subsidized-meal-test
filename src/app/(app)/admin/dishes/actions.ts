@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -8,6 +8,7 @@ import { assertCapability } from '@/lib/session';
 import { encodeTags } from '@/lib/db-compat';
 import { audit } from '@/lib/orders';
 import { ringgitToSen, assertValidSen, formatSen } from '@/lib/money';
+import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
 const dishSchema = z.object({
@@ -64,6 +65,7 @@ export async function createDish(_prev: ActionState, formData: FormData): Promis
 
   await audit(actor.id, 'dish.create', 'Dish', created.id, { name: created.name, priceSen: created.priceSen });
   revalidatePath('/admin/dishes');
+  revalidateTag(CACHE_TAGS.restaurants);
   return { success: `Added ${created.name} at ${formatSen(created.priceSen)}.` };
 }
 
@@ -144,4 +146,5 @@ export async function deleteDish(formData: FormData): Promise<void> {
   }
 
   revalidatePath('/admin/dishes');
+  revalidateTag(CACHE_TAGS.restaurants);
 }

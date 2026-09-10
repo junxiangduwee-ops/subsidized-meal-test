@@ -8,6 +8,7 @@ import { formatDateTime } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
+import { getDepartments } from '@/lib/cache';
 
 import { toggleUserActive } from './actions';
 import { AddUserButton, EditUserDialog, ResetPasswordDialog } from './user-forms';
@@ -56,13 +57,7 @@ export default async function UsersPage({
     }),
   ]);
 
-  const departmentRows = await prisma.user.findMany({
-    where: { department: { not: null } },
-    distinct: ['department'],
-    select: { department: true },
-    orderBy: { department: 'asc' },
-  });
-  const departments = departmentRows.map((r) => r.department!).filter(Boolean);
+  const departments = await getDepartments();
 
   return (
     <>

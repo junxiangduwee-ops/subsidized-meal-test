@@ -1,12 +1,13 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
+import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
 const ROLES = ['ADMIN', 'ANALYTICS', 'FINANCE', 'USER'] as const;
@@ -54,6 +55,7 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
 
   await audit(actor.id, 'user.create', 'User', user.id, { email: user.email, role: user.role });
   revalidatePath('/admin/users');
+  revalidateTag(CACHE_TAGS.departments);
   return { success: `Created ${user.name}. Share the temporary password securely — never by email.` };
 }
 
@@ -94,6 +96,7 @@ export async function updateUser(_prev: ActionState, formData: FormData): Promis
 
   await audit(actor.id, 'user.update', 'User', d.id, { roleFrom: target.role, roleTo: d.role });
   revalidatePath('/admin/users');
+  revalidateTag(CACHE_TAGS.departments);
   return { success: 'Saved.' };
 }
 

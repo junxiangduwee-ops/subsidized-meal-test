@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { getSiteSettingsCached } from '@/lib/cache';
 
 /**
  * Site settings are a single row, always read/written by this fixed id -
@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
  * `generateMetadata` - it never throws.
  */
 export async function getSiteSettings(): Promise<SiteSettings> {
-  const row = await prisma.appSettings.findUnique({ where: { id: SETTINGS_ID } });
+  const row = await getSiteSettingsCached();
 
   return {
     siteName: row?.siteName || DEFAULT_SETTINGS.siteName,
