@@ -3,6 +3,15 @@ import 'server-only';
 import { unstable_cache } from 'next/cache';
 
 import { prisma } from './prisma';
+import {
+  demandByWeekday,
+  departmentBreakdown,
+  participation,
+  restaurantShare,
+  topDishes,
+  trailingWeeks,
+  weeklyTotals,
+} from './reporting';
 
 // ---------------------------------------------------------------------------
 // Cached reference data.
@@ -25,9 +34,7 @@ export const CACHE_TAGS = {
   restaurants: 'restaurants',
   siteSettings: 'site-settings',
   departments: 'departments',
-} as const;
-
-export const getActiveDeliverySites = unstable_cache(
+} as const;export const getActiveDeliverySites = unstable_cache(
   async () =>
     prisma.deliverySite.findMany({
       where: { active: true },
@@ -146,4 +153,43 @@ export const getDepartments = unstable_cache(
   },
   ['departments-distinct'],
   { tags: [CACHE_TAGS.departments], revalidate: 300 },
+);
+
+// ---------------------------------------------------------------------------
+// Analytics dashboard.
+//
+// Deliberately NOT wrapping the underlying reporting.ts functions themselves
+// (weeklyTotals, departmentBreakdown, etc.) - Finance imports those same
+// functions directly for its own live totals, and wrapping them here would
+// silently cache Finance's numbers too. Instead this is its own cached
+// entry point, used only by the Analytics page.
+//
+// This one is a genuinely good caching candidate for a different reason
+// than the catalogue data above: it's not about being "static", it's that
+// a trailing-weeks trend dashboard is inherently retrospective, backed by
+// several expensive aggregate queries, and a couple of minutes of staleness
+// on a reporting view is normal practice for any BI dashboard - nobody is
+// making an in-the-moment operational call off this page the way they
+// would off Finance or Kitchen.
+// ---------------------------------------------------------------------------
+
+export const getAnalyticsDashboard = unstable_cache(
+  async (weeks: number, locale: string) => {
+    const window = trailingWeeks(weeks);
+    const [weekly, dishes, restaurants, weekday, departments, take] = await Promise.all([
+      weeklyTotals(window, locale),
+      topDishes(window, 10),
+      restaurantShare(window),
+      demandByWeekday(window, locale),
+      departmentBreakdown(window),
+      participation(window),
+    ]);
+    return { weekly, dishes, restaurants, weekday, departments, take };
+  },
+  ['analytics-dashboard'],
+  { revalidate: 120 }, // time-based only - no tag, since it aggregates so many
+                        // tables (orders, order items, cycles) that tagging
+                        // every mutation that could touch it would defeat
+                        // the point; a 2-minute refresh is the intended
+                        // behaviour, not a fallback.
 );

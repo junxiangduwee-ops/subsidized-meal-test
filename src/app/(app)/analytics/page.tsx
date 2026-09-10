@@ -2,15 +2,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 
 import { requireCapability } from '@/lib/session';
 import { formatSen } from '@/lib/money';
-import {
-  demandByWeekday,
-  departmentBreakdown,
-  participation,
-  restaurantShare,
-  topDishes,
-  trailingWeeks,
-  weeklyTotals,
-} from '@/lib/reporting';
+import { getAnalyticsDashboard } from '@/lib/cache';
 import { PageHeader, Section, Stat, EmptyState } from '@/components/ui';
 
 import { RestaurantShareChart, SpendChart, WeekdayChart, WeeklyDemandChart } from './charts';
@@ -31,16 +23,8 @@ export default async function AnalyticsPage({
 
   const requested = Number.parseInt(params.weeks ?? '', 10);
   const weeks = (RANGES as readonly number[]).includes(requested) ? requested : 12;
-  const window = trailingWeeks(weeks);
 
-  const [weekly, dishes, restaurants, weekday, departments, take] = await Promise.all([
-    weeklyTotals(window, locale),
-    topDishes(window, 10),
-    restaurantShare(window),
-    demandByWeekday(window, locale),
-    departmentBreakdown(window),
-    participation(window),
-  ]);
+  const { weekly, dishes, restaurants, weekday, departments, take } = await getAnalyticsDashboard(weeks, locale);
 
   const totalMeals = weekly.reduce((s, w) => s + w.meals, 0);
   const totalOrders = weekly.reduce((s, w) => s + w.orders, 0);
