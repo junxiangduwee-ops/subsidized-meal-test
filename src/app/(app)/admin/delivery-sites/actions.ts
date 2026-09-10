@@ -1,11 +1,12 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
+import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
 const siteSchema = z.object({
@@ -26,6 +27,7 @@ export async function createDeliverySite(_prev: ActionState, formData: FormData)
 
   await audit(actor.id, 'delivery_site.create', 'DeliverySite', created.id, { name: created.name });
   revalidatePath('/admin/delivery-sites');
+  revalidateTag(CACHE_TAGS.deliverySites);
   return { success: `Added ${created.name}.` };
 }
 
@@ -46,6 +48,7 @@ export async function updateDeliverySite(_prev: ActionState, formData: FormData)
 
   await audit(actor.id, 'delivery_site.update', 'DeliverySite', id);
   revalidatePath('/admin/delivery-sites');
+  revalidateTag(CACHE_TAGS.deliverySites);
   return { success: 'Saved.' };
 }
 
@@ -66,6 +69,7 @@ export async function toggleDeliverySiteActive(formData: FormData): Promise<void
   );
   revalidatePath('/admin/delivery-sites');
   revalidatePath('/menu');
+  revalidateTag(CACHE_TAGS.deliverySites);
 }
 
 /**
@@ -90,4 +94,5 @@ export async function deleteDeliverySite(formData: FormData): Promise<void> {
 
   revalidatePath('/admin/delivery-sites');
   revalidatePath('/menu');
+  revalidateTag(CACHE_TAGS.deliverySites);
 }
