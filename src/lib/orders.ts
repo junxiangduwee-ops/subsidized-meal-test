@@ -11,6 +11,16 @@ import { getActiveSubsidyRules } from './cache';
 /** Statuses that hold a portion against a menu item's capacity. */
 const COMMITTED_STATUSES = ['AWAITING_PAYMENT', 'PAID'] as const;
 
+/**
+ * Any function below that takes an optional `db` accepts either the plain
+ * `prisma` client or an interactive-transaction client (`tx` from
+ * `prisma.$transaction(async (tx) => ...)`). Callers that need several of
+ * these to happen atomically - and, just as importantly, on a *single*
+ * pooled connection instead of one checkout per query - pass `tx` through;
+ * everything else just uses the default `prisma` client.
+ */
+type Db = typeof prisma | Prisma.TransactionClient;
+
 export function newOrderReference(): string {
   const d = new Date();
   const stamp = `${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(
@@ -19,13 +29,13 @@ export function newOrderReference(): string {
   return `MRD-${stamp}-${randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
-export async function getOrCreateCart(userId: string, cycleId: string): Promise<Order> {
-  const existing = await prisma.order.findFirst({
+export async function getOrCreateCart(userId: string, cycleId: string, db: Db = prisma): Promise<Order> {
+  const existing = await db.order.findFirst({
     where: { userId, cycleId, status: 'CART' },
   });
   if (existing) return existing;
 
-  return prisma.order.create({
+  return db.order.create({
     data: { userId, cycleId, reference: newOrderReference(), status: 'CART' },
   })
 }
@@ -34,8 +44,9 @@ export async function getOrCreateCart(userId: string, cycleId: string): Promise<
 export async function committedQuantity(
   menuItemId: string,
   excludeOrderId?: string,
+  db: Db = prisma,
 ): Promise<number> {
-  const agg = await prisma.orderItem.aggregate({
+  const agg = await db.orderItem.aggregate({
     _sum: { quantity: true },
     where: {
       menuItemId,
@@ -111,52 +122,60 @@ export const MEALS_PER_DAY = 1;
  * a no-op rather than an error.
  */
 export async function selectMeal(userId: string, menuItemId: string): Promise<CartMutationResult> {
-  const menuItem = await prisma.menuItem.findUnique({
-    where: { id: menuItemId },
-    include: {
-      dish: { include: { restaurant: true } },
-      menuDay: { include: { cycle: true } },
-    },
-  });
-  if (!menuItem) return { ok: false, error: 'That dish is no longer on the menu.' };
+  // Everything below runs on ONE pooled connection instead of ~15 separate
+  // checkouts (lookup, lock-check, cart find/create, capacity check,
+  // delete+upsert, reprice's own read+writes). Under normal traffic that
+  // difference is barely noticeable; the moment a whole team clicks
+  // "choose meal" within the same minute (e.g. right when next week's
+  // ordering window opens), it's the difference between each click waiting
+  // once for a free connection vs. queueing behind itself over a dozen
+  // times.
+  return prisma.$transaction(async (tx) => {
+    const menuItem = await tx.menuItem.findUnique({
+      where: { id: menuItemId },
+      include: {
+        dish: { include: { restaurant: true } },
+        menuDay: { include: { cycle: true } },
+      },
+    });
+    if (!menuItem) return { ok: false, error: 'That dish is no longer on the menu.' };
 
-  const cycle = menuItem.menuDay.cycle;
-  if (!isOrderingOpen(cycle)) {
-    return { ok: false, error: 'Ordering for that week is not open.' };
-  }
-
-  const lockedSameDay = await prisma.orderItem.findFirst({
-    where: {
-      serviceDate: menuItem.menuDay.serviceDate,
-      order: { userId, cycleId: cycle.id, status: { not: 'CART' } },
-    },
-  });
-
-  if (lockedSameDay) {
-    return { ok: false, error: 'Your order for this day has already been submitted.' }
-  }
-
-  const order = await getOrCreateCart(userId, cycle.id);
-
-  if (menuItem.capacity != null) {
-    const others = await committedQuantity(menuItemId, order.id);
-    if (others + MEALS_PER_DAY > menuItem.capacity) {
-      return { ok: false, error: 'That dish is sold out for the day.' };
+    const cycle = menuItem.menuDay.cycle;
+    if (!isOrderingOpen(cycle)) {
+      return { ok: false, error: 'Ordering for that week is not open.' };
     }
-  }
 
-  const gross = menuItem.priceSen * MEALS_PER_DAY;
+    const lockedSameDay = await tx.orderItem.findFirst({
+      where: {
+        serviceDate: menuItem.menuDay.serviceDate,
+        order: { userId, cycleId: cycle.id, status: { not: 'CART' } },
+      },
+    });
 
-  await prisma.$transaction([
+    if (lockedSameDay) {
+      return { ok: false, error: 'Your order for this day has already been submitted.' }
+    }
+
+    const order = await getOrCreateCart(userId, cycle.id, tx);
+
+    if (menuItem.capacity != null) {
+      const others = await committedQuantity(menuItemId, order.id, tx);
+      if (others + MEALS_PER_DAY > menuItem.capacity) {
+        return { ok: false, error: 'That dish is sold out for the day.' };
+      }
+    }
+
+    const gross = menuItem.priceSen * MEALS_PER_DAY;
+
     // One meal per day: anything else already chosen for this date makes way.
-    prisma.orderItem.deleteMany({
+    await tx.orderItem.deleteMany({
       where: {
         orderId: order.id,
         serviceDate: menuItem.menuDay.serviceDate,
         NOT: { menuItemId },
       },
-    }),
-    prisma.orderItem.upsert({
+    });
+    await tx.orderItem.upsert({
       where: { orderId_menuItemId: { orderId: order.id, menuItemId } },
       create: {
         orderId: order.id,
@@ -175,42 +194,44 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
         unitPriceSen: menuItem.priceSen,
         grossSen: gross,
       },
-    }),
-  ]);
+    });
 
-  await repriceOrder(order.id);
-  return { ok: true };
+    await repriceOrder(order.id, tx);
+    return { ok: true };
+  });
 }
 
 /** Drop the meal chosen for a day, leaving that day unordered. */
 export async function clearMeal(userId: string, menuItemId: string): Promise<CartMutationResult> {
-  const menuItem = await prisma.menuItem.findUnique({
-    where: { id: menuItemId },
-    select: { menuDay: { select: { cycle: true } } },
+  return prisma.$transaction(async (tx) => {
+    const menuItem = await tx.menuItem.findUnique({
+      where: { id: menuItemId },
+      select: { menuDay: { select: { cycle: true } } },
+    });
+    if (!menuItem) return { ok: false, error: 'That dish is no longer on the menu.' };
+
+    const cycle = menuItem.menuDay.cycle;
+    if (!isOrderingOpen(cycle)) {
+      return { ok: false, error: 'Ordering for that week is not open.' };
+    }
+
+    const order = await tx.order.findFirst({
+      where: { userId, cycleId: cycle.id, status: 'CART' },
+    });
+    if (!order) return { ok: true };
+
+    await tx.orderItem.deleteMany({ where: { orderId: order.id, menuItemId } });
+    await repriceOrder(order.id, tx);
+    return { ok: true };
   });
-  if (!menuItem) return { ok: false, error: 'That dish is no longer on the menu.' };
-
-  const cycle = menuItem.menuDay.cycle;
-  if (!isOrderingOpen(cycle)) {
-    return { ok: false, error: 'Ordering for that week is not open.' };
-  }
-
-  const order = await prisma.order.findFirst({
-    where: { userId, cycleId: cycle.id, status: 'CART' },
-  });
-  if (!order) return { ok: true };
-
-  await prisma.orderItem.deleteMany({ where: { orderId: order.id, menuItemId } });
-  await repriceOrder(order.id);
-  return { ok: true };
 }
 
 /**
  * Recompute subsidy and totals for an order from its current lines.
  * Called after every cart mutation and again at checkout.
  */
-export async function repriceOrder(orderId: string): Promise<Order> {
-  const order = await prisma.order.findUniqueOrThrow({
+export async function repriceOrder(orderId: string, db: Db = prisma): Promise<Order> {
+  const order = await db.order.findUniqueOrThrow({
     where: { id: orderId },
     include: { items: true, user: { select: { department: true } } },
   });
@@ -227,30 +248,37 @@ export async function repriceOrder(orderId: string): Promise<Order> {
   const outcome = calculateSubsidy(inputs, rules, order.user.department);
   const byKey = new Map(outcome.lines.map((l) => [l.key, l]));
 
-  await prisma.$transaction([
-    ...order.items.map((item) => {
-      const line = byKey.get(item.id)!;
-      return prisma.orderItem.update({
-        where: { id: item.id },
-        data: {
-          grossSen: line.grossSen,
-          subsidySen: line.subsidySen,
-          netSen: line.netSen,
-        },
-      });
-    }),
-    prisma.order.update({
-      where: { id: orderId },
+  // Sequential, not $transaction([...]) - when `db` is already an
+  // interactive-transaction client (the common case now: selectMeal /
+  // clearMeal pass their own `tx` in), Prisma can't open a *nested*
+  // transaction, and these writes are already atomic as part of the
+  // caller's transaction. When `db` is the plain client (e.g. checkout,
+  // which reprices outside any wrapping transaction), each write is its
+  // own tiny transaction - fine, since checkout only runs once per order,
+  // not on every click.
+  for (const item of order.items) {
+    const line = byKey.get(item.id)!;
+    await db.orderItem.update({
+      where: { id: item.id },
       data: {
-        grossSen: outcome.grossSen,
-        subsidySen: outcome.subsidySen,
-        netSen: outcome.netSen,
-        subsidySnapshot: outcome.snapshot as unknown as Prisma.InputJsonValue,
+        grossSen: line.grossSen,
+        subsidySen: line.subsidySen,
+        netSen: line.netSen,
       },
-    }),
-  ]);
+    });
+  }
 
-  return prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+  // `update` already returns the fresh row - no need for the extra
+  // findUniqueOrThrow round trip that used to follow this.
+  return db.order.update({
+    where: { id: orderId },
+    data: {
+      grossSen: outcome.grossSen,
+      subsidySen: outcome.subsidySen,
+      netSen: outcome.netSen,
+      subsidySnapshot: outcome.snapshot as unknown as Prisma.InputJsonValue,
+    },
+  });
 }
 
 export type CheckoutValidation = { ok: true } | { ok: false; error: string };
