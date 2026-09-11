@@ -87,9 +87,9 @@ The uploaded project already included:
 
 ## 6 — Pagination 24 Aug 2026
 1. **New reusable pagination component** — Previous/Next, "Showing X–Y of Z", preserves other filters in the URL.
-   *New file: `src/components/pagination.tsx`*
+   *New files: `src/components/pagination.tsx`*
 2. **Applied to `/admin/users`**: replaced the flat `take: 300` cap with real `count` + `skip`/`take` pagination, 25 rows per page.
-   *File: `admin/users/page.tsx`*
+   *Files: `admin/users/page.tsx`*
 3. **Added a shared `<Pagination>`** - component (`src/components/pagination.tsx`) and applied it to every admin table that could grow without bound, replacing flat row caps with real `skip`/`take` paging:
    *Users, Restaurants, Dishes, Subsidy rules, Delivery sites, Cycles*
 
@@ -97,25 +97,38 @@ The uploaded project already included:
 
 ## 7 - Export Order History, payment method not stored in db 24 Aug 2026
 1. **Added a month picker + "Download CSV"**
-   *File: `src/app/api/exports/[type]/route.ts`*
+   *Files: `src/app/api/exports/[type]/route.ts`*
 2. **added `fetchPaymentType()`, which calls HitPay's `GET /v1/payment-requests/{id}`**
-   *File: ` src/lib/hitpay.ts`*
+   *Files: ` src/lib/hitpay.ts`*
 
 ---
 
 ## 8 - Settings page for admin 25 Aug 2026
 1. **Added pages for admin to edit site name, logo, favicon, support email and maintenance banner with the default logo of Mr DIY logo**
-   *File: `prisma/schema.prisma`, `public/uploads/branding/`(for image upload), `src/app/layout.tsx`, `src/app/login/page.tsx`, `src/app/(app)/admin/settings`,`src/app/(app)/layout.tsx`, `src/lib/settings.ts`*
+   *Files: `prisma/schema.prisma`, `public/uploads/branding/`(for image upload), `src/app/layout.tsx`, `src/app/login/page.tsx`, `src/app/(app)/admin/settings`,`src/app/(app)/layout.tsx`, `src/lib/settings.ts`*
 
 ---
 
 ## 9 - Mobile Sliding UI 27 Aug 2026
 1. **Updated chevron and scrollbar in mobile ui to notify user it is scrollable**
-   *File: `src/components/scroll-fade-row.tsx`*
+   *Files: `src/components/scroll-fade-row.tsx`*
 
 ---
 
 ## 10 - Integration with Joget 9 Sept 2026
 1. **Updated Integration with Joget throught IFrame**
 2. **Intergrated login function with Joget Sign In**
-   *File: `src/lib/session.ts` — createSession() now accepts a crossSiteEmbed option controlling the cookie's SameSite/Secure attributes, needed specifically for the iframe case.*
+   *Files: `src/lib/session.ts` — createSession() now accepts a crossSiteEmbed option controlling the cookie's SameSite/Secure attributes, needed specifically for the iframe case.*
+
+---
+
+## 11 - Reduce Latency during usage of the system 10 - 11 Sept 2026
+1. **Added Read Caching Layer to reduce the latency of waiting the query from database**
+   *Files: `src/lib/cache.ts`, `lib/settings.ts` - cached read: getActiveDeliverySites, getActiveSubsidyRules, getRestaurantsForDropdown, getSiteSettingsCached, getDeliverySitesPage, getRestaurantsPage, getSubsidyRulesPage, getDepartments, getAnalyticsDashboard*
+2. **repriceOrder reads subsidy rules from cache**
+   *Files: `src/lib/orders.ts` - Reads from getActiveSubsidyRules instead from repriceOrder*
+3. **Menu page reads run in parallel instead of sequentially**
+   *Files: `src/app/(app)/menu/page.tsx` - Same queries, same data is restructured into 3 different batch using Promise all where each of them runs independently*
+   1. Batch 1 (nothing here depends on anything else): auth check, the open-cycle lookup, cached delivery sites, cached subsidy rules, translations, locale, and the ?day= query param.
+   2. Batch 2 (both only need cycle.id): the user's orders for this cycle, and the day-tabs list.
+   3. Batch 3: the active day's dishes, then capacity-remaining (this one genuinely has to wait on Batch 3's own result).
