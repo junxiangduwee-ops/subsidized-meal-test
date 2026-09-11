@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Fragment, useOptimistic, useState, useTransition } from 'react';
+import { Fragment, useState, useTransition } from 'react';
 
 import { formatSen } from '@/lib/money';
 import { DayTabs, type DayTab } from '@/components/day-tabs';
@@ -91,65 +91,10 @@ export function MenuOrdering({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  // Selecting a meal always has to reach the server - that write can't be
-  // cached away. What this can fix is the *feel* of it: without this, the
-  // dish doesn't visibly highlight and the summary panel doesn't update
-  // until both the mutation AND the subsequent router.refresh() finish -
-  // two round trips stacked, sequentially, before anything moves on
-  // screen. useOptimistic shows the choice immediately, using the same
-  // post-subsidy price already sitting in `dish.priceSen` (that value is
-  // computed server-side and sent down for display, so this isn't a guess -
-  // it's the same number the real update will confirm). If the mutation
-  // fails, `error` is set and the next render reverts to the real
-  // (server-confirmed) state automatically - optimistic state only ever
-  // overlays the real props, it doesn't replace them permanently.
-  const [optimistic, applyOptimistic] = useOptimistic<
-    { dishes: MenuDish[]; cartLines: CartLine[]; totalSen: number },
-    { type: 'choose' | 'remove'; menuItemId: string } | { type: 'clear' }
-  >({ dishes, cartLines, totalSen }, (state, action) => {
-    if (action.type === 'clear') {
-      const remainingCartLines = state.cartLines.filter((l) => l.locked);
-      return {
-        dishes: state.dishes.map((d) => ({ ...d, chosen: false })),
-        cartLines: remainingCartLines,
-        totalSen: remainingCartLines.reduce((s, l) => s + l.netSen, 0),
-      };
-    }
-
-    const dish = state.dishes.find((d) => d.menuItemId === action.menuItemId);
-    if (!dish) return state;
-
-    const withoutToday = state.cartLines.filter((l) => l.dayKey !== activeDay);
-    const newCartLines =
-      action.type === 'choose'
-        ? [
-            ...withoutToday,
-            {
-              id: `optimistic-${action.menuItemId}`,
-              dayKey: activeDay,
-              dayLabel: dayHeading,
-              dishName: dish.dishName,
-              netSen: dish.priceSen,
-              locked: false,
-            },
-          ]
-        : withoutToday;
-
-    return {
-      dishes: state.dishes.map((d) => ({
-        ...d,
-        chosen: action.type === 'choose' ? d.menuItemId === action.menuItemId : false,
-      })),
-      cartLines: newCartLines,
-      totalSen: newCartLines.filter((l) => !l.locked).reduce((s, l) => s + l.netSen, 0),
-    };
-  });
-
   function toggle(menuItemId: string, alreadyChosen: boolean) {
     setError(null);
     setBusyId(menuItemId);
     startTransition(async () => {
-      applyOptimistic({ type: alreadyChosen ? 'remove' : 'choose', menuItemId });
       const result = alreadyChosen ? await removeMeal(menuItemId) : await chooseMeal(menuItemId);
       if (!result.ok) setError(result.error ?? t('genericError'));
       setBusyId(null);
@@ -161,7 +106,6 @@ export function MenuOrdering({
     const data = new FormData();
     data.set('cycleId', cycleId);
     startTransition(async () => {
-      applyOptimistic({ type: 'clear' });
       await clearCart(data);
       router.refresh();
     });
@@ -194,7 +138,7 @@ export function MenuOrdering({
             </span>
           </header>
 
-          {optimistic.dishes.length === 0 ? (
+          {dishes.length === 0 ? (
             <p className="px-5 py-16 text-center text-sm text-slate-400">{t('noDishes')}</p>
           ) : (
             <ul
@@ -202,7 +146,7 @@ export function MenuOrdering({
               aria-label={readOnly ? undefined : t('mealForDay', { day: dayHeading })}
               className="divide-y divide-slate-100"
             >
-              {groupByRestaurant(optimistic.dishes).map(([restaurantName, group]) => (
+              {groupByRestaurant(dishes).map(([restaurantName, group]) => (
                 <Fragment key={restaurantName}>
                   <li
                     role="presentation"
@@ -227,8 +171,8 @@ export function MenuOrdering({
       </div>
 
       <OrderSummary
-        cartLines={optimistic.cartLines}
-        totalSen={optimistic.totalSen}
+        cartLines={cartLines}
+        totalSen={totalSen}
         cycleId={cycleId}
         onClear={clear}
         hasSettledOrders={hasSettledOrders}
