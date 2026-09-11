@@ -20,17 +20,26 @@ export default async function MenuPage({
 }: {
   searchParams: Promise<{ day?: string }>;
 }) {
-  const user = await requireCapability('order:place');
-  const t = await getTranslations('menu');
-  const locale = await getLocale();
-  const { day: requestedDay } = await searchParams;
   const now = new Date();
 
-  // Cycle only - the dishes are fetched per selected day further down.
-  const cycle = await prisma.menuCycle.findFirst({
-    where: { status: 'PUBLISHED', orderOpenAt: { lte: now }, orderCutoffAt: { gt: now } },
-    orderBy: { serviceWeekStart: 'asc' },
-  });
+  // Independent of everything else on this page - user identity, the open
+  // cycle, delivery site options, subsidy rules, translations/locale, and
+  // the day query param don't depend on one another, so there is no reason
+  // to fetch them one after another. This is a read-only page: running
+  // these concurrently carries none of the atomicity/timeout risk that
+  // wrapping a write in a transaction would.
+  const [user, cycle, deliverySites, rules, t, locale, { day: requestedDay }] = await Promise.all([
+    requireCapability('order:place'),
+    prisma.menuCycle.findFirst({
+      where: { status: 'PUBLISHED', orderOpenAt: { lte: now }, orderCutoffAt: { gt: now } },
+      orderBy: { serviceWeekStart: 'asc' },
+    }),
+    getActiveDeliverySites(),
+    getActiveSubsidyRules(),
+    getTranslations('menu'),
+    getLocale(),
+    searchParams,
+  ]);
 
   if (!cycle) {
     const upcoming = await prisma.menuCycle.findFirst({
@@ -61,17 +70,26 @@ export default async function MenuPage({
     );
   }
 
-  // A person may have several orders for this cycle - the open cart, plus
-  // any earlier ones they already paid for. Pulling all of them, rather than
-  // assuming there is exactly one, is what lets a paid Mon-Wed order sit
-  // alongside an untouched Thu/Fri instead of locking the whole week.
-  const orders = await prisma.order.findMany({
-    where: { userId: user.id, cycleId: cycle.id },
-    include: { items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] } },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  const deliverySites = await getActiveDeliverySites();
+  // Both of these only need cycle.id (orders also needs user.id) - neither
+  // depends on the other's result, so they run together instead of one
+  // after another.
+  const [orders, days] = await Promise.all([
+    // A person may have several orders for this cycle - the open cart, plus
+    // any earlier ones they already paid for. Pulling all of them, rather
+    // than assuming there is exactly one, is what lets a paid Mon-Wed order
+    // sit alongside an untouched Thu/Fri instead of locking the whole week.
+    prisma.order.findMany({
+      where: { userId: user.id, cycleId: cycle.id },
+      include: { items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    // Day tabs: dates and per-day dish counts only - not the dishes themselves.
+    prisma.menuDay.findMany({
+      where: { cycleId: cycle.id },
+      orderBy: { serviceDate: 'asc' },
+      select: { id: true, serviceDate: true, _count: { select: { items: true } } },
+    }),
+  ]);
 
   // The cart is created on first add, not on first view, so browsing alone
   // does not litter the table with empty orders.
@@ -81,13 +99,6 @@ export default async function MenuPage({
   const orderItems = orders.flatMap((o) =>
     o.items.map((item) => ({ ...item, orderStatus: o.status, orderReference: o.reference })),
   );
-
-  // Day tabs: dates and per-day dish counts only - not the dishes themselves.
-  const days = await prisma.menuDay.findMany({
-    where: { cycleId: cycle.id },
-    orderBy: { serviceDate: 'asc' },
-    select: { id: true, serviceDate: true, _count: { select: { items: true } } },
-  });
 
   if (days.length === 0) {
     return (
@@ -178,9 +189,10 @@ export default async function MenuPage({
         cart?.id,
       );
 
-  // Employees see their own price, never the list price or the company's
-  // contribution. Exact per dish because it is one meal per service day.
-  const rules = await getActiveSubsidyRules();
+  // `rules` was already fetched at the top, in parallel with the cycle
+  // lookup - employees see their own price, never the list price or the
+  // company's contribution, computed here per dish since it is one meal
+  // per service day.
 
   const dishes: MenuDish[] = menuItems.map((item) => ({
     menuItemId: item.id,
