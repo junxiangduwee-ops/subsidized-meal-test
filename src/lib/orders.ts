@@ -231,8 +231,20 @@ export async function repriceOrder(orderId: string): Promise<Order> {
   const outcome = calculateSubsidy(inputs, rules, order.user.department);
   const byKey = new Map(outcome.lines.map((l) => [l.key, l]));
 
-  await prisma.$transaction([
-    ...order.items.map((item) => {
+  // Only write the items whose numbers actually changed. Selecting one
+  // day's meal recalculates every line (subsidy rules can be tiered across
+  // the whole cart, so a change to one day can in principle shift another
+  // day's number) - but in the common case only the day just picked
+  // actually differs. Comparing against the values already sitting in
+  // `order.items` (no extra query - we fetched them above) lets us skip
+  // writing rows whose gross/subsidy/net didn't move, which is normally
+  // most of the cart on any single click.
+  const itemUpdates = order.items
+    .filter((item) => {
+      const line = byKey.get(item.id)!;
+      return line.grossSen !== item.grossSen || line.subsidySen !== item.subsidySen || line.netSen !== item.netSen;
+    })
+    .map((item) => {
       const line = byKey.get(item.id)!;
       return prisma.orderItem.update({
         where: { id: item.id },
@@ -242,7 +254,10 @@ export async function repriceOrder(orderId: string): Promise<Order> {
           netSen: line.netSen,
         },
       });
-    }),
+    });
+
+  const results = await prisma.$transaction([
+    ...itemUpdates,
     prisma.order.update({
       where: { id: orderId },
       data: {
@@ -254,7 +269,13 @@ export async function repriceOrder(orderId: string): Promise<Order> {
     }),
   ]);
 
-  return prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+  // The last statement in the array is always the order update above, and
+  // `$transaction([...])` returns results in the same order the statements
+  // were given - so the last element here is always that fresh order row.
+  // It already reflects the update - no need for the extra
+  // findUniqueOrThrow that used to follow this (one less round trip on
+  // every single click, unconditionally).
+  return results[results.length - 1] as Order;
 }
 
 export type CheckoutValidation = { ok: true } | { ok: false; error: string };
