@@ -88,10 +88,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ) : (
         // Still embedded, still needs to navigate between sections on
         // small screens - just without the branding bar above it.
-        // The language switcher is appended as a pill after the nav items
-        // so it blends in naturally with the MobileNav pill style.
+        // The language switcher is surfaced here because the UserMenu
+        // (which normally holds it) is hidden when embedded inside Joget.
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <MobileNav groups={groups} append={<LanguageSwitcher />} />
+          <div className="flex items-center justify-between">
+            <MobileNav groups={groups} />
+            <LanguageSwitcher />
+          </div>
         </div>
       )}
 

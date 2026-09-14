@@ -1,25 +1,24 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useTransition } from 'react';
 
 import { LOCALES, LOCALE_LABEL } from '@/i18n/config';
 import { setLocale } from '@/i18n/actions';
 
 /**
- * A pill-shaped button that sits inline with the MobileNav items in the
- * embedded sticky bar. Tapping it cycles through the available locales,
- * matching the exact pill style used by MobileNav so it looks native.
+ * A compact language-select shown in the embedded sticky bar, where the
+ * normal UserMenu (which also has a language picker) is hidden because
+ * the Joget host page already provides the surrounding chrome.
  */
 export function LanguageSwitcher() {
+  const t = useTranslations('userMenu');
   const locale = useLocale();
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
-  function cycleLocale() {
-    const idx = LOCALES.indexOf(locale as typeof LOCALES[number]);
-    const next = LOCALES[(idx + 1) % LOCALES.length];
+  function changeLocale(next: string) {
     startTransition(async () => {
       await setLocale(next);
       router.refresh();
@@ -27,13 +26,19 @@ export function LanguageSwitcher() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={cycleLocale}
-      disabled={pending}
-      className="whitespace-nowrap rounded-full px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-    >
-      {LOCALE_LABEL[locale as typeof LOCALES[number]]}
-    </button>
+    <div className="flex items-center gap-1.5 px-2">
+      <label className="shrink-0 text-xs text-slate-500">{t('language')}:</label>
+      <select
+        className="h-7 rounded-md border border-slate-200 bg-white py-0 pl-2 pr-6 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        value={locale}
+        onChange={(e) => changeLocale(e.target.value)}
+      >
+        {LOCALES.map((l) => (
+          <option key={l} value={l}>
+            {LOCALE_LABEL[l]}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

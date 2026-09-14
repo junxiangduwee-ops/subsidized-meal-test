@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -56,16 +55,12 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
 /**
  * Horizontally scrolling nav for narrow screens. Employees order lunch on
  * their phones, so the sidebar cannot simply disappear below `lg`.
- *
- * `append` – optional extra node rendered after the nav pills inside the
- * same scrolling row (used in the embedded bar to slot in the language
- * switcher as a matching pill without breaking the row's layout).
  */
-export function MobileNav({ groups, append }: { groups: NavGroup[]; append?: React.ReactNode }) {
+export function MobileNav({ groups }: { groups: NavGroup[] }) {
   const isActive = useIsActive();
   const items = groups.flatMap((g) => g.items);
 
-  if (items.length <= 1 && !append) return null;
+  if (items.length <= 1) return null;
 
   return (
     <nav aria-label="Sections" className="border-t border-slate-200 bg-white px-4 py-2 lg:hidden">
@@ -87,7 +82,6 @@ export function MobileNav({ groups, append }: { groups: NavGroup[]; append?: Rea
             </Link>
           );
         })}
-        {append}
       </ScrollFadeRow>
     </nav>
   );
