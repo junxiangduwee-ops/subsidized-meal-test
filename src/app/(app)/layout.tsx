@@ -101,7 +101,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       <div className="mx-auto flex max-w-[1400px] gap-6 px-4 py-6">
         <aside className="hidden w-56 shrink-0 lg:block">
-          <div className="sticky top-24">
+          <div className={`sticky ${user.embed ? 'top-4' : 'top-24'}`}>
             {user.embed ? <SidebarLanguageSwitcher /> : null}
             <SideNav groups={groups} />
           </div>
