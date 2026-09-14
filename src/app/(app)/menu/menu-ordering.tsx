@@ -310,6 +310,7 @@ function OrderSummary({
   selectedDeliverySiteId: string | null;
 }) {
   const t = useTranslations('menu');
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [siteSaving, setSiteSaving] = useState(false);
