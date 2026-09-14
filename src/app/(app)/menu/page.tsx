@@ -121,6 +121,10 @@ export default async function MenuPage({
   // that item is paid for and done. A day with no item at all is always
   // still open, regardless of how many other days are locked.
   const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
+  // Lets a chosen-and-locked dish's tick render as "pending" vs "paid" -
+  // only meaningful for chosen items, so a lookup keyed by menuItemId is
+  // enough (one order item per menu item, per user, per cycle).
+  const orderStatusByMenuItemId = new Map(orderItems.map((item) => [item.menuItemId, item.orderStatus]));
   const lockedDayKeys = new Set(
     orderItems.filter((item) => item.orderStatus !== 'CART').map((item) => toDateKey(item.serviceDate)),
   );
@@ -212,6 +216,7 @@ export default async function MenuPage({
     tags: decodeTags(item.dish.tags),
     priceSen: employeePriceFor(item.priceSen, activeDay.serviceDate, rules, user.department),
     remaining: remaining.get(item.id) ?? null,
+    orderStatus: orderStatusByMenuItemId.get(item.id) ?? null,
     chosen: chosenMenuItemIds.has(item.id),
   }));
 

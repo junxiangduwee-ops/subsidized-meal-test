@@ -49,7 +49,9 @@
     "awaitingPayment": "等待付款",
     "inCart": "购物车中",
     "cancelled": "已取消",
-    "refunded": "已退款"
+    "refunded": "已退款",
+    "pending": "待付款",
+    "yourChoicePending": "您的选择 · 待付款"
   },
   "orders": {
     "title": "我的订单",

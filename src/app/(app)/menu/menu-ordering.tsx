@@ -24,6 +24,12 @@ export type MenuDish = {
   priceSen: number;
   remaining: number | null;
   chosen: boolean;
+  /**
+   * Status of the order this dish belongs to, when chosen (null otherwise).
+   * Only used to give the "chosen" tick a slightly different look while a
+   * chosen-and-locked day is still awaiting payment, versus already paid.
+   */
+  orderStatus?: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUNDED' | null;
 };
 
 /** One chosen day, for the summary panel. Spans the whole week. */
@@ -215,12 +221,20 @@ function DishRow({
   const { chosen } = dish;
   const soldOut = dish.remaining !== null && dish.remaining <= 0 && !chosen;
   const disabled = busy || soldOut;
+  // Once locked, a chosen day is either paid or still awaiting payment -
+  // give the tick a distinct amber look while pending, so it doesn't read
+  // as identical to an already-paid day at a glance.
+  const pendingPayment = readOnly && chosen && dish.orderStatus === 'AWAITING_PAYMENT';
 
   const body = (
     <>
       <span
         aria-hidden
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${chosen ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white'
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${chosen
+            ? pendingPayment
+              ? 'border-amber-500 bg-amber-500 text-white'
+              : 'border-brand-600 bg-brand-600 text-white'
+            : 'border-slate-300 bg-white'
           }`}
       >
         {busy ? (
@@ -259,8 +273,11 @@ function DishRow({
           {formatSen(dish.priceSen)}
         </span>
         {chosen ? (
-          <span className="block text-[11px] font-medium text-brand-700">
-            {readOnly ? t('yourChoice') : t('chosenTapRemove')}
+          <span
+            className={`block text-[11px] font-medium ${pendingPayment ? 'text-amber-700' : 'text-brand-700'
+              }`}
+          >
+            {readOnly ? (pendingPayment ? t('yourChoicePending') : t('yourChoice')) : t('chosenTapRemove')}
           </span>
         ) : null}
       </span>
@@ -312,9 +329,12 @@ const LINE_STATUS_STYLES: Record<string, string> = {
 
 function LineStatusPill({ status }: { status: CartLine['status'] }) {
   const t = useTranslations('menu');
+  // Kept short on purpose ("Pending", not "Awaiting payment") - this pill
+  // sits inside a truncating flex row next to the dish name, so a longer
+  // label gets clipped down to an ellipsis instead of being readable.
   const labels: Record<string, string> = {
     CART: t('inCart'),
-    AWAITING_PAYMENT: t('awaitingPayment'),
+    AWAITING_PAYMENT: t('pending'),
     PAID: t('paid'),
     CANCELLED: t('cancelled'),
     REFUNDED: t('refunded'),
@@ -322,7 +342,7 @@ function LineStatusPill({ status }: { status: CartLine['status'] }) {
 
   return (
     <span
-      className={`ml-1.5 badge align-middle ${LINE_STATUS_STYLES[status] ?? 'bg-slate-100 text-slate-600'}`}
+      className={`ml-1.5 shrink-0 whitespace-nowrap badge align-middle ${LINE_STATUS_STYLES[status] ?? 'bg-slate-100 text-slate-600'}`}
     >
       {labels[status] ?? status}
     </span>
@@ -432,9 +452,11 @@ function OrderSummary({
                   {day.label}
                 </p>
                 {day.lines.map((line) => (
-                  <div key={line.id} className="mt-1 flex items-baseline justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-slate-700">
-                      {line.dishName}
+                  <div key={line.id} className="mt-1 flex items-center justify-between gap-3 text-sm">
+                    {/* The pill sits outside the truncating span so it never gets
+                        clipped down to "…" when the dish name + pill run long. */}
+                    <span className="flex min-w-0 items-center">
+                      <span className="min-w-0 truncate text-slate-700">{line.dishName}</span>
                       <LineStatusPill status={line.status} />
                     </span>
                     <span className="shrink-0 tabular-nums text-slate-900">{formatSen(line.netSen)}</span>

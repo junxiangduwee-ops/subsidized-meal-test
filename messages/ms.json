@@ -49,7 +49,9 @@
     "awaitingPayment": "Menunggu pembayaran",
     "inCart": "Dalam troli",
     "cancelled": "Dibatalkan",
-    "refunded": "Dikembalikan"
+    "refunded": "Dikembalikan",
+    "pending": "Belum bayar",
+    "yourChoicePending": "Pilihan anda · menunggu pembayaran"
   },
   "orders": {
     "title": "Pesanan saya",

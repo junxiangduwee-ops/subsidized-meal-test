@@ -49,7 +49,9 @@
     "awaitingPayment": "Awaiting payment",
     "inCart": "In cart",
     "cancelled": "Cancelled",
-    "refunded": "Refunded"
+    "refunded": "Refunded",
+    "pending": "Pending",
+    "yourChoicePending": "Your choice · pending payment"
   },
   "orders": {
     "title": "My orders",
