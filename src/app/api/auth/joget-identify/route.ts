@@ -72,25 +72,30 @@ export async function GET(request: Request) {
     .filter(Boolean);
 
   if (!email) {
-    return uncachedRedirect('/login?error=sso_failed');
+    return uncachedRedirect('/embed/error?reason=sso_failed');
   }
 
   // provisionFromDirectory() creates the account on first login and, for
   // JOGET identities specifically, re-syncs the role from group membership
   // on every subsequent login too - so moving someone between Joget groups
   // takes effect the next time they open the app.
-  const user = await provisionFromDirectory({
-    provider: 'JOGET',
-    externalId: username || email,
-    email,
-    name: name || email.split('@')[0],
-    staffId: staffId || null,
-    department: department || null,
-    groups,
-  });
+  let user;
+  try {
+    user = await provisionFromDirectory({
+      provider: 'JOGET',
+      externalId: username || email,
+      email,
+      name: name || email.split('@')[0],
+      staffId: staffId || null,
+      department: department || null,
+      groups,
+    });
+  } catch {
+    return uncachedRedirect('/embed/error?reason=inactive');
+  }
 
   if (!user.active) {
-    return uncachedRedirect('/login?error=inactive');
+    return uncachedRedirect('/embed/error?reason=inactive');
   }
 
   await createSession(

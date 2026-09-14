@@ -63,6 +63,11 @@ export async function createSession(
     httpOnly: true,
     secure: embed ? true : process.env.NODE_ENV === 'production',
     sameSite: embed ? 'none' : 'lax',
+    // CHIPS: partitions the cookie per top-level site (Joget's origin) so
+    // Chrome still stores/sends it for the iframe even when general
+    // third-party cookies are blocked (this includes Incognito by default).
+    // Ignored harmlessly by browsers that don't support it yet.
+    ...(embed ? { partitioned: true } : {}),
     path: '/',
     expires,
   });
