@@ -140,7 +140,7 @@
     "incorrectCredentials": "E-mel atau kata laluan salah.",
     "ssoDisabled": "Log masuk tunggal tidak diaktifkan untuk persekitaran ini.",
     "ssoStateExpired": "Pautan log masuk itu telah tamat tempoh. Sila cuba lagi.",
-    "ssoFailed": "Log masuk tunggal gagal. Cuba lagi, atau gunakan e-mel dan kata laluan anda.",
+    "ssoFailed": "Log masuk tunggal gagal. Sila hubungi pentadbir anda.",
     "ssoInactive": "Akaun ini telah dinyahaktifkan. Hubungi pentadbir anda.",
     "ssoNotProvisioned": "Akaun anda belum disediakan. Sila minta pentadbir anda menambah anda sebagai pengguna.",
     "contactCustom": "Menghadapi masalah? Hubungi {email}"
