@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireUser } from '@/lib/session';
 import { can, ROLE_LABEL } from '@/lib/rbac';
 import { getSiteSettings } from '@/lib/settings';
-import { MobileNav, SideNav, EmbeddedNav, type NavGroup } from '@/components/nav';
+import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
 import { UserMenu } from '@/components/user-menu';
 import { Alert } from '@/components/ui';
 import { logoutAction } from '@/app/login/actions';
@@ -86,11 +86,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileNav groups={groups} />
         </header>
       ) : (
-        // Still embedded, still needs to navigate between sections at all
-        // screen sizes (EmbeddedNav has no lg:hidden), and surfaces the
-        // language switcher as a matching pill since UserMenu is hidden.
+        // Still embedded, still needs to navigate between sections on
+        // small screens - just without the branding bar above it.
+        // The language switcher is appended as a pill after the nav items
+        // so it blends in naturally with the MobileNav pill style.
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <EmbeddedNav groups={groups} append={<LanguageSwitcher />} />
+          <MobileNav groups={groups} append={<LanguageSwitcher />} />
         </div>
       )}
 
