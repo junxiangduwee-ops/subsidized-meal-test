@@ -33,7 +33,13 @@ export type CartLine = {
   dayLabel: string;
   dishName: string;
   netSen: number;
-  /** True once this line belongs to an already-submitted order (paid, done). */
+  /**
+   * The underlying order's status for this line - drives the pill shown
+   * next to it (in cart / awaiting payment / paid), so the summary never
+   * claims a line is paid when it is only pending payment.
+   */
+  status: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUNDED';
+  /** True once this line belongs to an already-submitted order (no longer editable here). */
   locked: boolean;
 };
 
@@ -290,6 +296,39 @@ function DishRow({
   );
 }
 
+/**
+ * Small pill next to each line in "Your week", so pending payment is never
+ * mistaken for paid: CART / AWAITING_PAYMENT / PAID (and CANCELLED /
+ * REFUNDED, for completeness) each get their own colour and label rather
+ * than a single "paid" badge applied to anything not still in the cart.
+ */
+const LINE_STATUS_STYLES: Record<string, string> = {
+  CART: 'bg-slate-100 text-slate-600',
+  AWAITING_PAYMENT: 'bg-amber-100 text-amber-800',
+  PAID: 'bg-emerald-100 text-emerald-800',
+  CANCELLED: 'bg-red-100 text-red-800',
+  REFUNDED: 'bg-purple-100 text-purple-800',
+};
+
+function LineStatusPill({ status }: { status: CartLine['status'] }) {
+  const t = useTranslations('menu');
+  const labels: Record<string, string> = {
+    CART: t('inCart'),
+    AWAITING_PAYMENT: t('awaitingPayment'),
+    PAID: t('paid'),
+    CANCELLED: t('cancelled'),
+    REFUNDED: t('refunded'),
+  };
+
+  return (
+    <span
+      className={`ml-1.5 badge align-middle ${LINE_STATUS_STYLES[status] ?? 'bg-slate-100 text-slate-600'}`}
+    >
+      {labels[status] ?? status}
+    </span>
+  );
+}
+
 function OrderSummary({
   cartLines,
   totalSen,
@@ -396,11 +435,7 @@ function OrderSummary({
                   <div key={line.id} className="mt-1 flex items-baseline justify-between gap-3 text-sm">
                     <span className="min-w-0 truncate text-slate-700">
                       {line.dishName}
-                      {line.locked ? (
-                        <span className="ml-1.5 badge bg-emerald-100 text-emerald-800 align-middle">
-                          {t('paid')}
-                        </span>
-                      ) : null}
+                      <LineStatusPill status={line.status} />
                     </span>
                     <span className="shrink-0 tabular-nums text-slate-900">{formatSen(line.netSen)}</span>
                   </div>

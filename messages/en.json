@@ -45,7 +45,11 @@
     "nothingToPay": "Nothing to pay for the days you just chose.",
     "savedAsYouGo": "Saved as you go. Confirmed once payment succeeds.",
     "awaitingPaymentBanner": "We are waiting for your payment to be confirmed for part of this week. Refresh shortly, or open your orders to continue paying.",
-    "paid": "Paid"
+    "paid": "Paid",
+    "awaitingPayment": "Awaiting payment",
+    "inCart": "In cart",
+    "cancelled": "Cancelled",
+    "refunded": "Refunded"
   },
   "orders": {
     "title": "My orders",

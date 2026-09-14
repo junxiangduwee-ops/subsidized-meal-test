@@ -45,7 +45,11 @@
     "nothingToPay": "本次所选项目无需付款。",
     "savedAsYouGo": "系统会自动保存，付款成功后即视为确认。",
     "awaitingPaymentBanner": "本周部分订单正在等待付款确认，请稍后刷新，或前往「我的订单」继续付款。",
-    "paid": "已付款"
+    "paid": "已付款",
+    "awaitingPayment": "等待付款",
+    "inCart": "购物车中",
+    "cancelled": "已取消",
+    "refunded": "已退款"
   },
   "orders": {
     "title": "我的订单",
