@@ -230,11 +230,7 @@ function DishRow({
     <>
       <span
         aria-hidden
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${chosen
-            ? pendingPayment
-              ? 'border-amber-500 bg-amber-500 text-white'
-              : 'border-brand-600 bg-brand-600 text-white'
-            : 'border-slate-300 bg-white'
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${chosen ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white'
           }`}
       >
         {busy ? (
@@ -273,10 +269,7 @@ function DishRow({
           {formatSen(dish.priceSen)}
         </span>
         {chosen ? (
-          <span
-            className={`block text-[11px] font-medium ${pendingPayment ? 'text-amber-700' : 'text-brand-700'
-              }`}
-          >
+          <span className="block text-[11px] font-medium text-brand-700">
             {readOnly ? (pendingPayment ? t('yourChoicePending') : t('yourChoice')) : t('chosenTapRemove')}
           </span>
         ) : null}
