@@ -8,7 +8,6 @@ import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
 import { UserMenu } from '@/components/user-menu';
 import { Alert } from '@/components/ui';
 import { logoutAction } from '@/app/login/actions';
-import { LanguageSwitcher } from '@/components/language-switcher';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,13 +87,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ) : (
         // Still embedded, still needs to navigate between sections on
         // small screens - just without the branding bar above it.
-        // The language switcher is surfaced here because the UserMenu
-        // (which normally holds it) is hidden when embedded inside Joget.
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <div className="flex items-center justify-between">
-            <MobileNav groups={groups} />
-            <LanguageSwitcher />
-          </div>
+          <MobileNav groups={groups} />
         </div>
       )}
 
