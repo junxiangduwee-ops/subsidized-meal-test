@@ -56,19 +56,50 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
 /**
  * Horizontally scrolling nav for narrow screens. Employees order lunch on
  * their phones, so the sidebar cannot simply disappear below `lg`.
- *
- * `append` – optional extra node rendered after the nav pills inside the
- * same scrolling row (used in the embedded bar to slot in the language
- * switcher as a matching pill without breaking the row's layout).
  */
-export function MobileNav({ groups, append }: { groups: NavGroup[]; append?: React.ReactNode }) {
+export function MobileNav({ groups }: { groups: NavGroup[] }) {
   const isActive = useIsActive();
   const items = groups.flatMap((g) => g.items);
 
-  if (items.length <= 1 && !append) return null;
+  if (items.length <= 1) return null;
 
   return (
     <nav aria-label="Sections" className="border-t border-slate-200 bg-white px-4 py-2 lg:hidden">
+      <ScrollFadeRow innerClassName="gap-1" fadeColorClassName="from-white">
+        {items.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? 'page' : undefined}
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-brand-600 font-medium text-white'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </ScrollFadeRow>
+    </nav>
+  );
+}
+
+/**
+ * Like MobileNav but always visible at all breakpoints — used in the
+ * embedded Joget view where the normal header is hidden and the sidebar
+ * is also hidden, so this bar is the only navigation the user has.
+ * The language switcher is appended as a matching pill after the nav items.
+ */
+export function EmbeddedNav({ groups, append }: { groups: NavGroup[]; append?: React.ReactNode }) {
+  const isActive = useIsActive();
+  const items = groups.flatMap((g) => g.items);
+
+  return (
+    <nav aria-label="Sections" className="bg-white px-4 py-2">
       <ScrollFadeRow innerClassName="gap-1" fadeColorClassName="from-white">
         {items.map((item) => {
           const active = isActive(item.href);
