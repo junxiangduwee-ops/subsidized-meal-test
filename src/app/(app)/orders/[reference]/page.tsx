@@ -8,6 +8,7 @@ import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
 import { formatDate, formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, Alert, StatusBadge } from '@/components/ui';
+import { PaymentStatus } from './payment-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,11 +84,15 @@ export default async function OrderDetailPage({
           <Alert tone="warning">
             <p>{t('awaitingPayment', { amount: formatSen(order.netSen) })}</p>
             {latestPayment?.checkoutUrl ? (
-              <p className="mt-2">
-                <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
-                  {t('continueToPayment')}
-                </a>
-              </p>
+              user.embed ? (
+                <PaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
+              ) : (
+                <p className="mt-2">
+                  <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
+                    {t('continueToPayment')}
+                  </a>
+                </p>
+              )
             ) : null}
           </Alert>
         </div>

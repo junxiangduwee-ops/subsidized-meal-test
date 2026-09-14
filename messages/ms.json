@@ -76,6 +76,7 @@
     "awaitingPayment": "Kami sedang menunggu pengesahan pembayaran anda sebanyak {amount}. Ini biasanya mengambil masa beberapa saat — muat semula halaman sebentar lagi.",
     "continueToPayment": "Teruskan pembayaran",
     "cancelled": "Pesanan ini telah dibatalkan",
+    "popupBlocked": "Jika tetingkap pembayaran tidak dibuka, benarkan pop timbul untuk laman ini dan ketik Teruskan pembayaran.",
     "meals": "Hidangan",
     "lineItems": "{count, plural, one {# item} other {# item}}",
     "summary": "Ringkasan",

@@ -75,6 +75,7 @@
     "orderConfirmed": "Order confirmed — there is nothing to pay for this week.",
     "awaitingPayment": "We are waiting for your payment of {amount} to be confirmed. This usually takes a few seconds — refresh the page shortly.",
     "continueToPayment": "Continue to payment",
+    "popupBlocked": "If the payment window didn't open, allow pop-ups for this site and tap Continue to payment.",
     "cancelled": "This order was cancelled",
     "meals": "Meals",
     "lineItems": "{count, plural, one {# line item} other {# line items}}",

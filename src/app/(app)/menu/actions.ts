@@ -10,6 +10,17 @@ import { createPaymentRequest, hitpayConfigured } from '@/lib/hitpay';
 import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
 
+/**
+ * HitPay's checkout page refuses to render inside any iframe (it sends
+ * X-Frame-Options/CSP frame-ancestors headers to block that, for
+ * clickjacking protection - not something we can turn off from here). So
+ * instead of redirecting to it directly, checkout() hands the order
+ * reference back; the client navigates to /orders/{reference}, which opens
+ * HitPay's checkout in its own popup window and polls for payment
+ * completion rather than trying to load HitPay inside the embedded iframe.
+ */
+export type CheckoutResult = ActionState & { reference?: string };
+
 export type MealResult = { ok: boolean; error?: string };
 
 /**
@@ -71,7 +82,7 @@ export async function clearCart(formData: FormData): Promise<void> {
  * charge. Everything else goes to HitPay, and only the webhook may mark the
  * order PAID.
  */
-export async function checkout(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function checkout(_prev: ActionState, formData: FormData): Promise<CheckoutResult> {
   const user = await assertCapability('order:place');
   const cycleId = String(formData.get('cycleId') ?? '');
   if (!cycleId) return { error: 'Missing week.' };
@@ -151,5 +162,12 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   await audit(user.id, 'order.checkout', 'Order', fresh.id, { netSen: fresh.netSen });
   revalidatePath('/menu');
   revalidatePath('/orders');
+
+  // Only embedded (Joget iframe) sessions need the popup+poll dance - a
+  // plain web session isn't in any iframe, so redirecting straight to
+  // HitPay works exactly as it always did.
+  if (user.embed) {
+    return { reference: fresh.reference };
+  }
   redirect(checkoutUrl);
 }

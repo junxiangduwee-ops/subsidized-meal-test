@@ -350,8 +350,18 @@ function OrderSummary({
     data.set('cycleId', cycleId);
     startTransition(async () => {
       const result = await checkout({}, data);
-      // A successful checkout redirects, so anything returned is an error.
-      if (result?.error) setError(result.error);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      if (result?.reference) {
+        // The order page opens HitPay's checkout in its own popup window and
+        // polls for completion - HitPay itself refuses to render inside any
+        // iframe, so it can't be loaded directly here.
+        router.push(`/orders/${encodeURIComponent(result.reference)}`);
+      }
+      // Fully-subsidised (zero-cost) orders skip HitPay entirely and are
+      // redirected server-side straight to the confirmed order.
     });
   }
 
