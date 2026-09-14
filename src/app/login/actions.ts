@@ -50,7 +50,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
       department: user.department,
       staffId: user.staffId,
     },
-    { crossSiteEmbed: true },
+    { crossSiteEmbed: formData.get('embed') === '1' }
   );
   await audit(user.id, 'auth.login', 'User', user.id, { provider: user.authProvider });
 
