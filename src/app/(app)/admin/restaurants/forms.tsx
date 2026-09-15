@@ -9,6 +9,7 @@ import { createRestaurant, updateRestaurant } from './actions';
 
 type RestaurantFields = {
   id: string;
+  code: string | null;
   name: string;
   cuisine: string | null;
   description: string | null;
@@ -22,16 +23,29 @@ function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
   const c = useTranslations('adminCommon');
   return (
     <>
-      <div>
-        <label className="label">{c('name')}</label>
-        <input
-          name="name"
-          required
-          defaultValue={restaurant?.name}
-          className="input"
-          placeholder={t('namePlaceholder')}
-        />
+      <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+        <div>
+          <label className="label">{c('name')}</label>
+          <input
+            name="name"
+            required
+            defaultValue={restaurant?.name}
+            className="input"
+            placeholder={t('namePlaceholder')}
+          />
+        </div>
+        <div>
+          <label className="label">{t('code')}</label>
+          <input
+            name="code"
+            defaultValue={restaurant?.code ?? ''}
+            className="input uppercase"
+            placeholder={t('codePlaceholder')}
+            maxLength={40}
+          />
+        </div>
       </div>
+      <p className="text-xs text-slate-400">{t('codeHint')}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label">{t('cuisine')}</label>

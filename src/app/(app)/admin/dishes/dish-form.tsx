@@ -12,6 +12,7 @@ export type RestaurantOption = { id: string; name: string; active: boolean };
 type DishFields = {
   id: string;
   restaurantId: string;
+  code: string | null;
   name: string;
   priceSen: number;
   category: string | null;
@@ -65,18 +66,30 @@ function Fields({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
+          <label className="label">{t('code')}</label>
+          <input
+            name="code"
+            defaultValue={dish?.code ?? ''}
+            className="input uppercase"
+            placeholder={t('codePlaceholder')}
+            maxLength={40}
+          />
+        </div>
+        <div>
           <label className="label">{t('category')}</label>
           <input name="category" defaultValue={dish?.category ?? ''} className="input" placeholder="Main" />
         </div>
-        <div>
-          <label className="label">{t('tagsLabel')}</label>
-          <input
-            name="tags"
-            defaultValue={dish?.tags.join(', ') ?? ''}
-            className="input"
-            placeholder={t('tagsPlaceholder')}
-          />
-        </div>
+      </div>
+      <p className="-mt-2 text-xs text-slate-400">{t('codeHint')}</p>
+
+      <div>
+        <label className="label">{t('tagsLabel')}</label>
+        <input
+          name="tags"
+          defaultValue={dish?.tags.join(', ') ?? ''}
+          className="input"
+          placeholder={t('tagsPlaceholder')}
+        />
       </div>
 
       <div>

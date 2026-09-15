@@ -174,7 +174,8 @@
     "pagerPrevious": "Previous",
     "pagerNext": "Next",
     "pagerPageOf": "Page {page} of {totalPages}",
-    "pagerPerPage": "Per page"
+    "pagerPerPage": "Per page",
+    "exportCsv": "Export CSV"
   },
   "restaurantsAdmin": {
     "title": "Restaurants",
@@ -186,6 +187,9 @@
     "addRestaurant": "Add restaurant",
     "addARestaurant": "Add a restaurant",
     "editRestaurant": "Edit {name}",
+    "code": "Code",
+    "codePlaceholder": "PELITA",
+    "codeHint": "Optional. A short, unique code (letters, numbers, - and _) for matching this restaurant in a future weekly-menu import.",
     "cuisine": "Cuisine",
     "contact": "Contact",
     "dishes": "Dishes",
@@ -226,6 +230,9 @@
     "noDishesMatchHint": "Try clearing the filters, or add a dish on the right.",
     "dish": "Dish",
     "restaurant": "Restaurant",
+    "code": "Code",
+    "codePlaceholder": "PELITA-01",
+    "codeHint": "Optional. A short, unique-per-restaurant code (letters, numbers, - and _) for matching this dish in a future weekly-menu import.",
     "category": "Category",
     "price": "Price",
     "deleteConfirm": "Delete {name}? If it has ever been on a menu it will be deactivated instead.",

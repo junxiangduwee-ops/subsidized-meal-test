@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { can } from '@/lib/rbac';
 import { csvAmount, csvResponse, toCsv } from '@/lib/csv';
+import { decodeTags } from '@/lib/db-compat';
 import { formatWeekRange, toDateKey, zonedToUtc } from '@/lib/cycle';
 import { kitchenSheet, trailingWeeks, weeklyTotals } from '@/lib/reporting';
 import { audit } from '@/lib/orders';
@@ -12,12 +13,18 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * CSV exports for Finance, Kitchen, and employees' own order history.
+ * CSV exports for Finance, Kitchen, Catalogue admin, and employees' own
+ * order history.
  *
  * The Finance/Kitchen exports contain other employees' names and staff IDs.
  * They are personal data: store them on approved systems only and do not
  * forward them outside Finance/HR. `my-orders` is scoped to the signed-in
  * user's own orders only, so no extra capability is required for it.
+ *
+ * `restaurants`/`dishes` are catalogue reference data (no personal data) -
+ * they exist so an admin can round-trip the current catalogue into a
+ * spreadsheet, including each row's `code`, which is the stable key a
+ * future weekly-menu import will validate against.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ type: string }> }) {
   const user = await getCurrentUser();
@@ -34,6 +41,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   if (type === 'kitchen' && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  if ((type === 'restaurants' || type === 'dishes') && !can(user.role, 'catalogue:manage')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   switch (type) {
     case 'orders':
@@ -46,6 +56,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportKitchen(user.id, cycleId);
     case 'my-orders':
       return exportMyOrders(user.id, url.searchParams.get('month'));
+    case 'restaurants':
+      return exportRestaurants(user.id);
+    case 'dishes':
+      return exportDishes(user.id);
     default:
       return NextResponse.json({ error: 'Unknown export' }, { status: 404 });
   }
@@ -274,5 +288,77 @@ async function exportMyOrders(userId: string, monthRaw: string | null) {
   const monthKey = `${month.year}-${String(month.month1).padStart(2, '0')}`;
   await audit(userId, 'export.my-orders', 'Order', null, { month: monthKey, rows: rows.length });
   return csvResponse(`my-orders-${monthKey}.csv`, csv);
+}
+
+/**
+ * Catalogue exports.
+ *
+ * These double as the template for the (future) weekly-menu CSV/Excel
+ * import: `code` is the stable key an importer will validate rows against,
+ * so every column here matches what admins see and edit in
+ * Admin > Restaurants / Admin > Dishes.
+ */
+async function exportRestaurants(actorId: string) {
+  const restaurants = await prisma.restaurant.findMany({
+    orderBy: [{ active: 'desc' }, { name: 'asc' }],
+  });
+
+  const rows = restaurants.map((r) => [
+    r.code ?? '',
+    r.name,
+    r.cuisine ?? '',
+    r.contactName ?? '',
+    r.contactPhone ?? '',
+    r.address ?? '',
+    r.description ?? '',
+    r.active ? 'ACTIVE' : 'INACTIVE',
+  ]);
+
+  const csv = toCsv(
+    ['Code', 'Name', 'Cuisine', 'Contact name', 'Contact phone', 'Address', 'Description', 'Status'],
+    rows,
+  );
+
+  await audit(actorId, 'export.restaurants', 'Restaurant', null, { rows: rows.length });
+  return csvResponse('restaurants.csv', csv);
+}
+
+async function exportDishes(actorId: string) {
+  const dishes = await prisma.dish.findMany({
+    orderBy: [{ active: 'desc' }, { restaurant: { name: 'asc' } }, { name: 'asc' }],
+    include: { restaurant: { select: { code: true, name: true } } },
+  });
+
+  const rows = dishes.map((d) => [
+    d.restaurant.code ?? '',
+    d.restaurant.name,
+    d.code ?? '',
+    d.name,
+    d.category ?? '',
+    csvAmount(d.priceSen),
+    decodeTags(d.tags).join(', '),
+    d.description ?? '',
+    d.imageUrl ?? '',
+    d.active ? 'ACTIVE' : 'INACTIVE',
+  ]);
+
+  const csv = toCsv(
+    [
+      'Restaurant code',
+      'Restaurant name',
+      'Dish code',
+      'Dish name',
+      'Category',
+      'Price (RM)',
+      'Tags',
+      'Description',
+      'Image URL',
+      'Status',
+    ],
+    rows,
+  );
+
+  await audit(actorId, 'export.dishes', 'Dish', null, { rows: rows.length });
+  return csvResponse('dishes.csv', csv);
 }
 

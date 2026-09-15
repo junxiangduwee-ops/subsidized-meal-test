@@ -9,10 +9,18 @@ import { encodeTags } from '@/lib/db-compat';
 import { audit } from '@/lib/orders';
 import { ringgitToSen, assertValidSen, formatSen } from '@/lib/money';
 import { CACHE_TAGS } from '@/lib/cache';
+import { CODE_MAX_LENGTH, CODE_PATTERN, normalizeCode } from '@/lib/codes';
 import type { ActionState } from '@/components/action-form';
 
 const dishSchema = z.object({
   restaurantId: z.string().min(1, 'Choose a restaurant.'),
+  code: z
+    .string()
+    .trim()
+    .max(CODE_MAX_LENGTH)
+    .regex(CODE_PATTERN, 'Code can only contain letters, numbers, - and _.')
+    .optional()
+    .or(z.literal('')),
   name: z.string().trim().min(2, 'Dish name must be at least 2 characters.').max(120),
   price: z.string().min(1, 'Enter a price.'),
   category: z.string().trim().max(60).optional().or(z.literal('')),
@@ -51,9 +59,16 @@ export async function createDish(_prev: ActionState, formData: FormData): Promis
   const clash = await prisma.dish.findFirst({ where: { restaurantId: d.restaurantId, name: d.name } });
   if (clash) return { error: `That restaurant already has a dish called "${d.name}".` };
 
+  const code = normalizeCode(d.code);
+  if (code) {
+    const codeClash = await prisma.dish.findFirst({ where: { restaurantId: d.restaurantId, code } });
+    if (codeClash) return { error: `That restaurant already has a dish with code "${code}".` };
+  }
+
   const created = await prisma.dish.create({
     data: {
       restaurantId: d.restaurantId,
+      code,
       name: d.name,
       priceSen: price.sen,
       category: d.category?.trim() || null,
@@ -89,10 +104,19 @@ export async function updateDish(_prev: ActionState, formData: FormData): Promis
   });
   if (clash) return { error: `That restaurant already has a dish called "${d.name}".` };
 
+  const code = normalizeCode(d.code);
+  if (code) {
+    const codeClash = await prisma.dish.findFirst({
+      where: { restaurantId: d.restaurantId, code, NOT: { id } },
+    });
+    if (codeClash) return { error: `That restaurant already has a dish with code "${code}".` };
+  }
+
   await prisma.dish.update({
     where: { id },
     data: {
       restaurantId: d.restaurantId,
+      code,
       name: d.name,
       priceSen: price.sen,
       category: d.category?.trim() || null,

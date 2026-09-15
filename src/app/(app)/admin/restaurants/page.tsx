@@ -29,7 +29,18 @@ export default async function RestaurantsPage({
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddRestaurantButton />} />
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        action={
+          <>
+            <a href="/api/exports/restaurants" className="btn-secondary btn-sm">
+              {c('exportCsv')}
+            </a>
+            <AddRestaurantButton />
+          </>
+        }
+      />
 
       <Section title={t('allRestaurants')} description={t('totalCount', { count: total })}>
         {restaurants.length === 0 ? (
@@ -43,6 +54,7 @@ export default async function RestaurantsPage({
             <table className="table">
               <thead>
                 <tr>
+                  <th>{t('code')}</th>
                   <th>{c('name')}</th>
                   <th>{t('cuisine')}</th>
                   <th>{t('contact')}</th>
@@ -54,6 +66,7 @@ export default async function RestaurantsPage({
               <tbody>
                 {restaurants.map((r) => (
                   <tr key={r.id}>
+                    <td className="font-mono text-xs text-slate-500">{r.code ?? '—'}</td>
                     <td>
                       <div className="font-medium text-slate-900">{r.name}</div>
                       {r.description ? (

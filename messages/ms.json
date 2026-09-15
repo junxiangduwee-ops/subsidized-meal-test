@@ -174,7 +174,8 @@
     "pagerPrevious": "Sebelumnya",
     "pagerNext": "Seterusnya",
     "pagerPageOf": "Halaman {page} daripada {totalPages}",
-    "pagerPerPage": "Setiap halaman"
+    "pagerPerPage": "Setiap halaman",
+    "exportCsv": "Eksport CSV"
   },
   "restaurantsAdmin": {
     "title": "Restoran",
@@ -186,6 +187,9 @@
     "addRestaurant": "Tambah restoran",
     "addARestaurant": "Tambah restoran",
     "editRestaurant": "Edit {name}",
+    "code": "Kod",
+    "codePlaceholder": "PELITA",
+    "codeHint": "Pilihan. Kod unik yang ringkas (huruf, nombor, - dan _) untuk memadankan restoran ini dalam import menu mingguan pada masa hadapan.",
     "cuisine": "Jenis masakan",
     "contact": "Hubungan",
     "dishes": "Hidangan",
@@ -226,6 +230,9 @@
     "noDishesMatchHint": "Cuba kosongkan penapis, atau tambah hidangan di sebelah kanan.",
     "dish": "Hidangan",
     "restaurant": "Restoran",
+    "code": "Kod",
+    "codePlaceholder": "PELITA-01",
+    "codeHint": "Pilihan. Kod unik setiap restoran (huruf, nombor, - dan _) untuk memadankan hidangan ini dalam import menu mingguan pada masa hadapan.",
     "category": "Kategori",
     "price": "Harga",
     "deleteConfirm": "Padam {name}? Jika ia pernah berada dalam menu, ia akan dinyahaktifkan sahaja.",

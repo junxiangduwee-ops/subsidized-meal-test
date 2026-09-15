@@ -127,6 +127,10 @@ model User {
 
 model Restaurant {
   id          String   @id @default(cuid())
+  /// Short, stable identifier (e.g. "PELITA") admins can put in a CSV/Excel
+  /// sheet to select this restaurant - unlike `name`, it never changes when
+  /// the business is renamed. Used to validate weekly-menu imports.
+  code        String?  @unique
   name        String   @unique
   description String?
   cuisine     String?
@@ -145,6 +149,10 @@ model Restaurant {
 model Dish {
   id           String   @id @default(cuid())
   restaurantId String
+  /// Short, stable identifier (e.g. "PELITA-01"), unique within its
+  /// restaurant. Lets a weekly-menu CSV/Excel import reference an exact
+  /// dish without relying on the (editable) name matching exactly.
+  code         String?
   name         String
   description  String?
   /// Catalogue list price in sen. A MenuItem may override it for one cycle.
@@ -161,6 +169,7 @@ model Dish {
   menuItems    MenuItem[]
 
   @@unique([restaurantId, name])
+  @@unique([restaurantId, code])
   @@index([active])
   @@index([category])
 }

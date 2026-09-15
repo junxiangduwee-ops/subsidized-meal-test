@@ -175,8 +175,9 @@ async function main() {
 
   // --- Catalogue -------------------------------------------------------
   const catalogue: Array<{
-    restaurant: { name: string; cuisine: string; contactName: string; contactPhone: string };
+    restaurant: { code: string; name: string; cuisine: string; contactName: string; contactPhone: string };
     dishes: Array<{
+      code: string;
       name: string;
       priceSen: number;
       category: string;
@@ -186,6 +187,7 @@ async function main() {
   }> = [
       {
         restaurant: {
+          code: 'PELITA',
           name: 'Nasi Kandar Pelita',
           cuisine: 'Mamak',
           contactName: 'Encik Zul',
@@ -193,19 +195,21 @@ async function main() {
         },
         dishes: [
           {
+            code: 'PELITA-01',
             name: 'Nasi Kandar Ayam Goreng',
             priceSen: 1250,
             category: 'Main',
             tags: ['halal', 'spicy'],
             description: 'Fried chicken with mixed curry gravy',
           },
-          { name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
-          { name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
-          { name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
+          { code: 'PELITA-02', name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
+          { code: 'PELITA-03', name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
+          { code: 'PELITA-04', name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
         ],
       },
       {
         restaurant: {
+          code: 'AHSENG',
           name: 'Kedai Kopi Ah Seng',
           cuisine: 'Chinese',
           contactName: 'Ah Seng',
@@ -213,19 +217,21 @@ async function main() {
         },
         dishes: [
           {
+            code: 'AHSENG-01',
             name: 'Chicken Rice',
             priceSen: 1100,
             category: 'Main',
             tags: [],
             description: 'Steamed chicken with fragrant rice',
           },
-          { name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
-          { name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
-          { name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
+          { code: 'AHSENG-02', name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
+          { code: 'AHSENG-03', name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
+          { code: 'AHSENG-04', name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
         ],
       },
       {
         restaurant: {
+          code: 'GREENBOWL',
           name: 'Green Bowl',
           cuisine: 'Healthy',
           contactName: 'Melissa Koh',
@@ -233,38 +239,42 @@ async function main() {
         },
         dishes: [
           {
+            code: 'GREENBOWL-01',
             name: 'Grilled Chicken Quinoa Bowl',
             priceSen: 1650,
             category: 'Main',
             tags: ['halal', 'high-protein'],
           },
           {
+            code: 'GREENBOWL-02',
             name: 'Tofu Buddha Bowl',
             priceSen: 1450,
             category: 'Main',
             tags: ['vegetarian', 'vegan'],
           },
-          { name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
-          { name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
+          { code: 'GREENBOWL-03', name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
+          { code: 'GREENBOWL-04', name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
         ],
       },
       {
         restaurant: {
+          code: 'BUTINI',
           name: 'Warung Bu Tini',
           cuisine: 'Indonesian',
           contactName: 'Bu Tini',
           contactPhone: '011-2233 4455',
         },
         dishes: [
-          { name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
+          { code: 'BUTINI-01', name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
           {
+            code: 'BUTINI-02',
             name: 'Gado-Gado',
             priceSen: 1050,
             category: 'Main',
             tags: ['halal', 'vegetarian', 'contains-nuts'],
           },
-          { name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
-          { name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
+          { code: 'BUTINI-03', name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
+          { code: 'BUTINI-04', name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
         ],
       },
     ];
@@ -273,7 +283,7 @@ async function main() {
   for (const entry of catalogue) {
     const restaurant = await prisma.restaurant.upsert({
       where: { name: entry.restaurant.name },
-      update: {},
+      update: { code: entry.restaurant.code },
       create: entry.restaurant,
     });
 
@@ -281,7 +291,7 @@ async function main() {
       allDishes.push(
         await prisma.dish.upsert({
           where: { restaurantId_name: { restaurantId: restaurant.id, name: dish.name } },
-          update: { priceSen: dish.priceSen },
+          update: { priceSen: dish.priceSen, code: dish.code },
           create: { ...dish, tags: encodeTags(dish.tags), restaurantId: restaurant.id },
         }),
       );

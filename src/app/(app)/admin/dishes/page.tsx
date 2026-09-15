@@ -52,7 +52,18 @@ export default async function DishesPage({
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddDishButton restaurants={restaurants} />} />
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        action={
+          <>
+            <a href="/api/exports/dishes" className="btn-secondary btn-sm">
+              {c('exportCsv')}
+            </a>
+            <AddDishButton restaurants={restaurants} />
+          </>
+        }
+      />
 
       {restaurants.length === 0 ? (
         <EmptyState
@@ -97,6 +108,7 @@ export default async function DishesPage({
                 <table className="table">
                   <thead>
                     <tr>
+                      <th>{t('code')}</th>
                       <th>{t('dish')}</th>
                       <th>{t('restaurant')}</th>
                       <th>{t('category')}</th>
@@ -108,6 +120,7 @@ export default async function DishesPage({
                   <tbody>
                     {rows.map((d) => (
                       <tr key={d.id}>
+                        <td className="font-mono text-xs text-slate-500">{d.code ?? '—'}</td>
                         <td>
                           <div className="font-medium text-slate-900">{d.name}</div>
                           {d.tags.length > 0 ? (
