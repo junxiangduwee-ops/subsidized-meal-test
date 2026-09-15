@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   // Joget's hash-variable engine comma-joins multi-value results, so a
   // person in several groups arrives as "Admin,Finance" etc.
   const groups = (url.searchParams.get('groups') ?? '')
-    .split(',')
+    .split(';')
     .map((g) => g.trim())
     .filter(Boolean);
 
