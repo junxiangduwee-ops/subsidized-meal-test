@@ -35,7 +35,7 @@ export async function authenticate(emailRaw: string, password: string): Promise<
   if (existing?.passwordHash) {
     const match = await bcrypt.compare(password, existing.passwordHash);
     if (match) {
-      return { ok: true, user: await markSignedIn(existing.id) };
+      return { ok: true, user: await markSignedIn(existing.id, 'LOCAL') };
     }
     // Fall through to LDAP: the account may have been migrated to the
     // directory while keeping a stale local hash.
@@ -100,8 +100,8 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
   });
 }
 
-async function markSignedIn(userId: string): Promise<User> {
-  return prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+async function markSignedIn(userId: string, provider: 'LOCAL' | 'LDAP' = 'LOCAL'): Promise<User> {
+  return prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date(), authProvider: provider } });
 }
 
 /** Basic strength gate for locally managed passwords. */
