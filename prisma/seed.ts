@@ -187,7 +187,7 @@ async function main() {
   }> = [
       {
         restaurant: {
-          code: 'PELITA',
+          code: 'R-001',
           name: 'Nasi Kandar Pelita',
           cuisine: 'Mamak',
           contactName: 'Encik Zul',
@@ -195,21 +195,21 @@ async function main() {
         },
         dishes: [
           {
-            code: 'PELITA-01',
+            code: 'D-001',
             name: 'Nasi Kandar Ayam Goreng',
             priceSen: 1250,
             category: 'Main',
             tags: ['halal', 'spicy'],
             description: 'Fried chicken with mixed curry gravy',
           },
-          { code: 'PELITA-02', name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
-          { code: 'PELITA-03', name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
-          { code: 'PELITA-04', name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
+          { code: 'D-002', name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
+          { code: 'D-003', name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
+          { code: 'D-004', name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
         ],
       },
       {
         restaurant: {
-          code: 'AHSENG',
+          code: 'R-002',
           name: 'Kedai Kopi Ah Seng',
           cuisine: 'Chinese',
           contactName: 'Ah Seng',
@@ -217,21 +217,21 @@ async function main() {
         },
         dishes: [
           {
-            code: 'AHSENG-01',
+            code: 'D-005',
             name: 'Chicken Rice',
             priceSen: 1100,
             category: 'Main',
             tags: [],
             description: 'Steamed chicken with fragrant rice',
           },
-          { code: 'AHSENG-02', name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
-          { code: 'AHSENG-03', name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
-          { code: 'AHSENG-04', name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
+          { code: 'D-006', name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
+          { code: 'D-007', name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
+          { code: 'D-008', name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
         ],
       },
       {
         restaurant: {
-          code: 'GREENBOWL',
+          code: 'R-003',
           name: 'Green Bowl',
           cuisine: 'Healthy',
           contactName: 'Melissa Koh',
@@ -239,42 +239,42 @@ async function main() {
         },
         dishes: [
           {
-            code: 'GREENBOWL-01',
+            code: 'D-009',
             name: 'Grilled Chicken Quinoa Bowl',
             priceSen: 1650,
             category: 'Main',
             tags: ['halal', 'high-protein'],
           },
           {
-            code: 'GREENBOWL-02',
+            code: 'D-010',
             name: 'Tofu Buddha Bowl',
             priceSen: 1450,
             category: 'Main',
             tags: ['vegetarian', 'vegan'],
           },
-          { code: 'GREENBOWL-03', name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
-          { code: 'GREENBOWL-04', name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
+          { code: 'D-011', name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
+          { code: 'D-012', name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
         ],
       },
       {
         restaurant: {
-          code: 'BUTINI',
+          code: 'R-004',
           name: 'Warung Bu Tini',
           cuisine: 'Indonesian',
           contactName: 'Bu Tini',
           contactPhone: '011-2233 4455',
         },
         dishes: [
-          { code: 'BUTINI-01', name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
+          { code: 'D-013', name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
           {
-            code: 'BUTINI-02',
+            code: 'D-014',
             name: 'Gado-Gado',
             priceSen: 1050,
             category: 'Main',
             tags: ['halal', 'vegetarian', 'contains-nuts'],
           },
-          { code: 'BUTINI-03', name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
-          { code: 'BUTINI-04', name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
+          { code: 'D-015', name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
+          { code: 'D-016', name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
         ],
       },
     ];

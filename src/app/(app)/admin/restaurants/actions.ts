@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import { CACHE_TAGS } from '@/lib/cache';
-import { CODE_MAX_LENGTH, CODE_PATTERN, normalizeCode } from '@/lib/codes';
+import { CODE_MAX_LENGTH, CODE_PATTERN, generateUniqueCode, nextSequentialCode, normalizeCode } from '@/lib/codes';
 import type { ActionState } from '@/components/action-form';
 
 const restaurantSchema = z.object({
@@ -31,6 +31,20 @@ function blankToNull(v: string | undefined): string | null {
   return t ? t : null;
 }
 
+/**
+ * Auto-generates the next "R-001"-style code, used when the admin leaves
+ * the code field blank. Unique across every restaurant.
+ */
+async function autoCode(): Promise<string> {
+  const existing = await prisma.restaurant.findMany({
+    where: { code: { not: null } },
+    select: { code: true },
+  });
+  const base = nextSequentialCode('R', existing.map((r) => r.code));
+  const isTaken = (code: string) => prisma.restaurant.findUnique({ where: { code } }).then(Boolean);
+  return generateUniqueCode(base, isTaken);
+}
+
 export async function createRestaurant(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await assertCapability('catalogue:manage');
 
@@ -49,7 +63,7 @@ export async function createRestaurant(_prev: ActionState, formData: FormData): 
 
   const created = await prisma.restaurant.create({
     data: {
-      code,
+      code: code ?? (await autoCode()),
       name: d.name,
       cuisine: blankToNull(d.cuisine),
       description: blankToNull(d.description),
@@ -87,7 +101,7 @@ export async function updateRestaurant(_prev: ActionState, formData: FormData): 
   await prisma.restaurant.update({
     where: { id },
     data: {
-      code,
+      code: code ?? (await autoCode()),
       name: d.name,
       cuisine: blankToNull(d.cuisine),
       description: blankToNull(d.description),

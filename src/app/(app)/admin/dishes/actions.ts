@@ -9,7 +9,7 @@ import { encodeTags } from '@/lib/db-compat';
 import { audit } from '@/lib/orders';
 import { ringgitToSen, assertValidSen, formatSen } from '@/lib/money';
 import { CACHE_TAGS } from '@/lib/cache';
-import { CODE_MAX_LENGTH, CODE_PATTERN, normalizeCode } from '@/lib/codes';
+import { CODE_MAX_LENGTH, CODE_PATTERN, generateUniqueCode, nextSequentialCode, normalizeCode } from '@/lib/codes';
 import type { ActionState } from '@/components/action-form';
 
 const dishSchema = z.object({
@@ -46,6 +46,21 @@ function parsePrice(raw: string): { sen: number } | { error: string } {
   return { sen };
 }
 
+/**
+ * Auto-generates the next "D-001"-style code, used when the admin leaves
+ * the code field blank. Unique across every dish in the catalogue, not
+ * just within its restaurant.
+ */
+async function autoCode(): Promise<string> {
+  const existing = await prisma.dish.findMany({
+    where: { code: { not: null } },
+    select: { code: true },
+  });
+  const base = nextSequentialCode('D', existing.map((d) => d.code));
+  const isTaken = (code: string) => prisma.dish.findUnique({ where: { code } }).then(Boolean);
+  return generateUniqueCode(base, isTaken);
+}
+
 export async function createDish(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await assertCapability('catalogue:manage');
 
@@ -61,14 +76,14 @@ export async function createDish(_prev: ActionState, formData: FormData): Promis
 
   const code = normalizeCode(d.code);
   if (code) {
-    const codeClash = await prisma.dish.findFirst({ where: { restaurantId: d.restaurantId, code } });
-    if (codeClash) return { error: `That restaurant already has a dish with code "${code}".` };
+    const codeClash = await prisma.dish.findUnique({ where: { code } });
+    if (codeClash) return { error: `A dish with code "${code}" already exists.` };
   }
 
   const created = await prisma.dish.create({
     data: {
       restaurantId: d.restaurantId,
-      code,
+      code: code ?? (await autoCode()),
       name: d.name,
       priceSen: price.sen,
       category: d.category?.trim() || null,
@@ -106,17 +121,15 @@ export async function updateDish(_prev: ActionState, formData: FormData): Promis
 
   const code = normalizeCode(d.code);
   if (code) {
-    const codeClash = await prisma.dish.findFirst({
-      where: { restaurantId: d.restaurantId, code, NOT: { id } },
-    });
-    if (codeClash) return { error: `That restaurant already has a dish with code "${code}".` };
+    const codeClash = await prisma.dish.findFirst({ where: { code, NOT: { id } } });
+    if (codeClash) return { error: `Another dish already uses code "${code}".` };
   }
 
   await prisma.dish.update({
     where: { id },
     data: {
       restaurantId: d.restaurantId,
-      code,
+      code: code ?? (await autoCode()),
       name: d.name,
       priceSen: price.sen,
       category: d.category?.trim() || null,
