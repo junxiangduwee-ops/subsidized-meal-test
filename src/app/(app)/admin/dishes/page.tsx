@@ -57,7 +57,7 @@ export default async function DishesPage({
         subtitle={t('subtitle')}
         action={
           <>
-            <a href="/api/exports/dishes" className="btn-secondary btn-sm">
+            <a href="/api/exports/dishes" className="btn-secondary">
               {c('exportCsv')}
             </a>
             <AddDishButton restaurants={restaurants} />

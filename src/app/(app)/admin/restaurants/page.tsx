@@ -34,7 +34,7 @@ export default async function RestaurantsPage({
         subtitle={t('subtitle')}
         action={
           <>
-            <a href="/api/exports/restaurants" className="btn-secondary btn-sm">
+            <a href="/api/exports/restaurants" className="btn-secondary">
               {c('exportCsv')}
             </a>
             <AddRestaurantButton />
