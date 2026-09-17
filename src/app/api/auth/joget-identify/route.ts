@@ -71,6 +71,19 @@ export async function GET(request: Request) {
     .map((g) => g.trim())
     .filter(Boolean);
 
+  // TEMPORARY DEBUG MODE - append &debug=1 to the URL to see exactly what
+  // the server computes, instead of guessing. Remove this block once the
+  // role mapping is confirmed working.
+  if (url.searchParams.get('debug') === '1') {
+    const { roleFromGroups } = await import('@/lib/rbac');
+    return NextResponse.json({
+      rawGroupsParam: url.searchParams.get('groups'),
+      parsedGroups: groups,
+      envVarAsSeenByServer: process.env.JOGET_GROUP_ROLE_MAP ?? '(not set - using built-in default)',
+      computedRole: roleFromGroups(groups),
+    });
+  }
+
   if (!email) {
     return uncachedRedirect('/embed/error?reason=sso_failed');
   }
