@@ -7,6 +7,7 @@ import { prisma } from './prisma';
 import { ldapProvider } from './auth/ldap';
 import type { ExternalIdentity } from './auth/providers';
 import { isLdapEnabled, isOidcEnabled } from './auth/providers';
+import { roleFromGroups } from './rbac';
 
 export { isLdapEnabled, isOidcEnabled };
 
@@ -64,12 +65,20 @@ export async function authenticate(emailRaw: string, password: string): Promise<
 const DUMMY_HASH = '$2a$12$C6UzMDM.H6dfI/f/IKcEe.7bJUmmnzHrJPcNPlQZfLBBFhVXjKQ4W';
 
 /**
- * Create or refresh the local mirror of a directory account. Role is only
- * assigned on creation - once an admin changes someone's role here, the
- * directory must not silently overwrite it.
+ * Create or refresh the local mirror of a directory account.
+ *
+ * Role handling differs by provider:
+ *   - JOGET identities carry `groups`, and JOGET is the source of truth for
+ *     who's an Admin/Finance/Analytics user, so role is (re-)computed from
+ *     `roleFromGroups()` on every login, creation included - moving someone
+ *     between Joget groups takes effect the next time they open the app.
+ *   - All other providers (LDAP today) only assign a role on creation
+ *     ('USER'); once an admin changes someone's role here, a later LDAP
+ *     login must not silently overwrite it.
  */
 export async function provisionFromDirectory(identity: ExternalIdentity): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { email: identity.email } });
+  const role = identity.provider === 'JOGET' ? roleFromGroups(identity.groups) : undefined;
 
   if (existing) {
     if (!existing.active) throw new Error('This account has been deactivated.');
@@ -81,6 +90,7 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
         department: identity.department ?? existing.department,
         authProvider: identity.provider,
         externalId: identity.externalId,
+        role: role ?? existing.role,
         lastLoginAt: new Date(),
       },
     });
@@ -94,7 +104,7 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
       department: identity.department ?? null,
       authProvider: identity.provider,
       externalId: identity.externalId,
-      role: 'USER', // new directory accounts always start as employees
+      role: role ?? 'USER', // new directory accounts default to employees unless JOGET says otherwise
       lastLoginAt: new Date(),
     },
   });
