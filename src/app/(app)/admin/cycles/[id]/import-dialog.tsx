@@ -62,6 +62,21 @@ export function ImportMenuDialog({ cycleId }: { cycleId: string }) {
             {t('downloadTemplate')}
           </a>
 
+          <details className="rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+              {t('importChecksHeading')}
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600">
+              <li>{t('importCheckDay')}</li>
+              <li>{t('importCheckCodeFormat')}</li>
+              <li>{t('importCheckRestaurantMatch')}</li>
+              <li>{t('importCheckDishMatch')}</li>
+              <li>{t('importCheckNewPrice')}</li>
+              <li>{t('importCheckCapacity')}</li>
+              <li>{t('importCheckAllOrNothing')}</li>
+            </ul>
+          </details>
+
           <form action={formAction} className="space-y-3">
             <input type="hidden" name="cycleId" value={cycleId} />
             <div>
@@ -88,13 +103,18 @@ export function ImportMenuDialog({ cycleId }: { cycleId: string }) {
 
           {state.result ? (
             <div className="space-y-3 border-t border-slate-200 pt-4">
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                {t('importResultSummary', {
-                  added: state.result.importedCount,
-                  skipped: state.result.skippedCount,
-                  rejected: state.result.rejected.length,
-                })}
-              </p>
+              {state.result.aborted ? (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+                  {t('importAbortedSummary', { rejected: state.result.rejected.length })}
+                </p>
+              ) : (
+                <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {t('importSuccessSummary', {
+                    added: state.result.importedCount,
+                    skipped: state.result.skippedCount,
+                  })}
+                </p>
+              )}
 
               {state.result.createdRestaurants.length > 0 ? (
                 <p className="text-xs text-slate-500">

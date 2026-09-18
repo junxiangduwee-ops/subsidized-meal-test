@@ -429,6 +429,8 @@ export type MenuImportState = {
   error?: string;
   result?: {
     fileName: string;
+    /** true = nothing was written; every row must be fixed before re-uploading the whole file. */
+    aborted: boolean;
     importedCount: number;
     skippedCount: number;
     createdRestaurants: string[];
@@ -440,11 +442,12 @@ export type MenuImportState = {
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 /**
- * Bulk-adds dishes to a draft menu from an uploaded CSV/Excel file. Rows
- * whose restaurant/dish code+name match the catalogue (or are entirely new)
- * are applied; rows where a code matches an existing record under a
- * different name are rejected and reported back, untouched, so the admin
- * can fix and re-upload just those.
+ * Bulk-adds dishes to a draft menu from an uploaded CSV/Excel file.
+ *
+ * All-or-nothing: every row is validated first, and if even one row fails
+ * (see lib/menu-import.ts for the exact checks), nothing in the file is
+ * written - the admin fixes the reported rows and re-uploads the whole
+ * file. Only once every row passes does anything get created.
  */
 export async function importWeeklyMenu(
   _prev: MenuImportState,
@@ -490,25 +493,8 @@ export async function importWeeklyMenu(
 
   const resolved = resolveMenuImportRows(parsed.rows, { restaurants, dishes });
 
-  // Per-day sort order, seeded from what's already on the menu.
-  const dayIds = cycle.days.map((d) => d.id);
-  const counts = await prisma.menuItem.groupBy({
-    by: ['menuDayId'],
-    where: { menuDayId: { in: dayIds } },
-    _count: { _all: true },
-  });
-  const sortOrderByDay = new Map<string, number>(dayIds.map((id) => [id, 0]));
-  for (const c of counts) sortOrderByDay.set(c.menuDayId, c._count._all);
-
-  const existingDishPriceById = new Map(dishes.map((d) => [d.id, d.priceSen]));
-  const restaurantIdByCode = new Map<string, string>();
-  const dishIdByCode = new Map<string, { id: string; priceSen: number }>();
-  const createdRestaurants: string[] = [];
-  const createdDishes: string[] = [];
+  // --- Validation pass: collect every problem, write nothing yet. ---
   const rejected: MenuImportRejectedRow[] = [];
-  let importedCount = 0;
-  let skippedCount = 0;
-
   for (const row of resolved) {
     if (!row.ok) {
       rejected.push({
@@ -522,9 +508,7 @@ export async function importWeeklyMenu(
       });
       continue;
     }
-
-    const dayId = cycle.days[row.weekdayIndex]?.id;
-    if (!dayId) {
+    if (!cycle.days[row.weekdayIndex]) {
       rejected.push({
         row: row.rowNumber,
         restaurantCode: row.restaurant.code,
@@ -534,77 +518,122 @@ export async function importWeeklyMenu(
         day: WEEKDAY_LABELS[row.weekdayIndex] ?? '',
         reason: "That day isn't part of this menu.",
       });
-      continue;
     }
+  }
 
-    try {
-      let restaurantId = row.restaurant.existingId ?? restaurantIdByCode.get(row.restaurant.code);
-      if (!restaurantId) {
-        const created = await prisma.restaurant.create({
-          data: { code: row.restaurant.code, name: row.restaurant.name },
+  if (rejected.length > 0) {
+    await audit(actor.id, 'cycle.import_menu_rejected', 'MenuCycle', cycleId, {
+      fileName: file.name,
+      totalRows: resolved.length,
+      rejectedRows: rejected.length,
+    });
+    return {
+      result: {
+        fileName: file.name,
+        aborted: true,
+        importedCount: 0,
+        skippedCount: 0,
+        createdRestaurants: [],
+        createdDishes: [],
+        rejected,
+      },
+    };
+  }
+
+  // --- Every row is valid: write them all inside one transaction, so a
+  // rare mid-write failure (e.g. a concurrent edit) rolls everything back
+  // instead of leaving a half-applied menu. ---
+  const okRows = resolved.filter((r): r is Extract<typeof r, { ok: true }> => r.ok);
+
+  const createdRestaurants: string[] = [];
+  const createdDishes: string[] = [];
+  let importedCount = 0;
+  let skippedCount = 0;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const dayIds = cycle.days.map((d) => d.id);
+      const counts = await tx.menuItem.groupBy({
+        by: ['menuDayId'],
+        where: { menuDayId: { in: dayIds } },
+        _count: { _all: true },
+      });
+      const sortOrderByDay = new Map<string, number>(dayIds.map((id) => [id, 0]));
+      for (const c of counts) sortOrderByDay.set(c.menuDayId, c._count._all);
+
+      const existingDishPriceById = new Map(dishes.map((d) => [d.id, d.priceSen]));
+      const restaurantIdByCode = new Map<string, string>();
+      const dishIdByCode = new Map<string, { id: string; priceSen: number }>();
+
+      for (const row of okRows) {
+        const dayId = cycle.days[row.weekdayIndex].id;
+
+        let restaurantId = row.restaurant.existingId ?? restaurantIdByCode.get(row.restaurant.code);
+        if (!restaurantId) {
+          const created = await tx.restaurant.create({
+            data: { code: row.restaurant.code, name: row.restaurant.name },
+          });
+          restaurantId = created.id;
+          restaurantIdByCode.set(row.restaurant.code, restaurantId);
+          createdRestaurants.push(`${row.restaurant.name} (${row.restaurant.code})`);
+        }
+
+        let dish = dishIdByCode.get(row.dish.code);
+        if (!dish && row.dish.existingId) {
+          dish = { id: row.dish.existingId, priceSen: existingDishPriceById.get(row.dish.existingId)! };
+        }
+        if (!dish) {
+          // New dish: priceSen is guaranteed by resolveMenuImportRows when existingId is null.
+          const created = await tx.dish.create({
+            data: {
+              restaurantId,
+              code: row.dish.code,
+              name: row.dish.name,
+              priceSen: row.priceSen!,
+            },
+          });
+          dish = { id: created.id, priceSen: created.priceSen };
+          dishIdByCode.set(row.dish.code, dish);
+          createdDishes.push(`${row.dish.name} (${row.dish.code})`);
+        }
+
+        const already = await tx.menuItem.findUnique({
+          where: { menuDayId_dishId: { menuDayId: dayId, dishId: dish.id } },
         });
-        restaurantId = created.id;
-        restaurantIdByCode.set(row.restaurant.code, restaurantId);
-        createdRestaurants.push(`${row.restaurant.name} (${row.restaurant.code})`);
-      }
+        if (already) {
+          skippedCount++;
+          continue;
+        }
 
-      let dish = dishIdByCode.get(row.dish.code);
-      if (!dish && row.dish.existingId) {
-        dish = { id: row.dish.existingId, priceSen: existingDishPriceById.get(row.dish.existingId)! };
-      }
-      if (!dish) {
-        // New dish: priceSen is guaranteed by resolveMenuImportRows when existingId is null.
-        const created = await prisma.dish.create({
+        const sortOrder = sortOrderByDay.get(dayId) ?? 0;
+        await tx.menuItem.create({
           data: {
-            restaurantId,
-            code: row.dish.code,
-            name: row.dish.name,
-            priceSen: row.priceSen!,
+            menuDayId: dayId,
+            dishId: dish.id,
+            priceSen: row.priceSen ?? dish.priceSen,
+            capacity: row.capacity,
+            sortOrder,
           },
         });
-        dish = { id: created.id, priceSen: created.priceSen };
-        dishIdByCode.set(row.dish.code, dish);
-        createdDishes.push(`${row.dish.name} (${row.dish.code})`);
+        sortOrderByDay.set(dayId, sortOrder + 1);
+        importedCount++;
       }
-
-      const already = await prisma.menuItem.findUnique({
-        where: { menuDayId_dishId: { menuDayId: dayId, dishId: dish.id } },
-      });
-      if (already) {
-        skippedCount++;
-        continue;
-      }
-
-      const sortOrder = sortOrderByDay.get(dayId) ?? 0;
-      await prisma.menuItem.create({
-        data: {
-          menuDayId: dayId,
-          dishId: dish.id,
-          priceSen: row.priceSen ?? dish.priceSen,
-          capacity: row.capacity,
-          sortOrder,
-        },
-      });
-      sortOrderByDay.set(dayId, sortOrder + 1);
-      importedCount++;
-    } catch (e) {
-      rejected.push({
-        row: row.rowNumber,
-        restaurantCode: row.restaurant.code,
-        restaurantName: row.restaurant.name,
-        dishCode: row.dish.code,
-        dishName: row.dish.name,
-        day: WEEKDAY_LABELS[row.weekdayIndex] ?? '',
-        reason: (e as Error).message || 'Could not save this row.',
-      });
-    }
+    });
+  } catch (e) {
+    await audit(actor.id, 'cycle.import_menu_failed', 'MenuCycle', cycleId, {
+      fileName: file.name,
+      error: (e as Error).message,
+    });
+    return {
+      error:
+        'Something changed in the catalogue while this file was being saved, so nothing was added. Please try uploading again.',
+    };
   }
 
   await audit(actor.id, 'cycle.import_menu', 'MenuCycle', cycleId, {
     fileName: file.name,
     imported: importedCount,
     skipped: skippedCount,
-    rejected: rejected.length,
   });
 
   revalidatePath(`/admin/cycles/${cycleId}`);
@@ -614,11 +643,12 @@ export async function importWeeklyMenu(
   return {
     result: {
       fileName: file.name,
+      aborted: false,
       importedCount,
       skippedCount,
       createdRestaurants,
       createdDishes,
-      rejected,
+      rejected: [],
     },
   };
 }
