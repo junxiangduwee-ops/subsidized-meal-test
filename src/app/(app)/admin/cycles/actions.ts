@@ -437,8 +437,6 @@ export type MenuImportState = {
   };
 };
 
-export const EMPTY_IMPORT_STATE: MenuImportState = {};
-
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 /**

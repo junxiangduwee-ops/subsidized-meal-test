@@ -7,7 +7,9 @@ import { useFormStatus } from 'react-dom';
 import { Dialog } from '@/components/dialog';
 import { toCsv } from '@/lib/csv';
 
-import { EMPTY_IMPORT_STATE, importWeeklyMenu, type MenuImportRejectedRow } from '../actions';
+import { importWeeklyMenu, type MenuImportRejectedRow, type MenuImportState } from '../actions';
+
+const EMPTY_IMPORT_STATE: MenuImportState = {};
 
 function UploadSubmit({ label }: { label: string }) {
   const t = useTranslations('common');
