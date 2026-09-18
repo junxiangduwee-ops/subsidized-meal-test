@@ -11,6 +11,7 @@ import {
 } from '../src/lib/cycle';
 import { calculateSubsidy } from '../src/lib/subsidy';
 import { formatSen, ringgitToSen } from '../src/lib/money';
+import { resolveMenuImportRows, resolveWeekdayIndex, type CatalogueDish, type CatalogueRestaurant, type ImportRow } from '../src/lib/menu-import';
 
 let pass = 0;
 let fail = 0;
@@ -203,6 +204,118 @@ out = calculateSubsidy(
   'IT',
 );
 check('snapshot names the applied rule', out.snapshot.rules.map((r) => r.name), ['Standard']);
+
+console.log('\n=== Weekly-menu import ===');
+
+function row(overrides: Partial<ImportRow> = {}): ImportRow {
+  return {
+    day: 'Mon',
+    restaurantCode: 'R-001',
+    restaurantName: 'Nasi Kandar Corner',
+    dishCode: 'D-001',
+    dishName: 'Chicken Rice',
+    price: '',
+    capacity: '',
+    ...overrides,
+  };
+}
+
+const existingRestaurants: CatalogueRestaurant[] = [{ id: 'rest_1', code: 'R-001', name: 'Nasi Kandar Corner' }];
+const existingDishes: CatalogueDish[] = [
+  { id: 'dish_1', code: 'D-001', name: 'Chicken Rice', restaurantId: 'rest_1', priceSen: 1250 },
+];
+
+check('resolveWeekdayIndex accepts short and long names', [resolveWeekdayIndex('Wed'), resolveWeekdayIndex('friday')], [2, 4]);
+check('resolveWeekdayIndex rejects unknown days', resolveWeekdayIndex('Saturday'), null);
+
+// Matching code + matching name -> reuse the existing restaurant and dish.
+let plan = resolveMenuImportRows([row()], { restaurants: existingRestaurants, dishes: existingDishes });
+check('existing code+name matches', plan[0].ok, true);
+if (plan[0].ok) {
+  check('existing restaurant reused', plan[0].restaurant.existingId, 'rest_1');
+  check('existing dish reused', plan[0].dish.existingId, 'dish_1');
+}
+
+// Same code, different name -> conflict, row rejected.
+plan = resolveMenuImportRows(
+  [row({ restaurantName: 'Totally Different Name' })],
+  { restaurants: existingRestaurants, dishes: existingDishes },
+);
+check('same restaurant code different name is rejected', plan[0].ok, false);
+
+// Same dish code, different name -> conflict.
+plan = resolveMenuImportRows([row({ dishName: 'Beef Rendang' })], {
+  restaurants: existingRestaurants,
+  dishes: existingDishes,
+});
+check('same dish code different name is rejected', plan[0].ok, false);
+
+// Brand new restaurant + dish (new code, new name) -> created, needs a price.
+plan = resolveMenuImportRows(
+  [row({ restaurantCode: 'R-099', restaurantName: 'New Spot', dishCode: 'D-099', dishName: 'New Dish' })],
+  { restaurants: existingRestaurants, dishes: existingDishes },
+);
+check('brand new restaurant+dish without price is rejected', plan[0].ok, false);
+
+plan = resolveMenuImportRows(
+  [
+    row({
+      restaurantCode: 'R-099',
+      restaurantName: 'New Spot',
+      dishCode: 'D-099',
+      dishName: 'New Dish',
+      price: '9.90',
+    }),
+  ],
+  { restaurants: existingRestaurants, dishes: existingDishes },
+);
+check('brand new restaurant+dish with price is accepted', plan[0].ok, true);
+if (plan[0].ok) {
+  check('new restaurant has no existing id', plan[0].restaurant.existingId, null);
+  check('new dish has no existing id', plan[0].dish.existingId, null);
+}
+
+// A new code claiming a name that already belongs to someone else -> conflict.
+plan = resolveMenuImportRows(
+  [row({ restaurantCode: 'R-050', restaurantName: 'Nasi Kandar Corner' })],
+  { restaurants: existingRestaurants, dishes: existingDishes },
+);
+check('new code with an existing name is rejected', plan[0].ok, false);
+
+// Two rows in the same file both declaring the same brand-new restaurant
+// code consistently should both succeed and share one restaurant.
+plan = resolveMenuImportRows(
+  [
+    row({ restaurantCode: 'R-200', restaurantName: 'Second Spot', dishCode: 'D-200', dishName: 'Dish A', price: '5.00' }),
+    row({
+      day: 'Tue',
+      restaurantCode: 'R-200',
+      restaurantName: 'Second Spot',
+      dishCode: 'D-201',
+      dishName: 'Dish B',
+      price: '6.00',
+    }),
+  ],
+  { restaurants: existingRestaurants, dishes: existingDishes },
+);
+check('two rows sharing a new restaurant code both succeed', [plan[0].ok, plan[1].ok], [true, true]);
+
+// ...but the same new code with an inconsistent name across rows is a conflict.
+plan = resolveMenuImportRows(
+  [
+    row({ restaurantCode: 'R-300', restaurantName: 'Third Spot', dishCode: 'D-300', dishName: 'Dish A', price: '5.00' }),
+    row({
+      day: 'Tue',
+      restaurantCode: 'R-300',
+      restaurantName: 'A Different Name',
+      dishCode: 'D-301',
+      dishName: 'Dish B',
+      price: '6.00',
+    }),
+  ],
+  { restaurants: existingRestaurants, dishes: existingDishes },
+);
+check('inconsistent new restaurant name within the same file is rejected', [plan[0].ok, plan[1].ok], [true, false]);
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

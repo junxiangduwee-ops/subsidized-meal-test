@@ -22,6 +22,7 @@ import type { DayTab } from '@/components/day-tabs';
 
 import { cancelCycle, closeCycle, copyPreviousWeek, publishCycle, unpublishCycle } from '../actions';
 import { DayPlanner, type DishOption, type PlannerItem } from './planner';
+import { ImportMenuDialog } from './import-dialog';
 import { ScheduleForm } from './schedule-form';
 
 export const dynamic = 'force-dynamic';
@@ -96,6 +97,8 @@ export default async function CycleDetailPage({
         }
         action={
           <div className="flex flex-wrap gap-2">
+            {editable ? <ImportMenuDialog cycleId={cycle.id} /> : null}
+
             {editable && previousWeek ? (
               <form action={copyPreviousWeek}>
                 <input type="hidden" name="id" value={cycle.id} />

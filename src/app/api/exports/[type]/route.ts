@@ -44,6 +44,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   if ((type === 'restaurants' || type === 'dishes') && !can(user.role, 'catalogue:manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  if (type === 'weekly-menu-template' && !can(user.role, 'menu:plan')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   switch (type) {
     case 'orders':
@@ -60,6 +63,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportRestaurants(user.id);
     case 'dishes':
       return exportDishes(user.id);
+    case 'weekly-menu-template':
+      return exportWeeklyMenuTemplate(user.id);
     default:
       return NextResponse.json({ error: 'Unknown export' }, { status: 404 });
   }
@@ -360,5 +365,43 @@ async function exportDishes(actorId: string) {
 
   await audit(actorId, 'export.dishes', 'Dish', null, { rows: rows.length });
   return csvResponse('dishes.csv', csv);
+}
+
+/**
+ * Template for the weekly-menu bulk import (Admin > a draft cycle >
+ * "Upload CSV/Excel"). Column order matches the restaurants/dishes exports
+ * above so codes copy-paste cleanly between the two. Example rows use the
+ * first couple of real, active dishes when there are any, so a new admin
+ * sees codes that actually exist rather than made-up placeholders.
+ */
+async function exportWeeklyMenuTemplate(actorId: string) {
+  const sample = await prisma.dish.findMany({
+    where: { active: true, restaurant: { active: true } },
+    take: 2,
+    orderBy: { createdAt: 'asc' },
+    include: { restaurant: { select: { code: true, name: true } } },
+  });
+
+  const headers = ['Day', 'Restaurant code', 'Restaurant name', 'Dish code', 'Dish name', 'Price (RM)', 'Capacity'];
+
+  const rows =
+    sample.length > 0
+      ? sample.map((d, i) => [
+          i === 0 ? 'Mon' : 'Tue',
+          d.restaurant.code ?? '',
+          d.restaurant.name,
+          d.code ?? '',
+          d.name,
+          csvAmount(d.priceSen),
+          '',
+        ])
+      : [
+          ['Mon', 'R-001', 'Example Restaurant', 'D-001', 'Example Dish', '12.50', ''],
+          ['Mon', 'R-001', 'Example Restaurant', 'D-002', 'Another Dish', '10.00', '50'],
+        ];
+
+  const csv = toCsv(headers, rows);
+  await audit(actorId, 'export.weekly_menu_template', 'MenuCycle', null, {});
+  return csvResponse('weekly-menu-template.csv', csv);
 }
 
