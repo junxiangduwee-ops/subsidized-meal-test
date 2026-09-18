@@ -16,7 +16,60 @@ import { toDateKey } from './cycle';
  *      proportionally with exact integer conservation.
  *
  * Everything is in sen; no floats survive past the proportional split.
+ *
+ * Rules are frozen per menu cycle at publish time (see freezeSubsidyRules /
+ * thawSubsidyRules below) so every order placed against a given week is
+ * priced with the same rules, however many times a rule is edited while
+ * that week is open for ordering. `calculateSubsidy` therefore accepts the
+ * narrower `SubsidyRuleLike` shape rather than a live Prisma `SubsidyRule`
+ * row, since a thawed snapshot and a live row both satisfy it.
  */
+
+export type SubsidyRuleLike = {
+  id: string;
+  name: string;
+  type: SubsidyRule['type'];
+  value: number;
+  capSen: number | null;
+  scope: SubsidyRule['scope'];
+  department: string | null;
+  priority: number;
+  active: boolean;
+  effectiveFrom: Date | null;
+  effectiveTo: Date | null;
+};
+
+/** JSON-safe form of `SubsidyRuleLike` (dates as ISO date strings) for storing on MenuCycle.subsidyRulesSnapshot. */
+export type FrozenSubsidyRule = Omit<SubsidyRuleLike, 'effectiveFrom' | 'effectiveTo'> & {
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+};
+
+/** Call at the moment a cycle is published, on the live rules just read from the database. */
+export function freezeSubsidyRules(rules: SubsidyRuleLike[]): FrozenSubsidyRule[] {
+  return rules.map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    value: r.value,
+    capSen: r.capSen,
+    scope: r.scope,
+    department: r.department,
+    priority: r.priority,
+    active: r.active,
+    effectiveFrom: r.effectiveFrom ? toDateKey(r.effectiveFrom) : null,
+    effectiveTo: r.effectiveTo ? toDateKey(r.effectiveTo) : null,
+  }));
+}
+
+/** Call on a cycle's stored `subsidyRulesSnapshot` before passing it to `calculateSubsidy`/`employeePriceFor`. */
+export function thawSubsidyRules(frozen: FrozenSubsidyRule[]): SubsidyRuleLike[] {
+  return frozen.map((r) => ({
+    ...r,
+    effectiveFrom: r.effectiveFrom ? new Date(r.effectiveFrom) : null,
+    effectiveTo: r.effectiveTo ? new Date(r.effectiveTo) : null,
+  }));
+}
 
 export type SubsidyLineInput = {
   /** Stable key for matching results back to the caller's rows. */
@@ -60,7 +113,7 @@ export type SubsidySnapshot = {
 
 const PER_ITEM_TYPES = new Set<SubsidyRule['type']>(['PERCENTAGE', 'FIXED_PER_ITEM']);
 
-function isEffective(rule: SubsidyRule, on: Date): boolean {
+function isEffective(rule: SubsidyRuleLike, on: Date): boolean {
   if (!rule.active) return false;
   const day = toDateKey(on);
   if (rule.effectiveFrom && toDateKey(rule.effectiveFrom) > day) return false;
@@ -68,18 +121,18 @@ function isEffective(rule: SubsidyRule, on: Date): boolean {
   return true;
 }
 
-function matchesScope(rule: SubsidyRule, department: string | null): boolean {
+function matchesScope(rule: SubsidyRuleLike, department: string | null): boolean {
   if (rule.scope === 'ALL') return true;
   if (!rule.department || !department) return false;
   return rule.department.toLowerCase() === department.toLowerCase();
 }
 
 /** Higher wins. DEPARTMENT outranks ALL when priority ties. */
-function rank(rule: SubsidyRule): [number, number] {
+function rank(rule: SubsidyRuleLike): [number, number] {
   return [rule.priority, rule.scope === 'DEPARTMENT' ? 1 : 0];
 }
 
-function bestRule(candidates: SubsidyRule[]): SubsidyRule | null {
+function bestRule(candidates: SubsidyRuleLike[]): SubsidyRuleLike | null {
   if (candidates.length === 0) return null;
   return candidates.reduce((best, r) => {
     const [bp, bs] = rank(best);
@@ -90,7 +143,7 @@ function bestRule(candidates: SubsidyRule[]): SubsidyRule | null {
   });
 }
 
-function perUnitSubsidy(rule: SubsidyRule, unitPriceSen: number): number {
+function perUnitSubsidy(rule: SubsidyRuleLike, unitPriceSen: number): number {
   let amount: number;
   if (rule.type === 'PERCENTAGE') {
     amount = Math.floor((unitPriceSen * rule.value) / 100);
@@ -104,10 +157,10 @@ function perUnitSubsidy(rule: SubsidyRule, unitPriceSen: number): number {
 
 export function calculateSubsidy(
   lines: SubsidyLineInput[],
-  rules: SubsidyRule[],
+  rules: SubsidyRuleLike[],
   department: string | null,
 ): SubsidyOutcome {
-  const usedRules = new Map<string, SubsidyRule>();
+  const usedRules = new Map<string, SubsidyRuleLike>();
 
   // --- Step 1 & 2: per-item subsidy -----------------------------------
   const working = lines.map((line) => {
@@ -231,7 +284,7 @@ function scaleDown(rows: Array<{ subsidy: number }>, cap: number, total: number)
 export function employeePriceFor(
   unitPriceSen: number,
   serviceDate: Date,
-  rules: SubsidyRule[],
+  rules: SubsidyRuleLike[],
   department: string | null,
 ): number {
   const outcome = calculateSubsidy(

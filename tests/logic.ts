@@ -9,7 +9,7 @@ import {
   toLocalInputValue,
   zonedToUtc,
 } from '../src/lib/cycle';
-import { calculateSubsidy } from '../src/lib/subsidy';
+import { calculateSubsidy, freezeSubsidyRules, thawSubsidyRules } from '../src/lib/subsidy';
 import { formatSen, ringgitToSen } from '../src/lib/money';
 import { resolveMenuImportRows, resolveWeekdayIndex, type CatalogueDish, type CatalogueRestaurant, type ImportRow } from '../src/lib/menu-import';
 
@@ -204,6 +204,47 @@ out = calculateSubsidy(
   'IT',
 );
 check('snapshot names the applied rule', out.snapshot.rules.map((r) => r.name), ['Standard']);
+
+console.log('\n=== Frozen subsidy snapshot (per published cycle) ===');
+
+const liveRuleAtPublish = rule({ id: 'r-launch', value: 500 }); // RM5 off, in effect when the cycle is published
+const frozen = freezeSubsidyRules([liveRuleAtPublish]);
+const thawed = thawSubsidyRules(frozen);
+
+check('freeze/thaw round-trips the values used by calculateSubsidy', {
+  id: thawed[0].id,
+  value: thawed[0].value,
+  type: thawed[0].type,
+  effectiveFrom: thawed[0].effectiveFrom,
+}, {
+  id: 'r-launch',
+  value: 500,
+  type: 'FIXED_PER_ITEM',
+  effectiveFrom: null,
+});
+
+// A dated rule survives the JSON round-trip as an actual Date, not a string.
+const datedRule = rule({ id: 'r-dated', effectiveFrom: d1, effectiveTo: d2 });
+const thawedDated = thawSubsidyRules(freezeSubsidyRules([datedRule]));
+check('effectiveFrom/effectiveTo thaw back into real Dates', thawedDated[0].effectiveFrom instanceof Date, true);
+
+// The actual point of the feature: pricing an order with the ORIGINAL
+// (frozen) rules must ignore a rule change made after the cycle was
+// published, even though both "live" and "frozen" cover the same line.
+const priceAtPublishTime = calculateSubsidy(
+  [{ key: 'a', serviceDate: d1, unitPriceSen: 1250, quantity: 1 }],
+  thawSubsidyRules(freezeSubsidyRules([rule({ value: 500 })])), // RM5 off, frozen at publish
+  null,
+).netSen;
+
+const adminThenRaisesTheSubsidyMidWeek = calculateSubsidy(
+  [{ key: 'a', serviceDate: d1, unitPriceSen: 1250, quantity: 1 }],
+  [rule({ value: 700 })], // RM7 off - the "live" rule now, after a mid-week edit
+  null,
+).netSen;
+
+check('order priced off the frozen snapshot is unaffected by a later live rule change', priceAtPublishTime, 750);
+check('a later order, if it used live rules, would get a different price (this is exactly what freezing prevents)', adminThenRaisesTheSubsidyMidWeek, 550);
 
 console.log('\n=== Weekly-menu import ===');
 

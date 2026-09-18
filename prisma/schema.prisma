@@ -201,6 +201,14 @@ model MenuCycle {
   orderCutoffAt    DateTime
 
   publishedAt      DateTime?
+  /// Subsidy rules frozen the moment this cycle actually becomes orderable
+  /// (orderOpenAt is reached), not when it's merely published - a cycle
+  /// can be published days ahead of its order-open date, and a rule
+  /// tweaked in that gap should still count since nobody could act on the
+  /// menu yet. See lib/orders.ts subsidyRulesForCycle. Every order placed
+  /// this week, whichever day, prices off this same frozen set. Null
+  /// before opening, or for a cycle that predates this column.
+  subsidyRulesSnapshot Json?
   closedAt         DateTime?
   notes            String?
 

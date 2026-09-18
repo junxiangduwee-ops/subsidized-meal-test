@@ -1,11 +1,18 @@
 import 'server-only';
 
 import { randomBytes } from 'node:crypto';
-import type { Order, Prisma } from '@prisma/client';
+import { Prisma, type Order } from '@prisma/client';
 
 import { prisma } from './prisma';
 import { isOrderingOpen, toDateKey } from './cycle';
-import { calculateSubsidy, type SubsidyLineInput } from './subsidy';
+import {
+  calculateSubsidy,
+  freezeSubsidyRules,
+  thawSubsidyRules,
+  type FrozenSubsidyRule,
+  type SubsidyLineInput,
+  type SubsidyRuleLike,
+} from './subsidy';
 import { getActiveSubsidyRules } from './cache';
 
 /** Statuses that hold a portion against a menu item's capacity. */
@@ -206,20 +213,72 @@ export async function clearMeal(userId: string, menuItemId: string): Promise<Car
 }
 
 /**
+ * The subsidy rules to price a cycle's orders with.
+ *
+ * Deliberately NOT frozen at publish time - an admin can publish a cycle
+ * days before its `orderOpenAt`, and a rule tweaked during that gap should
+ * still count, since nobody could act on the menu yet. Instead:
+ *
+ *   - Before `orderOpenAt`: rules keep tracking live changes (nothing to
+ *     freeze yet - it isn't "available to order" until this moment).
+ *   - From `orderOpenAt` onward: the first call after that instant - a
+ *     browse or a cart edit, whichever comes first - locks the currently
+ *     active rules onto the cycle. Every order placed against this week,
+ *     on whichever day, prices off that same frozen set from then on.
+ *
+ * The freeze is a first-writer-wins conditional update (only succeeds
+ * while the column is still unset), so if two requests race right at
+ * opening time they both end up reading back the one snapshot that
+ * actually landed, rather than each freezing their own slightly different
+ * copy.
+ */
+export async function subsidyRulesForCycle(cycle: {
+  id: string;
+  orderOpenAt: Date;
+  subsidyRulesSnapshot: Prisma.JsonValue | null;
+}): Promise<SubsidyRuleLike[]> {
+  if (cycle.subsidyRulesSnapshot) {
+    return thawSubsidyRules(cycle.subsidyRulesSnapshot as unknown as FrozenSubsidyRule[]);
+  }
+
+  const liveRules = await getActiveSubsidyRules();
+
+  if (new Date() < cycle.orderOpenAt) {
+    // Not open yet: still tracking live rules, nothing frozen yet.
+    return liveRules;
+  }
+
+  // Ordering has opened and nothing is frozen yet - this is the first
+  // price check since opening, so lock the rules in right now.
+  await prisma.menuCycle.updateMany({
+    where: { id: cycle.id, subsidyRulesSnapshot: { equals: Prisma.DbNull } },
+    data: { subsidyRulesSnapshot: freezeSubsidyRules(liveRules) as unknown as Prisma.InputJsonValue },
+  });
+
+  const fresh = await prisma.menuCycle.findUniqueOrThrow({
+    where: { id: cycle.id },
+    select: { subsidyRulesSnapshot: true },
+  });
+  return fresh.subsidyRulesSnapshot
+    ? thawSubsidyRules(fresh.subsidyRulesSnapshot as unknown as FrozenSubsidyRule[])
+    : liveRules; // defensive fallback; should be unreachable
+}
+
+/**
  * Recompute subsidy and totals for an order from its current lines.
  * Called after every cart mutation and again at checkout.
  */
 export async function repriceOrder(orderId: string): Promise<Order> {
   const order = await prisma.order.findUniqueOrThrow({
     where: { id: orderId },
-    include: { items: true, user: { select: { department: true } } },
+    include: {
+      items: true,
+      user: { select: { department: true } },
+      cycle: { select: { id: true, orderOpenAt: true, subsidyRulesSnapshot: true } },
+    },
   });
 
-  // The only caching-related change kept here: subsidy rules rarely change,
-  // but repriceOrder runs on every single cart click, so this alone used to
-  // mean one extra DB round trip per click. Reading from cache.ts instead
-  // does not touch connections/transactions at all - it is safe on its own.
-  const rules = await getActiveSubsidyRules();
+  const rules = await subsidyRulesForCycle(order.cycle);
 
   const inputs: SubsidyLineInput[] = order.items.map((i) => ({
     key: i.id,

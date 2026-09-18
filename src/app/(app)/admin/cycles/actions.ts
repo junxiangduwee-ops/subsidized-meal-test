@@ -9,6 +9,7 @@ import { assertCapability } from '@/lib/session';
 import { skipDuplicates } from '@/lib/db-compat';
 import { audit } from '@/lib/orders';
 import { ringgitToSen, assertValidSen, formatSen } from '@/lib/money';
+import { Prisma } from '@prisma/client';
 import {
   addWeeks,
   dateOnly,
@@ -126,7 +127,7 @@ export async function unpublishCycle(formData: FormData): Promise<void> {
 
   await prisma.menuCycle.update({
     where: { id },
-    data: { status: 'DRAFT', publishedAt: null },
+    data: { status: 'DRAFT', publishedAt: null, subsidyRulesSnapshot: Prisma.DbNull },
   });
 
   await audit(actor.id, 'cycle.unpublish', 'MenuCycle', id);

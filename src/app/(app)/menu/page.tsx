@@ -6,8 +6,8 @@ import { requireCapability } from '@/lib/session';
 import { decodeTags } from '@/lib/db-compat';
 import { employeePriceFor } from '@/lib/subsidy';
 import { formatDate, formatDateTime, formatWeekRange, timeUntil, toDateKey } from '@/lib/cycle';
-import { remainingCapacityMap } from '@/lib/orders';
-import { getActiveDeliverySites, getActiveSubsidyRules } from '@/lib/cache';
+import { remainingCapacityMap, subsidyRulesForCycle } from '@/lib/orders';
+import { getActiveDeliverySites } from '@/lib/cache';
 import { PageHeader, EmptyState, Alert } from '@/components/ui';
 import type { DayTab } from '@/components/day-tabs';
 
@@ -28,14 +28,13 @@ export default async function MenuPage({
   // to fetch them one after another. This is a read-only page: running
   // these concurrently carries none of the atomicity/timeout risk that
   // wrapping a write in a transaction would.
-  const [user, cycle, deliverySites, rules, t, locale, { day: requestedDay }] = await Promise.all([
+  const [user, cycle, deliverySites, t, locale, { day: requestedDay }] = await Promise.all([
     requireCapability('order:place'),
     prisma.menuCycle.findFirst({
       where: { status: 'PUBLISHED', orderOpenAt: { lte: now }, orderCutoffAt: { gt: now } },
       orderBy: { serviceWeekStart: 'asc' },
     }),
     getActiveDeliverySites(),
-    getActiveSubsidyRules(),
     getTranslations('menu'),
     getLocale(),
     searchParams,
@@ -69,6 +68,13 @@ export default async function MenuPage({
       </>
     );
   }
+
+  // Priced off the rules frozen once this cycle actually became orderable
+  // (see subsidyRulesForCycle in lib/orders.ts), not whatever subsidy
+  // rules happen to be active right now - so the price shown here always
+  // matches what checkout will actually charge, all week, however many
+  // times a rule is edited after the week opened.
+  const rules = await subsidyRulesForCycle(cycle);
 
   // Both of these only need cycle.id (orders also needs user.id) - neither
   // depends on the other's result, so they run together instead of one
@@ -203,10 +209,10 @@ export default async function MenuPage({
         cart?.id,
       );
 
-  // `rules` was already fetched at the top, in parallel with the cycle
-  // lookup - employees see their own price, never the list price or the
-  // company's contribution, computed here per dish since it is one meal
-  // per service day.
+  // `rules` was already resolved above (the cycle's frozen snapshot, or
+  // the live fallback) - employees see their own price, never the list
+  // price or the company's contribution, computed here per dish since it
+  // is one meal per service day.
 
   const dishes: MenuDish[] = menuItems.map((item) => ({
     menuItemId: item.id,
