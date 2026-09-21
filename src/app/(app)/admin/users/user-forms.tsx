@@ -11,7 +11,7 @@ import { createUser, resetPassword, updateUser } from './actions';
 type UserFields = {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   staffId: string | null;
   department: string | null;
   role: Role;
@@ -35,7 +35,8 @@ function CreateUserFields({ departments }: { departments: string[] }) {
     <>
       <div>
         <label className="label">{t('workEmail')}</label>
-        <input name="email" type="email" required className="input" placeholder="name@mrdiy.com" />
+        <input name="email" type="email" className="input" placeholder="name@mrdiy.com" />
+        <p className="mt-1 text-xs text-slate-500">{t('emailOrStaffIdHint')}</p>
       </div>
       <div>
         <label className="label">{t('fullName')}</label>
@@ -124,7 +125,7 @@ export function EditUserDialog({ user, departments }: { user: UserFields; depart
           <input type="hidden" name="id" value={user.id} />
           <div>
             <label className="label">{t('email')}</label>
-            <input value={user.email} disabled className="input" />
+            <input value={user.email ?? t('noEmailOnFile')} disabled className="input" />
             <p className="mt-1 text-xs text-slate-500">
               {t('signsInWith', {
                 provider: user.authProvider === 'LOCAL' ? t('localPassword') : user.authProvider,
