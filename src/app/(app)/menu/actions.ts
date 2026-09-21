@@ -122,6 +122,22 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     };
   }
 
+  // HitPay needs somewhere to send the payment link/receipt. Most staff
+  // have their own email; for the (real, expected) case of an employee
+  // provisioned by employee ID alone with no email account, they type one
+  // in just for this receipt - it's never saved as their login email.
+  let paymentEmail = user.email;
+  if (!paymentEmail) {
+    const entered = String(formData.get('receiptEmail') ?? '').trim();
+    if (!entered) {
+      return { error: 'Enter an email address to receive the payment receipt.' };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entered)) {
+      return { error: 'Enter a valid email address for the receipt.' };
+    }
+    paymentEmail = entered.toLowerCase();
+  }
+
   await prisma.order.update({
     where: { id: fresh.id },
     data: { status: 'AWAITING_PAYMENT', submittedAt: new Date() },
@@ -133,7 +149,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
       amountSen: fresh.netSen,
       reference: fresh.reference,
       purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-      email: user.email,
+      email: paymentEmail,
       name: user.name,
     });
 
@@ -145,6 +161,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
         amountSen: fresh.netSen,
         currency: (process.env.HITPAY_CURRENCY ?? 'MYR').toUpperCase(),
         checkoutUrl: request.url,
+        receiptEmail: paymentEmail,
       },
     });
 

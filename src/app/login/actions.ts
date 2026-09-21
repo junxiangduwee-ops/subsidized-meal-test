@@ -15,19 +15,19 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   const t = await getTranslations('login');
 
   const schema = z.object({
-    email: z.string().email(t('invalidEmail')),
+    identifier: z.string().trim().min(1, t('enterEmailOrStaffId')),
     password: z.string().min(1, t('enterPassword')),
   });
 
   const parsed = schema.safeParse({
-    email: formData.get('email'),
+    identifier: formData.get('identifier'),
     password: formData.get('password'),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? t('invalidInput') };
   }
 
-  const result = await authenticate(parsed.data.email, parsed.data.password);
+  const result = await authenticate(parsed.data.identifier, parsed.data.password);
 
   if (!result.ok) {
     if (result.reason === 'inactive') {

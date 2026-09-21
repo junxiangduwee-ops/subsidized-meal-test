@@ -25,7 +25,8 @@ function ttlHours(): number {
 
 export type SessionUser = {
   id: string;
-  email: string;
+  /** Null for an employee with no email account - see staffId. */
+  email: string | null;
   name: string;
   role: Role;
   department: string | null;

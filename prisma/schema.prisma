@@ -96,8 +96,16 @@ enum SubsidyScope {
 
 model User {
   id           String       @id @default(cuid())
-  email        String       @unique
+  /// Optional so an employee with no email account can still be provisioned
+  /// off their employee code alone (see staffId). App code enforces "at
+  /// least one of email or staffId" on every create/provision path - see
+  /// lib/auth.ts and admin/users/actions.ts.
+  email        String?      @unique
   name         String
+  /// The employee code - #currentUser.employee.code# on the Joget side.
+  /// The one identifier guaranteed to exist for every real employee, so
+  /// it's tried first when matching a Joget/directory identity, and is
+  /// the required fallback login identifier for anyone without an email.
   staffId      String?      @unique
   department   String?
   role         Role         @default(USER)
@@ -401,6 +409,10 @@ model Payment {
   /// Raw webhook body, kept for reconciliation and dispute handling.
   rawPayload        Json?
   failureReason     String?
+  /// The email HitPay was told to send the receipt/payment link to for
+  /// this one payment - normally the user's own email, but for an
+  /// employee with none on file, whatever they typed in at checkout.
+  receiptEmail      String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
