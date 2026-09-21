@@ -95,6 +95,13 @@ const DUMMY_HASH = '$2a$12$C6UzMDM.H6dfI/f/IKcEe.7bJUmmnzHrJPcNPlQZfLBBFhVXjKQ4W
  *   - All other providers (LDAP today) only assign a role on creation
  *     ('USER'); once an admin changes someone's role here, a later LDAP
  *     login must not silently overwrite it.
+ *
+ * Name handling is the same for every provider: the directory-supplied
+ * name only seeds the record when the account is first created. On every
+ * later login (JOGET via staffId, JOGET via email, LDAP, or OIDC all share
+ * this one code path) the locally stored name is kept as-is, so a
+ * correction made in Admin -> Users sticks instead of being silently
+ * overwritten the next time the person opens the embedded view.
  */
 export async function provisionFromDirectory(identity: ExternalIdentity): Promise<User> {
   if (!identity.email && !identity.staffId) {
@@ -114,7 +121,16 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
     return prisma.user.update({
       where: { id: existing.id },
       data: {
-        name: identity.name || existing.name,
+        // Directory-supplied name is only used to seed a brand-new account
+        // (see the create branch below). On every subsequent login for an
+        // account that already exists, keep whatever name is on file
+        // locally - an admin (or the user, if that's ever exposed) may have
+        // corrected it, and Joget/LDAP/OIDC re-sending their own copy of
+        // the name on every single login must not silently clobber that.
+        // `existing.name` is a required, non-null column, so this only
+        // ever falls back to identity.name for the (should-never-happen)
+        // case of a legacy blank name.
+        name: existing.name || identity.name,
         email: identity.email ?? existing.email,
         staffId: identity.staffId ?? existing.staffId,
         department: identity.department ?? existing.department,
