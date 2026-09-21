@@ -21,23 +21,15 @@ export type AuthResult =
   { ok: true; user: User } | { ok: false; reason: 'invalid' | 'inactive' | 'no-local-password' };
 
 /**
- * Verify an email-or-employee-ID/password credential.
- *
- * Some employees have no email account at all, so login accepts either
- * their email or their employee ID (staffId) as the identifier - whichever
- * looks like an email is looked up by that column, otherwise by staffId.
- * The password check itself is unchanged either way.
+ * Verify an email/password credential.
  *
  * Order matters: a local password wins if one is set, so break-glass admin
  * accounts keep working when the directory is unreachable. Otherwise LDAP is
  * tried, and a matching directory user is provisioned on first sign-in.
  */
-export async function authenticate(identifierRaw: string, password: string): Promise<AuthResult> {
-  const identifier = identifierRaw.trim();
-  const looksLikeEmail = identifier.includes('@');
-  const existing = await prisma.user.findFirst({
-    where: looksLikeEmail ? { email: identifier.toLowerCase() } : { staffId: identifier },
-  });
+export async function authenticate(emailRaw: string, password: string): Promise<AuthResult> {
+  const email = emailRaw.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
 
   if (existing && !existing.active) return { ok: false, reason: 'inactive' };
 
@@ -50,24 +42,20 @@ export async function authenticate(identifierRaw: string, password: string): Pro
     // directory while keeping a stale local hash.
   }
 
-  // LDAP directories are keyed by corporate email - an employee-ID login
-  // is, by definition, someone without one, so there is nothing to look
-  // up there.
-  const triedLdap = looksLikeEmail && isLdapEnabled();
-  if (triedLdap) {
-    const identity = await ldapProvider.verify(identifier.toLowerCase(), password);
+  if (isLdapEnabled()) {
+    const identity = await ldapProvider.verify(email, password);
     if (identity) {
       return { ok: true, user: await provisionFromDirectory(identity) };
     }
   }
 
-  if (existing && !existing.passwordHash && !triedLdap) {
+  if (existing && !existing.passwordHash && !isLdapEnabled()) {
     // SSO-only account trying to use the password form.
     return { ok: false, reason: 'no-local-password' };
   }
 
-  // Equalise timing a little so a wrong identifier is not obviously faster
-  // than a wrong password.
+  // Equalise timing a little so a wrong email is not obviously faster than
+  // a wrong password.
   if (!existing) await bcrypt.compare(password, DUMMY_HASH);
 
   return { ok: false, reason: 'invalid' };
@@ -79,14 +67,6 @@ const DUMMY_HASH = '$2a$12$C6UzMDM.H6dfI/f/IKcEe.7bJUmmnzHrJPcNPlQZfLBBFhVXjKQ4W
 /**
  * Create or refresh the local mirror of a directory account.
  *
- * Matching: the employee code (staffId) is tried first - it's the one
- * identifier guaranteed to exist and stay stable for a real employee (the
- * Joget side calls it #currentUser.employee.code#) - falling back to email
- * only when no staffId is given or it doesn't match anyone yet. This also
- * safely merges an account that started email-only once its employee code
- * becomes known, instead of creating a duplicate that would collide on the
- * unique email constraint.
- *
  * Role handling differs by provider:
  *   - JOGET identities carry `groups`, and JOGET is the source of truth for
  *     who's an Admin/Finance/Analytics user, so role is (re-)computed from
@@ -97,16 +77,7 @@ const DUMMY_HASH = '$2a$12$C6UzMDM.H6dfI/f/IKcEe.7bJUmmnzHrJPcNPlQZfLBBFhVXjKQ4W
  *     login must not silently overwrite it.
  */
 export async function provisionFromDirectory(identity: ExternalIdentity): Promise<User> {
-  if (!identity.email && !identity.staffId) {
-    throw new Error('This identity has neither an email nor an employee ID to match on.');
-  }
-
-  const byStaffId = identity.staffId
-    ? await prisma.user.findUnique({ where: { staffId: identity.staffId } })
-    : null;
-  const existing =
-    byStaffId ?? (identity.email ? await prisma.user.findUnique({ where: { email: identity.email } }) : null);
-
+  const existing = await prisma.user.findUnique({ where: { email: identity.email } });
   const role = identity.provider === 'JOGET' ? roleFromGroups(identity.groups) : undefined;
 
   if (existing) {
@@ -115,7 +86,6 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
       where: { id: existing.id },
       data: {
         name: identity.name || existing.name,
-        email: identity.email ?? existing.email,
         staffId: identity.staffId ?? existing.staffId,
         department: identity.department ?? existing.department,
         authProvider: identity.provider,

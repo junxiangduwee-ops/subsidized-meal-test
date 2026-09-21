@@ -11,8 +11,7 @@ export type ExternalIdentity = {
   provider: AuthProvider;
   /** Stable subject id from the directory: LDAP dn, or OIDC `sub`. */
   externalId: string;
-  /** Null when the directory has no email for this person - see staffId. */
-  email: string | null;
+  email: string;
   name: string;
   staffId?: string | null;
   department?: string | null;

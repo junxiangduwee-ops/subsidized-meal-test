@@ -27,33 +27,27 @@ function uncachedRedirect(path: string): NextResponse {
 }
 
 /**
- * GET /api/auth/joget-identify?username=...&email=...&name=...&staffId=...
+ * GET /api/auth/joget-identify?username=...&email=...&name=...
  *
  * Point the Joget-side iframe/link at this URL, with #currentUser.username#,
- * #currentUser.email#, #currentUser.firstName# #currentUser.lastName#, and
- * #currentUser.employee.code# (as staffId) filled in via plain Joget
- * hash-variable substitution (no scripting needed on the Joget side).
- *
- * Not every employee has an email account, but every real employee has an
- * employee code, so staffId alone is enough to identify and log someone in
- * - only a request with BOTH blank fails closed.
+ * #currentUser.email#, and #currentUser.firstName# #currentUser.lastName#
+ * filled in via plain Joget hash-variable substitution (no scripting needed
+ * on the Joget side).
  *
  * IMPORTANT - security trade-off, on purpose: there is no signature here.
  * Without working server-to-server API access on this Joget instance, we
  * cannot cryptographically prove the request wasn't tampered with. To keep
  * this workable anyway:
- *   - a matching staffId (tried first) or email auto-creates the account -
- *     see provisionFromDirectory() in lib/auth.ts for the exact matching
- *     order; role comes from the #currentUser.groups.name# hash variable
- *     via roleFromGroups() in rbac.ts, defaulting to USER for anything
- *     that isn't a recognised Admin/Finance/Analytics group name
+ *   - a matching email auto-creates the account; role comes from the
+ *     #currentUser.groups.name# hash variable via roleFromGroups() in
+ *     rbac.ts, defaulting to USER for anything that isn't a recognised
+ *     Admin/Finance/Analytics group name
  *   - per provisionFromDirectory()'s existing JOGET behaviour, role is
  *     re-synced from the group data on EVERY login, not just on creation -
  *     moving someone between Joget groups takes effect next time they open
  *     the app, but a manual role change in Admin -> Users would get
  *     overwritten by their next login here
- *   - a request with neither email nor staffId always fails closed (see
- *     destroySession() call below)
+ *   - a blank email always fails closed (see destroySession() call below)
  * Revisit this once real Joget API access is available (see conversation
  * notes) to add proper signature verification.
  */
@@ -65,12 +59,11 @@ export async function GET(request: Request) {
   await destroySession();
 
   const url = new URL(request.url);
-  const emailRaw = (url.searchParams.get('email') ?? '').trim().toLowerCase();
-  const email = emailRaw || null;
+  const email = (url.searchParams.get('email') ?? '').trim().toLowerCase();
   const username = (url.searchParams.get('username') ?? '').trim();
   const name = (url.searchParams.get('name') ?? '').trim();
   const department = (url.searchParams.get('department') ?? '').trim();
-  const staffId = (url.searchParams.get('staffId') ?? '').trim() || null;
+  const staffId = (url.searchParams.get('staffId') ?? '').trim();
   // Joget's hash-variable engine comma-joins multi-value results, so a
   // person in several groups arrives as "Admin,Finance" etc.
   const groups = (url.searchParams.get('groups') ?? '')
@@ -78,23 +71,22 @@ export async function GET(request: Request) {
     .map((g) => g.trim())
     .filter(Boolean);
 
-  if (!email && !staffId) {
+  if (!email) {
     return uncachedRedirect('/embed/error?reason=sso_failed');
   }
 
-  // provisionFromDirectory() creates the account on first login, matching
-  // by employee code first and falling back to email (see its own doc
-  // comment), and for JOGET identities specifically re-syncs the role from
-  // group membership on every subsequent login too - so moving someone
-  // between Joget groups takes effect the next time they open the app.
+  // provisionFromDirectory() creates the account on first login and, for
+  // JOGET identities specifically, re-syncs the role from group membership
+  // on every subsequent login too - so moving someone between Joget groups
+  // takes effect the next time they open the app.
   let user;
   try {
     user = await provisionFromDirectory({
       provider: 'JOGET',
-      externalId: username || staffId || email!,
+      externalId: username || email,
       email,
-      name: name || email?.split('@')[0] || staffId!,
-      staffId,
+      name: name || email.split('@')[0],
+      staffId: staffId || null,
       department: department || null,
       groups,
     });

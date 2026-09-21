@@ -79,7 +79,6 @@ export function MenuOrdering({
   hasSettledOrders = false,
   deliverySites,
   selectedDeliverySiteId,
-  needsReceiptEmail = false,
 }: {
   cycleId: string;
   tabs: DayTab[];
@@ -97,8 +96,6 @@ export function MenuOrdering({
   deliverySites: Array<{ id: string; name: string }>;
   /** The open cart's current choice, if one has been made yet. */
   selectedDeliverySiteId: string | null;
-  /** True when the signed-in employee has no email on file, so checkout must collect one just for the payment receipt. */
-  needsReceiptEmail?: boolean;
 }) {
   const t = useTranslations('menu');
   const router = useRouter();
@@ -193,7 +190,6 @@ export function MenuOrdering({
         hasSettledOrders={hasSettledOrders}
         deliverySites={deliverySites}
         selectedDeliverySiteId={selectedDeliverySiteId}
-        needsReceiptEmail={needsReceiptEmail}
       />
     </div>
   );
@@ -354,7 +350,6 @@ function OrderSummary({
   hasSettledOrders,
   deliverySites,
   selectedDeliverySiteId,
-  needsReceiptEmail = false,
 }: {
   cartLines: CartLine[];
   /** Amount due now - the open cart's total, not the whole week's. */
@@ -365,15 +360,12 @@ function OrderSummary({
   hasSettledOrders: boolean;
   deliverySites: Array<{ id: string; name: string }>;
   selectedDeliverySiteId: string | null;
-  /** True when the signed-in employee has no email on file, so checkout must collect one just for the payment receipt. */
-  needsReceiptEmail?: boolean;
 }) {
   const t = useTranslations('menu');
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [siteSaving, setSiteSaving] = useState(false);
-  const [receiptEmail, setReceiptEmail] = useState('');
 
   // Group by day so people see their whole week at a glance, paid and
   // pending days together.
@@ -407,17 +399,8 @@ function OrderSummary({
       setError(t('chooseSiteToContinue'));
       return;
     }
-    const wantsReceiptEmail = needsReceiptEmail && totalSen > 0;
-    if (wantsReceiptEmail) {
-      const trimmed = receiptEmail.trim();
-      if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-        setError(t('enterValidReceiptEmail'));
-        return;
-      }
-    }
     const data = new FormData();
     data.set('cycleId', cycleId);
-    if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
     startTransition(async () => {
       const result = await checkout({}, data);
       if (result?.error) {
@@ -521,20 +504,6 @@ function OrderSummary({
                   ))}
                 </select>
               </label>
-
-              {needsReceiptEmail && !nothingToPay ? (
-                <label className="mb-3 block text-xs font-medium text-slate-600">
-                  {t('receiptEmail')}
-                  <input
-                    type="email"
-                    className="input mt-1"
-                    value={receiptEmail}
-                    onChange={(e) => setReceiptEmail(e.target.value)}
-                    placeholder={t('receiptEmailPlaceholder')}
-                  />
-                  <span className="mt-1 block text-xs font-normal text-slate-400">{t('receiptEmailHint')}</span>
-                </label>
-              ) : null}
 
               {error ? (
                 <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>

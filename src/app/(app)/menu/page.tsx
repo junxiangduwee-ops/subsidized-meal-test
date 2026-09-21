@@ -261,7 +261,6 @@ export default async function MenuPage({
         hasSettledOrders={settledOrders.length > 0}
         deliverySites={deliverySites}
         selectedDeliverySiteId={cart?.deliverySiteId ?? null}
-        needsReceiptEmail={!user.email}
       />
     </>
   );

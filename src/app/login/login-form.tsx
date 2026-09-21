@@ -39,17 +39,17 @@ export function LoginForm({
         ) : null}
 
         <div>
-          <label htmlFor="identifier" className="label">
-            {t('emailOrStaffId')}
+          <label htmlFor="email" className="label">
+            {t('workEmail')}
           </label>
           <input
-            id="identifier"
-            name="identifier"
-            type="text"
+            id="email"
+            name="email"
+            type="email"
             autoComplete="username"
             required
             className="input"
-            placeholder={t('emailOrStaffIdPlaceholder')}
+            placeholder="name@mrdiy.com"
           />
         </div>
 

@@ -13,7 +13,7 @@ import type { ActionState } from '@/components/action-form';
 const ROLES = ['ADMIN', 'ANALYTICS', 'FINANCE', 'USER'] as const;
 
 const createSchema = z.object({
-  email: z.string().trim().max(255).optional().or(z.literal('')),
+  email: z.string().trim().email('Enter a valid email address.'),
   name: z.string().trim().min(2, 'Enter the person’s name.').max(120),
   staffId: z.string().trim().max(40).optional().or(z.literal('')),
   department: z.string().trim().max(120).optional().or(z.literal('')),
@@ -31,26 +31,12 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
   const weak = validatePasswordStrength(d.password);
   if (weak) return { error: weak };
 
+  const email = d.email.toLowerCase();
+  if (await prisma.user.findUnique({ where: { email } })) {
+    return { error: 'An account with that email already exists.' };
+  }
+
   const staffId = d.staffId?.trim() || null;
-  const emailRaw = d.email?.trim();
-
-  // Not every employee has an email - the employee ID is the required
-  // fallback identifier, since it's the one every real employee has.
-  if (!emailRaw && !staffId) {
-    return { error: 'Enter an email, an employee ID, or both.' };
-  }
-
-  let email: string | null = null;
-  if (emailRaw) {
-    if (!z.string().email().safeParse(emailRaw).success) {
-      return { error: 'Enter a valid email address.' };
-    }
-    email = emailRaw.toLowerCase();
-    if (await prisma.user.findUnique({ where: { email } })) {
-      return { error: 'An account with that email already exists.' };
-    }
-  }
-
   if (staffId && (await prisma.user.findUnique({ where: { staffId } }))) {
     return { error: `Staff ID ${staffId} is already assigned to someone else.` };
   }
@@ -67,7 +53,7 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
     },
   });
 
-  await audit(actor.id, 'user.create', 'User', user.id, { email: user.email, staffId: user.staffId, role: user.role });
+  await audit(actor.id, 'user.create', 'User', user.id, { email: user.email, role: user.role });
   revalidatePath('/admin/users');
   revalidateTag(CACHE_TAGS.departments);
   return { success: `Created ${user.name}. Share the temporary password securely — never by email.` };
