@@ -61,38 +61,68 @@ export async function toggleDeliverySiteActive(formData: FormData): Promise<void
   if (!current) return;
 
   await prisma.deliverySite.update({ where: { id }, data: { active: !current.active } });
+
+  // Turning a site OFF: nobody's default (admin-pinned or self-learned)
+  // should keep quietly pointing at a site that's no longer selectable -
+  // clear it back to null/unlocked, same as when a site is deleted outright
+  // (see deleteDeliverySite). It's just a convenience preference, not an
+  // audit/financial record like an Order, so there's nothing to preserve -
+  // whoever it was gets prompted to pick a site next time they order.
+  let clearedDefaults = 0;
+  if (current.active) {
+    const cleared = await prisma.user.updateMany({
+      where: { defaultDeliverySiteId: id },
+      data: { defaultDeliverySiteId: null, defaultDeliverySiteLocked: false },
+    });
+    clearedDefaults = cleared.count;
+  }
+
   await audit(
     actor.id,
     current.active ? 'delivery_site.deactivate' : 'delivery_site.activate',
     'DeliverySite',
     id,
+    current.active ? { usersDefaultCleared: clearedDefaults } : undefined,
   );
   revalidatePath('/admin/delivery-sites');
   revalidatePath('/menu');
+  revalidatePath('/admin/users');
   revalidateTag(CACHE_TAGS.deliverySites);
 }
 
 /**
  * Deleting is only allowed while nothing has ever been ordered to this site -
  * otherwise we deactivate so historical orders keep an intact reference.
+ * Someone's default pointing here is NOT a reason to block the delete: it's
+ * just a convenience preference (see User.defaultDeliverySiteId), not a
+ * record anything depends on, so it simply reverts to null/unlocked as part
+ * of the same delete - they pick a site next time they order, exactly like
+ * a first-time employee would.
  */
 export async function deleteDeliverySite(formData: FormData): Promise<void> {
   const actor = await assertCapability('catalogue:manage');
   const id = String(formData.get('id') ?? '');
   if (!id) return;
 
-  const usage = await prisma.order.count({ where: { deliverySiteId: id } });
-  if (usage > 0) {
+  const orderUsage = await prisma.order.count({ where: { deliverySiteId: id } });
+  if (orderUsage > 0) {
     await prisma.deliverySite.update({ where: { id }, data: { active: false } });
     await audit(actor.id, 'delivery_site.deactivate_instead_of_delete', 'DeliverySite', id, {
-      orders: usage,
+      orders: orderUsage,
     });
   } else {
-    await prisma.deliverySite.delete({ where: { id } });
-    await audit(actor.id, 'delivery_site.delete', 'DeliverySite', id);
+    const [{ count: usersDefaultCleared }] = await prisma.$transaction([
+      prisma.user.updateMany({
+        where: { defaultDeliverySiteId: id },
+        data: { defaultDeliverySiteId: null, defaultDeliverySiteLocked: false },
+      }),
+      prisma.deliverySite.delete({ where: { id } }),
+    ]);
+    await audit(actor.id, 'delivery_site.delete', 'DeliverySite', id, { usersDefaultCleared });
   }
 
   revalidatePath('/admin/delivery-sites');
   revalidatePath('/menu');
+  revalidatePath('/admin/users');
   revalidateTag(CACHE_TAGS.deliverySites);
 }

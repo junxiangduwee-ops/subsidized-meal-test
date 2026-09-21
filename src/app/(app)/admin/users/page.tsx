@@ -8,7 +8,7 @@ import { formatDateTime } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
-import { getDepartments } from '@/lib/cache';
+import { getDepartments, getActiveDeliverySites } from '@/lib/cache';
 
 import { toggleUserActive } from './actions';
 import { AddUserButton, EditUserDialog, ResetPasswordDialog } from './user-forms';
@@ -54,14 +54,19 @@ export default async function UsersPage({
       orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
+      include: { defaultDeliverySite: { select: { name: true } } },
     }),
   ]);
 
-  const departments = await getDepartments();
+  const [departments, deliverySites] = await Promise.all([getDepartments(), getActiveDeliverySites()]);
 
   return (
     <>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddUserButton departments={departments} />} />
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        action={<AddUserButton departments={departments} deliverySites={deliverySites} />}
+      />
 
       <div className="mb-6">
         <Alert tone="info">{t('rolesInfo')}</Alert>
@@ -101,6 +106,7 @@ export default async function UsersPage({
                     <th>{t('name')}</th>
                     <th>{t('staffId')}</th>
                     <th>{t('department')}</th>
+                    <th>{t('defaultDeliverySite')}</th>
                     <th>{t('role')}</th>
                     <th>{t('signIn')}</th>
                     <th>{t('lastSeen')}</th>
@@ -119,6 +125,20 @@ export default async function UsersPage({
                       </td>
                       <td className="text-slate-600">{u.staffId ?? '—'}</td>
                       <td className="text-slate-600">{u.department ?? '—'}</td>
+                      <td className="text-slate-600">
+                        {u.defaultDeliverySite ? (
+                          <>
+                            {u.defaultDeliverySite.name}{' '}
+                            <span className="text-xs text-slate-400">
+                              {u.defaultDeliverySiteLocked
+                                ? `(${t('defaultDeliverySitePinnedBadge')})`
+                                : `(${t('defaultDeliverySiteAutoBadge')})`}
+                            </span>
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td>
                         <span className={`badge ${ROLE_STYLE[u.role]}`}>{ROLE_LABEL[u.role]}</span>
                       </td>
@@ -137,8 +157,11 @@ export default async function UsersPage({
                               department: u.department,
                               role: u.role,
                               authProvider: u.authProvider,
+                              defaultDeliverySiteId: u.defaultDeliverySiteId,
+                              defaultDeliverySiteLocked: u.defaultDeliverySiteLocked,
                             }}
                             departments={departments}
+                            deliverySites={deliverySites}
                           />
                           <ResetPasswordDialog user={{ id: u.id, name: u.name }} />
                           {u.id === me.id ? null : (

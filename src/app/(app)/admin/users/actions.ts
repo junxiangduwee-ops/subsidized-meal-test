@@ -19,6 +19,11 @@ const createSchema = z.object({
   department: z.string().trim().max(120).optional().or(z.literal('')),
   role: z.enum(ROLES),
   password: z.string().min(1, 'Set a temporary password.'),
+  // Optional - Joget/LDAP/OIDC have no such field to provide, so this is
+  // the only place it's ever set directly. Blank means "no pinned default;
+  // let it auto-fill from their own order history once they place one" -
+  // see getOrCreateCart/setDeliverySite in lib/orders.ts.
+  defaultDeliverySiteId: z.string().trim().max(64).optional().or(z.literal('')),
 });
 
 export async function createUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -55,6 +60,12 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
     return { error: `Staff ID ${staffId} is already assigned to someone else.` };
   }
 
+  const defaultDeliverySiteId = d.defaultDeliverySiteId?.trim() || null;
+  if (defaultDeliverySiteId) {
+    const site = await prisma.deliverySite.findUnique({ where: { id: defaultDeliverySiteId } });
+    if (!site || !site.active) return { error: 'That delivery site is not available.' };
+  }
+
   const user = await prisma.user.create({
     data: {
       email,
@@ -64,6 +75,11 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
       role: d.role,
       passwordHash: await hashPassword(d.password),
       authProvider: 'LOCAL',
+      // Setting it here always pins it - a blank choice at creation just
+      // leaves both fields at their column defaults (null / false), so the
+      // person's first order will set their own default instead.
+      defaultDeliverySiteId,
+      defaultDeliverySiteLocked: defaultDeliverySiteId !== null,
     },
   });
 
@@ -79,6 +95,9 @@ const updateSchema = z.object({
   staffId: z.string().trim().max(40).optional().or(z.literal('')),
   department: z.string().trim().max(120).optional().or(z.literal('')),
   role: z.enum(ROLES),
+  // Present on every submit of this form (it's a <select>, never omitted) -
+  // blank explicitly means "clear/unlock", not "leave unchanged".
+  defaultDeliverySiteId: z.string().trim().max(64).optional().or(z.literal('')),
 });
 
 export async function updateUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -103,9 +122,26 @@ export async function updateUser(_prev: ActionState, formData: FormData): Promis
     if (clash) return { error: `Staff ID ${staffId} is already assigned to someone else.` };
   }
 
+  const defaultDeliverySiteId = d.defaultDeliverySiteId?.trim() || null;
+  if (defaultDeliverySiteId) {
+    const site = await prisma.deliverySite.findUnique({ where: { id: defaultDeliverySiteId } });
+    if (!site || !site.active) return { error: 'That delivery site is not available.' };
+  }
+
   await prisma.user.update({
     where: { id: d.id },
-    data: { name: d.name, staffId, department: d.department?.trim() || null, role: d.role },
+    data: {
+      name: d.name,
+      staffId,
+      department: d.department?.trim() || null,
+      role: d.role,
+      // Choosing a site here always (re-)pins it, same as on creation.
+      // Choosing the blank option explicitly unlocks it, reverting to
+      // auto-fill-from-their-own-order-history - it does NOT mean "leave
+      // whatever's there" (this form always submits the field).
+      defaultDeliverySiteId,
+      defaultDeliverySiteLocked: defaultDeliverySiteId !== null,
+    },
   });
 
   await audit(actor.id, 'user.update', 'User', d.id, { roleFrom: target.role, roleTo: d.role });

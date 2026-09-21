@@ -16,7 +16,11 @@ type UserFields = {
   department: string | null;
   role: Role;
   authProvider: AuthProvider;
+  defaultDeliverySiteId: string | null;
+  defaultDeliverySiteLocked: boolean;
 };
+
+type DeliverySiteOption = { id: string; name: string };
 
 function useRoleOptions() {
   const t = useTranslations('usersAdmin');
@@ -28,7 +32,13 @@ function useRoleOptions() {
   ] as const;
 }
 
-function CreateUserFields({ departments }: { departments: string[] }) {
+function CreateUserFields({
+  departments,
+  deliverySites,
+}: {
+  departments: string[];
+  deliverySites: DeliverySiteOption[];
+}) {
   const t = useTranslations('usersAdmin');
   const roleOptions = useRoleOptions();
   return (
@@ -68,6 +78,18 @@ function CreateUserFields({ departments }: { departments: string[] }) {
         </select>
       </div>
       <div>
+        <label className="label">{t('defaultDeliverySite')}</label>
+        <select name="defaultDeliverySiteId" defaultValue="" className="input">
+          <option value="">{t('defaultDeliverySiteNoneOption')}</option>
+          {deliverySites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-slate-500">{t('defaultDeliverySiteHint')}</p>
+      </div>
+      <div>
         <label className="label">{t('temporaryPassword')}</label>
         <input name="password" type="password" required className="input" autoComplete="new-password" />
         <p className="mt-1 text-xs text-slate-500">{t('passwordHint')}</p>
@@ -76,7 +98,13 @@ function CreateUserFields({ departments }: { departments: string[] }) {
   );
 }
 
-export function AddUserButton({ departments }: { departments: string[] }) {
+export function AddUserButton({
+  departments,
+  deliverySites,
+}: {
+  departments: string[];
+  deliverySites: DeliverySiteOption[];
+}) {
   const t = useTranslations('usersAdmin');
   return (
     <Dialog
@@ -94,17 +122,37 @@ export function AddUserButton({ departments }: { departments: string[] }) {
           className="space-y-3"
           onSuccess={close}
         >
-          <CreateUserFields departments={departments} />
+          <CreateUserFields departments={departments} deliverySites={deliverySites} />
         </ActionForm>
       )}
     </Dialog>
   );
 }
 
-export function EditUserDialog({ user, departments }: { user: UserFields; departments: string[] }) {
+export function EditUserDialog({
+  user,
+  departments,
+  deliverySites,
+}: {
+  user: UserFields;
+  departments: string[];
+  deliverySites: DeliverySiteOption[];
+}) {
   const t = useTranslations('usersAdmin');
   const c = useTranslations('adminCommon');
   const roleOptions = useRoleOptions();
+  // Only an already-*locked* default is the admin's business here - an
+  // auto-learned one (from the person's own last order) should show as
+  // "no pin set", so saving this form for an unrelated reason (say, just
+  // changing department) resubmits blank and doesn't accidentally lock in
+  // whatever they happened to pick for themselves most recently. See
+  // updateUser in actions.ts, which always treats this field as "pin to
+  // this" / "unlock", never "leave unchanged". A stored default can never
+  // point at an inactive/deleted site (see deleteDeliverySite and
+  // toggleDeliverySiteActive, which both clear it back to null/unlocked
+  // the moment that happens), so it's always safe to look it up directly
+  // in the active `deliverySites` list passed in below.
+  const pinnedDeliverySiteId = user.defaultDeliverySiteLocked ? user.defaultDeliverySiteId ?? '' : '';
   return (
     <Dialog
       title={t('editUser', { name: user.name })}
@@ -160,6 +208,24 @@ export function EditUserDialog({ user, departments }: { user: UserFields; depart
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="label">{t('defaultDeliverySite')}</label>
+            <select name="defaultDeliverySiteId" defaultValue={pinnedDeliverySiteId} className="input">
+              <option value="">{t('defaultDeliverySiteNoneOption')}</option>
+              {deliverySites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {user.defaultDeliverySiteLocked
+                ? t('defaultDeliverySiteLockedHint')
+                : user.defaultDeliverySiteId
+                  ? t('defaultDeliverySiteLearnedHint')
+                  : t('defaultDeliverySiteHint')}
+            </p>
           </div>
         </ActionForm>
       )}

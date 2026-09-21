@@ -119,6 +119,23 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  /// App-owned ordering preference, pre-fills a brand-new cart (see
+  /// getOrCreateCart in lib/orders.ts). Deliberately NEVER touched by
+  /// provisionFromDirectory() - Joget/LDAP/OIDC have no concept of this at
+  /// all, so it must not be treated as identity data the way name/role are.
+  /// Null until either an admin sets one (defaultDeliverySiteLocked = true,
+  /// see admin/users) or the person has ordered at least once
+  /// (defaultDeliverySiteLocked stays false, and it then auto-tracks their
+  /// most recent choice - see setDeliverySite in lib/orders.ts).
+  defaultDeliverySiteId     String?
+  defaultDeliverySite       DeliverySite? @relation("UserDefaultDeliverySite", fields: [defaultDeliverySiteId], references: [id])
+  /// true only when an admin explicitly picked a site in Admin -> Users.
+  /// While locked, order-time site changes stop auto-updating the default
+  /// (see setDeliverySite) - an admin-pinned value is never silently
+  /// overwritten by someone ordering for a different site once. Clearing
+  /// the field back to blank in Admin -> Users unlocks it again.
+  defaultDeliverySiteLocked Boolean       @default(false)
+
   orders       Order[]
   createdCycles MenuCycle[] @relation("CycleCreatedBy")
   auditLogs    AuditLog[]
@@ -305,6 +322,9 @@ model DeliverySite {
   updatedAt DateTime @updatedAt
 
   orders    Order[]
+  /// Users for whom this is the current default (admin-pinned or learned -
+  /// see User.defaultDeliverySiteLocked).
+  usersDefaultingHere User[] @relation("UserDefaultDeliverySite")
 
   @@index([active])
 }

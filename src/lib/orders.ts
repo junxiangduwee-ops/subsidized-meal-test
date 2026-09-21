@@ -32,8 +32,31 @@ export async function getOrCreateCart(userId: string, cycleId: string): Promise<
   });
   if (existing) return existing;
 
+  // Seed a brand-new cart from the person's stored default (admin-pinned or
+  // previously learned - see User.defaultDeliverySiteId), so returning
+  // employees don't have to re-pick their site every single week. Still
+  // fully editable via the dropdown either way. Re-checked against `active`
+  // here rather than trusted blindly, in case the site was deactivated
+  // since it was set as someone's default.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { defaultDeliverySiteId: true },
+  });
+  const defaultSite = user?.defaultDeliverySiteId
+    ? await prisma.deliverySite.findFirst({
+        where: { id: user.defaultDeliverySiteId, active: true },
+        select: { id: true },
+      })
+    : null;
+
   return prisma.order.create({
-    data: { userId, cycleId, reference: newOrderReference(), status: 'CART' },
+    data: {
+      userId,
+      cycleId,
+      reference: newOrderReference(),
+      status: 'CART',
+      deliverySiteId: defaultSite?.id ?? null,
+    },
   })
 }
 
@@ -329,7 +352,18 @@ export async function setDeliverySite(
   const order = await prisma.order.findFirst({ where: { userId, cycleId, status: 'CART' } });
   if (!order) return { ok: false, error: 'Add a meal to your cart first.' };
 
-  await prisma.order.update({ where: { id: order.id }, data: { deliverySiteId } });
+  await prisma.$transaction([
+    prisma.order.update({ where: { id: order.id }, data: { deliverySiteId } }),
+    // "Learn" this as the person's new default going forward - but only
+    // when it isn't admin-pinned. The `defaultDeliverySiteLocked: false`
+    // condition is enforced right here in the write itself (not a separate
+    // read-then-check) so a locked default can never race its way into
+    // being overwritten: updateMany simply touches 0 rows when locked.
+    prisma.user.updateMany({
+      where: { id: userId, defaultDeliverySiteLocked: false },
+      data: { defaultDeliverySiteId: deliverySiteId },
+    }),
+  ]);
   return { ok: true };
 }
 
