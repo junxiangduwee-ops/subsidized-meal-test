@@ -29,6 +29,7 @@ function useRoleOptions() {
     { value: 'ADMIN', label: t('roleAdminOption') },
     { value: 'ANALYTICS', label: t('roleAnalyticsOption') },
     { value: 'FINANCE', label: t('roleFinanceOption') },
+    { value: 'RECEPTION', label: t('roleReceptionOption') },
   ] as const;
 }
 

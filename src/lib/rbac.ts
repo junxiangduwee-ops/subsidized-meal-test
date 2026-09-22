@@ -16,6 +16,7 @@ export const CAPABILITIES = [
   'finance:export', // download settlement / payroll files
   'kitchen:view', // per-restaurant production counts after cutoff
   'settings:manage', // site branding, favicon, support email, maintenance banner
+  'delivery:confirm', // reception marks a site's delivery as received, with optional photo proof
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -32,9 +33,11 @@ const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'finance:export',
     'kitchen:view',
     'settings:manage',
+    'delivery:confirm',
   ],
   ANALYTICS: ['analytics:view', 'kitchen:view', 'order:place'],
   FINANCE: ['finance:view', 'finance:export', 'analytics:view', 'order:place'],
+  RECEPTION: ['delivery:confirm', 'order:place'],
   USER: ['order:place'],
 };
 
@@ -60,6 +63,8 @@ export function landingPathFor(role: Role): string {
       return '/analytics';
     case 'FINANCE':
       return '/finance';
+    case 'RECEPTION':
+      return '/reception';
     default:
       return '/menu';
   }
@@ -69,6 +74,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   ADMIN: 'Administrator',
   ANALYTICS: 'Analytics',
   FINANCE: 'Finance',
+  RECEPTION: 'Reception',
   USER: 'Employee',
 };
 
@@ -79,12 +85,13 @@ export const ROLE_LABEL: Record<Role, string> = {
  * Groups not listed fall through to USER. Parsed once per process.
  */
 function parseGroupRoleMap(): Record<string, Role> {
-  const raw = process.env.JOGET_GROUP_ROLE_MAP ?? 'Admin:ADMIN,Finance:FINANCE,Analytics:ANALYTICS';
+  const raw =
+    process.env.JOGET_GROUP_ROLE_MAP ?? 'Admin:ADMIN,Finance:FINANCE,Analytics:ANALYTICS,Reception:RECEPTION';
   const map: Record<string, Role> = {};
   for (const pair of raw.split(',')) {
     const [group, role] = pair.split(':').map((s) => s.trim());
     if (!group || !role) continue;
-    if (!['ADMIN', 'ANALYTICS', 'FINANCE', 'USER'].includes(role)) continue;
+    if (!['ADMIN', 'ANALYTICS', 'FINANCE', 'RECEPTION', 'USER'].includes(role)) continue;
     map[group.toLowerCase()] = role as Role;
   }
   return map;
@@ -94,7 +101,7 @@ const GROUP_ROLE_MAP = parseGroupRoleMap();
 
 /** Highest-privilege role implied by a user's directory groups. Defaults to USER. */
 export function roleFromGroups(groups: string[] | undefined | null): Role {
-  const priority: Role[] = ['ADMIN', 'FINANCE', 'ANALYTICS', 'USER'];
+  const priority: Role[] = ['ADMIN', 'FINANCE', 'ANALYTICS', 'RECEPTION', 'USER'];
   const matched = new Set(
     (groups ?? []).map((g) => GROUP_ROLE_MAP[g.trim().toLowerCase()]).filter((r): r is Role => Boolean(r)),
   );

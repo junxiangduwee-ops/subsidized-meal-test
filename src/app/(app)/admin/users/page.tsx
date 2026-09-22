@@ -19,6 +19,7 @@ const ROLE_STYLE: Record<string, string> = {
   ADMIN: 'bg-brand-100 text-brand-800',
   FINANCE: 'bg-emerald-100 text-emerald-800',
   ANALYTICS: 'bg-sky-100 text-sky-800',
+  RECEPTION: 'bg-amber-100 text-amber-800',
   USER: 'bg-slate-100 text-slate-700',
 };
 
@@ -82,6 +83,7 @@ export default async function UsersPage({
                 <option value="ADMIN">{t('roleAdmin')}</option>
                 <option value="ANALYTICS">{t('roleAnalytics')}</option>
                 <option value="FINANCE">{t('roleFinance')}</option>
+                <option value="RECEPTION">{t('roleReception')}</option>
                 <option value="USER">{t('roleEmployee')}</option>
               </select>
               <input

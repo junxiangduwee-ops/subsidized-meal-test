@@ -10,7 +10,7 @@ import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
-const ROLES = ['ADMIN', 'ANALYTICS', 'FINANCE', 'USER'] as const;
+const ROLES = ['ADMIN', 'ANALYTICS', 'FINANCE', 'RECEPTION', 'USER'] as const;
 
 const createSchema = z.object({
   email: z.string().trim().max(255).optional().or(z.literal('')),

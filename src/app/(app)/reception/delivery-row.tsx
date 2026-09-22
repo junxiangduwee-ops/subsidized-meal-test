@@ -1,0 +1,112 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
+import { ActionForm, InlineSubmit } from '@/components/action-form';
+import { Dialog } from '@/components/dialog';
+
+import { confirmDelivery, unmarkDelivery } from './actions';
+
+/**
+ * Not-yet-confirmed row: lets reception attach a photo, or just mark the
+ * delivery received with no photo at all. The photo input is intentionally
+ * optional - see confirmDelivery in actions.ts.
+ */
+export function ConfirmDeliveryForm({
+  cycleId,
+  deliverySiteId,
+  serviceDate,
+}: {
+  cycleId: string;
+  deliverySiteId: string;
+  serviceDate: string;
+}) {
+  const t = useTranslations('reception');
+
+  return (
+    <ActionForm
+      action={confirmDelivery}
+      submitLabel={t('markReceived')}
+      className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+    >
+      <input type="hidden" name="cycleId" value={cycleId} />
+      <input type="hidden" name="deliverySiteId" value={deliverySiteId} />
+      <input type="hidden" name="serviceDate" value={serviceDate} />
+      <input
+        type="file"
+        name="photo"
+        accept="image/*"
+        capture="environment"
+        className="input !w-full !py-1 text-xs sm:!w-44"
+        aria-label={t('photoInputLabel')}
+      />
+      <input
+        type="text"
+        name="note"
+        placeholder={t('notePlaceholder')}
+        maxLength={500}
+        className="input !w-full !py-1 text-xs sm:!w-40"
+      />
+    </ActionForm>
+  );
+}
+
+/** Already-confirmed row: status badge plus a dialog with the details/photo and an undo. */
+export function DeliveryConfirmedCell({
+  id,
+  receivedAtLabel,
+  receivedByName,
+  note,
+  photoDataUrl,
+}: {
+  id: string;
+  receivedAtLabel: string;
+  receivedByName: string | null;
+  note: string | null;
+  photoDataUrl: string | null;
+}) {
+  const t = useTranslations('reception');
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="badge bg-emerald-100 text-emerald-800">{t('received')}</span>
+      <Dialog
+        title={t('deliveryDetails')}
+        trigger={(open) => (
+          <button
+            type="button"
+            onClick={open}
+            className="text-xs font-medium text-brand-600 hover:underline"
+          >
+            {photoDataUrl ? t('viewPhoto') : t('details')}
+          </button>
+        )}
+      >
+        {() => (
+          <div className="space-y-3">
+            {photoDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photoDataUrl}
+                alt=""
+                className="max-h-96 w-full rounded-md border border-slate-200 object-contain"
+              />
+            ) : (
+              <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                {t('noPhotoAttached')}
+              </p>
+            )}
+            <p className="text-xs text-slate-500">
+              {t('receivedByAt', { name: receivedByName ?? t('unknownStaff'), when: receivedAtLabel })}
+            </p>
+            {note ? <p className="text-sm text-slate-700">{note}</p> : null}
+            <form action={unmarkDelivery}>
+              <input type="hidden" name="id" value={id} />
+              <InlineSubmit label={t('unmark')} variant="danger" confirm={t('unmarkConfirm')} />
+            </form>
+          </div>
+        )}
+      </Dialog>
+    </div>
+  );
+}

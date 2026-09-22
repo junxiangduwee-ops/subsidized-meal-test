@@ -51,6 +51,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
   if (insights.items.length) groups.push(insights);
 
+  if (can(user.role, 'delivery:confirm')) {
+    groups.push({
+      heading: t('reception'),
+      items: [{ href: '/reception', label: t('receptionDeliveries') }],
+    });
+  }
+
   const initials = user.name
     .split(/\s+/)
     .slice(0, 2)

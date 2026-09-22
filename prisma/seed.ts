@@ -92,6 +92,13 @@ async function main() {
       staffId: 'EMP-00003',
     },
     {
+      email: 'reception@mrdiy.com',
+      name: 'Nor Aina Yusof',
+      role: 'RECEPTION' as const,
+      department: 'Facilities',
+      staffId: 'EMP-00013',
+    },
+    {
       email: 'user@mrdiy.com',
       name: 'Farhan Idris',
       role: 'USER' as const,
