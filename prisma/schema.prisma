@@ -137,6 +137,15 @@ model User {
   /// the field back to blank in Admin -> Users unlocks it again.
   defaultDeliverySiteLocked Boolean       @default(false)
 
+  /// Restricts a RECEPTION account to confirming deliveries for one site
+  /// only (enforced in reception/actions.ts, not just hidden in the UI).
+  /// Null means this person can see and confirm every site - appropriate
+  /// for someone covering several sites, but not the norm. Meaningless for
+  /// any other role and always cleared back to null if the role changes
+  /// away from RECEPTION (see admin/users/actions.ts).
+  receptionSiteId           String?
+  receptionSite             DeliverySite? @relation("UserReceptionSite", fields: [receptionSiteId], references: [id], onDelete: SetNull)
+
   orders       Order[]
   createdCycles MenuCycle[] @relation("CycleCreatedBy")
   auditLogs    AuditLog[]
@@ -329,6 +338,9 @@ model DeliverySite {
   /// Users for whom this is the current default (admin-pinned or learned -
   /// see User.defaultDeliverySiteLocked).
   usersDefaultingHere User[] @relation("UserDefaultDeliverySite")
+  /// Reception accounts restricted to confirming deliveries at this site
+  /// only (see User.receptionSiteId).
+  receptionists User[] @relation("UserReceptionSite")
   deliveryConfirmations DeliveryConfirmation[]
 
   @@index([active])

@@ -315,8 +315,20 @@ async function main() {
   await prisma.deliverySite.createMany({
     data: DELIVERY_SITES.map((name) => ({ name, active: true })),
   });
-  const deliverySites = await prisma.deliverySite.findMany({ select: { id: true } });
+  const deliverySites = await prisma.deliverySite.findMany({ select: { id: true, name: true } });
   console.log(`  ${DELIVERY_SITES.length} delivery sites`);
+
+  // Demo reception account is confined to one site, to show the scoping
+  // off out of the box - see User.receptionSiteId in schema.prisma. Falls
+  // back to unrestricted (every site) if the seed's warehouse list ever
+  // changes to no longer include this one.
+  const receptionSite = deliverySites.find((s) => s.name === 'Warehouse A');
+  if (receptionSite) {
+    await prisma.user.update({
+      where: { email: 'reception@mrdiy.com' },
+      data: { receptionSiteId: receptionSite.id },
+    });
+  }
 
   // --- Subsidy rules ---------------------------------------------------
   await prisma.subsidyRule.deleteMany({});

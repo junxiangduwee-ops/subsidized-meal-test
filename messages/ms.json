@@ -341,6 +341,10 @@
     "defaultDeliverySite": "Lokasi penghantaran lalai",
     "defaultDeliverySiteNoneOption": "Tiada tetapan — isi automatik daripada pesanan mereka sendiri",
     "defaultDeliverySiteHint": "Pilihan. Biarkan kosong dan ia akan diisi secara automatik berdasarkan lokasi yang mereka pilih semasa pesanan pertama mereka.",
+    "receptionSite": "Tapak penerimaan",
+    "receptionSiteAllOption": "Semua tapak (tiada sekatan)",
+    "receptionSiteHint": "Hanya terpakai untuk peranan Penerimaan. Biarkan sebagai \"Semua tapak\" jika orang ini menguruskan lebih daripada satu gudang/tapak; jika tidak, pilih satu tapak sahaja untuk pengesahan penghantaran.",
+    "receptionSiteBadgeAll": "semua tapak",
     "defaultDeliverySiteLockedHint": "Ditetapkan oleh admin — tidak akan berubah secara automatik walaupun mereka memesan untuk lokasi lain.",
     "defaultDeliverySiteLearnedHint": "Sedang mengikut pesanan terakhir mereka secara automatik (tidak ditetapkan). Pilih satu lokasi di atas untuk menetapkannya.",
     "defaultDeliverySitePinnedBadge": "ditetapkan",
@@ -504,7 +508,11 @@
     "receivedByAt": "Disahkan oleh {name} · {when}",
     "unknownStaff": "Kakitangan tidak diketahui",
     "unmark": "Batalkan",
-    "unmarkConfirm": "Batalkan pengesahan ini? Tapak akan kembali menunjukkan status belum disahkan."
+    "unmarkConfirm": "Batalkan pengesahan ini? Tapak akan kembali menunjukkan status belum disahkan.",
+    "restaurants": "Restoran",
+    "mealCountSuffix": "({count, plural, other {# hidangan}})",
+    "scopedToSite": "Tapak ditugaskan: {site}",
+    "nothingToReceiveYetHintScoped": "Penghantaran untuk {site} akan dipaparkan di sini sebaik sahaja pekerja membayar pesanan untuk menu minggu ini."
   },
   "financeAdmin": {
     "title": "Kewangan",

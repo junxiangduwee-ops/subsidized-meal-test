@@ -341,6 +341,10 @@
     "defaultDeliverySite": "Default delivery site",
     "defaultDeliverySiteNoneOption": "No pin — auto-fill from their own orders",
     "defaultDeliverySiteHint": "Optional. Leave blank and it fills in automatically from whatever site they choose the first time they order.",
+    "receptionSite": "Reception site",
+    "receptionSiteAllOption": "All sites (unrestricted)",
+    "receptionSiteHint": "Only applies to the Reception role. Leave as \"All sites\" if this person covers more than one warehouse/site; otherwise pick the one site they confirm deliveries for.",
+    "receptionSiteBadgeAll": "all sites",
     "defaultDeliverySiteLockedHint": "Pinned by an admin — won't change automatically even if they order for a different site.",
     "defaultDeliverySiteLearnedHint": "Currently following their own last order automatically (not pinned). Pick a site above to pin it.",
     "defaultDeliverySitePinnedBadge": "pinned",
@@ -504,7 +508,11 @@
     "receivedByAt": "Confirmed by {name} · {when}",
     "unknownStaff": "Unknown staff",
     "unmark": "Unmark",
-    "unmarkConfirm": "Undo this confirmation? The site will show as pending again."
+    "unmarkConfirm": "Undo this confirmation? The site will show as pending again.",
+    "restaurants": "Restaurants",
+    "mealCountSuffix": "({count, plural, one {# meal} other {# meals}})",
+    "scopedToSite": "Assigned site: {site}",
+    "nothingToReceiveYetHintScoped": "Deliveries for {site} will appear here once employees have paid for orders on this week's menu."
   },
   "financeAdmin": {
     "title": "Finance",

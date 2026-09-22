@@ -55,7 +55,7 @@ export default async function UsersPage({
       orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { defaultDeliverySite: { select: { name: true } } },
+      include: { defaultDeliverySite: { select: { name: true } }, receptionSite: { select: { name: true } } },
     }),
   ]);
 
@@ -143,6 +143,11 @@ export default async function UsersPage({
                       </td>
                       <td>
                         <span className={`badge ${ROLE_STYLE[u.role]}`}>{ROLE_LABEL[u.role]}</span>
+                        {u.role === 'RECEPTION' ? (
+                          <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                            {u.receptionSite ? u.receptionSite.name : t('receptionSiteBadgeAll')}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="text-xs text-slate-500">{u.authProvider}</td>
                       <td className="text-xs text-slate-500">
@@ -161,6 +166,7 @@ export default async function UsersPage({
                               authProvider: u.authProvider,
                               defaultDeliverySiteId: u.defaultDeliverySiteId,
                               defaultDeliverySiteLocked: u.defaultDeliverySiteLocked,
+                              receptionSiteId: u.receptionSiteId,
                             }}
                             departments={departments}
                             deliverySites={deliverySites}

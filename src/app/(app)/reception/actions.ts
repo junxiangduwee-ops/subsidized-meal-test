@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import { dateOnly, toDateKey } from '@/lib/cycle';
-import { deliverySiteSheet, DELIVERY_PHOTO_MAX_BYTES } from '@/lib/delivery';
+import { deliverySiteSheet, receptionSiteRestriction, DELIVERY_PHOTO_MAX_BYTES } from '@/lib/delivery';
 import type { ActionState } from '@/components/action-form';
 
 const confirmSchema = z.object({
@@ -42,6 +42,15 @@ export async function confirmDelivery(_prev: ActionState, formData: FormData): P
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { cycleId, deliverySiteId, serviceDate, note } = parsed.data;
+
+  // A reception account confined to one site cannot confirm - or even
+  // probe the existence of - another site's delivery, regardless of what
+  // the submitted form claims. This must be checked here, not just hidden
+  // in the UI, since a form field is trivially editable client-side.
+  const restriction = await receptionSiteRestriction(actor.id);
+  if (restriction && restriction.id !== deliverySiteId) {
+    return { error: `You can only confirm deliveries for ${restriction.name}.` };
+  }
 
   let photoDataUrl: string | undefined;
   const photo = formData.get('photo');
@@ -117,6 +126,9 @@ export async function unmarkDelivery(formData: FormData): Promise<void> {
 
   const existing = await prisma.deliveryConfirmation.findUnique({ where: { id } });
   if (!existing) return;
+
+  const restriction = await receptionSiteRestriction(actor.id);
+  if (restriction && restriction.id !== existing.deliverySiteId) return;
 
   await prisma.deliveryConfirmation.delete({ where: { id } });
 

@@ -24,6 +24,9 @@ const createSchema = z.object({
   // let it auto-fill from their own order history once they place one" -
   // see getOrCreateCart/setDeliverySite in lib/orders.ts.
   defaultDeliverySiteId: z.string().trim().max(64).optional().or(z.literal('')),
+  // Only meaningful when role is RECEPTION - see receptionSiteId handling
+  // below. Blank means "no restriction, can confirm every site".
+  receptionSiteId: z.string().trim().max(64).optional().or(z.literal('')),
 });
 
 export async function createUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -66,6 +69,18 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
     if (!site || !site.active) return { error: 'That delivery site is not available.' };
   }
 
+  // Meaningless outside RECEPTION - never persisted for any other role, so
+  // a stray value submitted for the wrong role (or left over from a role
+  // change) can't quietly restrict someone it was never meant to.
+  let receptionSiteId: string | null = null;
+  if (d.role === 'RECEPTION') {
+    receptionSiteId = d.receptionSiteId?.trim() || null;
+    if (receptionSiteId) {
+      const site = await prisma.deliverySite.findUnique({ where: { id: receptionSiteId } });
+      if (!site || !site.active) return { error: 'That delivery site is not available.' };
+    }
+  }
+
   const user = await prisma.user.create({
     data: {
       email,
@@ -80,6 +95,7 @@ export async function createUser(_prev: ActionState, formData: FormData): Promis
       // person's first order will set their own default instead.
       defaultDeliverySiteId,
       defaultDeliverySiteLocked: defaultDeliverySiteId !== null,
+      receptionSiteId,
     },
   });
 
@@ -98,6 +114,9 @@ const updateSchema = z.object({
   // Present on every submit of this form (it's a <select>, never omitted) -
   // blank explicitly means "clear/unlock", not "leave unchanged".
   defaultDeliverySiteId: z.string().trim().max(64).optional().or(z.literal('')),
+  // Same "always submitted, blank means clear" rule as defaultDeliverySiteId
+  // above - only meaningful when role is RECEPTION.
+  receptionSiteId: z.string().trim().max(64).optional().or(z.literal('')),
 });
 
 export async function updateUser(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -128,6 +147,18 @@ export async function updateUser(_prev: ActionState, formData: FormData): Promis
     if (!site || !site.active) return { error: 'That delivery site is not available.' };
   }
 
+  // Meaningless outside RECEPTION - cleared to null the moment the role is
+  // anything else, so a leftover assignment can't quietly restrict an
+  // account that changed roles away from Reception.
+  let receptionSiteId: string | null = null;
+  if (d.role === 'RECEPTION') {
+    receptionSiteId = d.receptionSiteId?.trim() || null;
+    if (receptionSiteId) {
+      const site = await prisma.deliverySite.findUnique({ where: { id: receptionSiteId } });
+      if (!site || !site.active) return { error: 'That delivery site is not available.' };
+    }
+  }
+
   await prisma.user.update({
     where: { id: d.id },
     data: {
@@ -141,6 +172,7 @@ export async function updateUser(_prev: ActionState, formData: FormData): Promis
       // whatever's there" (this form always submits the field).
       defaultDeliverySiteId,
       defaultDeliverySiteLocked: defaultDeliverySiteId !== null,
+      receptionSiteId,
     },
   });
 

@@ -341,6 +341,10 @@
     "defaultDeliverySite": "默认送餐地点",
     "defaultDeliverySiteNoneOption": "不固定 — 根据其本人订单自动填入",
     "defaultDeliverySiteHint": "可选。留空的话，系统会在该员工第一次下单时，自动使用他们选择的地点作为默认值。",
+    "receptionSite": "前台负责站点",
+    "receptionSiteAllOption": "所有站点（无限制）",
+    "receptionSiteHint": "仅适用于前台角色。如果此人负责多个仓库/站点，请保留为“所有站点”；否则请选择仅由其确认配送的单一站点。",
+    "receptionSiteBadgeAll": "所有站点",
     "defaultDeliverySiteLockedHint": "已由管理员固定 — 即使该员工为其他地点下单，也不会自动改变。",
     "defaultDeliverySiteLearnedHint": "目前是根据其最近一次下单自动设定的（未固定）。请在上方选择一个地点以将其固定。",
     "defaultDeliverySitePinnedBadge": "已固定",
@@ -504,7 +508,11 @@
     "receivedByAt": "由 {name} 确认 · {when}",
     "unknownStaff": "未知员工",
     "unmark": "取消标记",
-    "unmarkConfirm": "确定要撤销此确认吗？该站点将重新显示为待确认。"
+    "unmarkConfirm": "确定要撤销此确认吗？该站点将重新显示为待确认。",
+    "restaurants": "餐厅",
+    "mealCountSuffix": "（{count, plural, other {# 份}}）",
+    "scopedToSite": "指定站点：{site}",
+    "nothingToReceiveYetHintScoped": "员工为本周菜单完成付款后，{site} 的配送记录将显示在此处。"
   },
   "financeAdmin": {
     "title": "财务",

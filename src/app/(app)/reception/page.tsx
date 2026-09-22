@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { cyclePhase, formatDate, formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
-import { deliverySiteSheet } from '@/lib/delivery';
+import { deliverySiteSheet, receptionSiteRestriction } from '@/lib/delivery';
 import { PageHeader, Section, EmptyState, PhaseBadge, Alert, Stat } from '@/components/ui';
 
 import { ConfirmDeliveryForm, DeliveryConfirmedCell } from './delivery-row';
@@ -15,10 +15,15 @@ export default async function ReceptionPage({
 }: {
   searchParams: Promise<{ cycle?: string }>;
 }) {
-  await requireCapability('delivery:confirm');
+  const user = await requireCapability('delivery:confirm');
   const params = await searchParams;
   const t = await getTranslations('reception');
   const locale = await getLocale();
+
+  // A reception account can be pinned to a single site (Admin -> Users);
+  // when it is, every query below is scoped to that site alone, not just
+  // hidden in the UI - see receptionSiteRestriction and reception/actions.ts.
+  const restriction = await receptionSiteRestriction(user.id);
 
   const cycles = await prisma.menuCycle.findMany({
     where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] } },
@@ -40,9 +45,9 @@ export default async function ReceptionPage({
   const phase = cyclePhase(selected);
 
   const [sheet, confirmations] = await Promise.all([
-    deliverySiteSheet(selected.id),
+    deliverySiteSheet(selected.id, { deliverySiteId: restriction?.id }),
     prisma.deliveryConfirmation.findMany({
-      where: { cycleId: selected.id },
+      where: { cycleId: selected.id, ...(restriction ? { deliverySiteId: restriction.id } : {}) },
       select: {
         id: true,
         deliverySiteId: true,
@@ -81,6 +86,11 @@ export default async function ReceptionPage({
           <span className="flex flex-wrap items-center gap-2">
             <PhaseBadge phase={phase} />
             <span>{formatWeekRange(selected.serviceWeekStart, locale)}</span>
+            {restriction ? (
+              <span className="badge bg-slate-100 text-slate-700">
+                {t('scopedToSite', { site: restriction.name })}
+              </span>
+            ) : null}
           </span>
         }
         action={
@@ -122,7 +132,10 @@ export default async function ReceptionPage({
       ) : null}
 
       {sheet.length === 0 ? (
-        <EmptyState title={t('nothingToReceiveYet')} hint={t('nothingToReceiveYetHint')} />
+        <EmptyState
+          title={t('nothingToReceiveYet')}
+          hint={restriction ? t('nothingToReceiveYetHintScoped', { site: restriction.name }) : t('nothingToReceiveYetHint')}
+        />
       ) : (
         <div className="grid gap-6">
           {[...bySite.entries()].map(([siteName, rows]) => {
@@ -141,6 +154,7 @@ export default async function ReceptionPage({
                     <thead>
                       <tr>
                         <th>{t('serviceDate')}</th>
+                        <th>{t('restaurants')}</th>
                         <th className="num">{t('expectedMeals')}</th>
                         <th className="num">{t('expectedOrders')}</th>
                         <th>{t('status')}</th>
@@ -157,6 +171,16 @@ export default async function ReceptionPage({
                             <td className="whitespace-nowrap font-medium text-slate-900">
                               {formatDate(r.serviceDate, 'weekday', locale)} ·{' '}
                               {formatDate(r.serviceDate, 'long', locale)}
+                            </td>
+                            <td className="text-xs text-slate-600">
+                              {r.restaurants.map((rr) => (
+                                <div key={rr.restaurantName} className="whitespace-nowrap">
+                                  {rr.restaurantName}{' '}
+                                  <span className="text-slate-400">
+                                    {t('mealCountSuffix', { count: rr.quantity })}
+                                  </span>
+                                </div>
+                              ))}
                             </td>
                             <td className="num text-slate-700 text-left">{r.mealCount}</td>
                             <td className="num text-slate-700 text-left">{r.orderCount}</td>
