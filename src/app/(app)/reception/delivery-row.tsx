@@ -27,7 +27,7 @@ export function ConfirmDeliveryForm({
     <ActionForm
       action={confirmDelivery}
       submitLabel={t('markReceived')}
-      className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+      className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-center"
     >
       <input type="hidden" name="cycleId" value={cycleId} />
       <input type="hidden" name="deliverySiteId" value={deliverySiteId} />
@@ -37,7 +37,7 @@ export function ConfirmDeliveryForm({
         name="photo"
         accept="image/*"
         capture="environment"
-        className="input !w-full !py-1 text-xs sm:!w-44"
+        className="input !w-full !py-1 text-xs sm:!w-36 sm:shrink-0"
         aria-label={t('photoInputLabel')}
       />
       <input
@@ -45,7 +45,7 @@ export function ConfirmDeliveryForm({
         name="note"
         placeholder={t('notePlaceholder')}
         maxLength={500}
-        className="input !w-full !py-1 text-xs sm:!w-40"
+        className="input !w-full !py-1 text-xs sm:!w-32 sm:shrink-0"
       />
     </ActionForm>
   );
