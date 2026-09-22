@@ -52,6 +52,10 @@ export function ActionForm({
   submitLabel: string;
   variant?: 'primary' | 'secondary' | 'danger';
   size?: 'default' | 'sm';
+  /** Applies to a wrapper around the fields only (children) - never to the
+   * submit-button row below them, which always keeps its own standard
+   * mt-3 gap so the button sits the same distance from the fields in
+   * every form, whether the fields stack (space-y-3) or run in a row. */
   className?: string;
   resetOnSuccess?: boolean;
   footer?: ReactNode;
@@ -71,8 +75,8 @@ export function ActionForm({
   }, [state.success, resetOnSuccess]);
 
   return (
-    <form ref={ref} action={formAction} className={className}>
-      {children}
+    <form ref={ref} action={formAction}>
+      <div className={className}>{children}</div>
       {state.error ? (
         <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p>
       ) : null}
