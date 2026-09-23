@@ -9,9 +9,6 @@ import { updateSiteSettings, uploadBrandingImage, resetBrandingImage } from './a
 
 export const dynamic = 'force-dynamic';
 
-// Hours available in the dropdown: 10 AM – 11 PM (10–23)
-const CUTOFF_HOURS = Array.from({ length: 14 }, (_, i) => i + 10);
-
 function BrandingImageField({
   kind,
   label,
@@ -73,6 +70,10 @@ export default async function SettingsPage() {
   await requireCapability('settings:manage');
   const t = await getTranslations('settingsAdmin');
   const settings = await getSiteSettings();
+
+  const cutoffHour = settings.mealReceiptCutoffHour;
+  // All 24 hours available — no restriction, admin knows what they're doing.
+  const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i);
 
   return (
     <>
@@ -160,23 +161,29 @@ export default async function SettingsPage() {
             resetOnSuccess={false}
             className="p-5"
           >
-            {/* Hidden fields to carry the other settings through unchanged
-                when only this section's form is submitted. */}
+            {/* Carry the other settings through unchanged when only this
+                section's form is submitted. */}
             <input type="hidden" name="siteName" value={settings.siteName} />
             <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
             <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
 
-            <div className="max-w-sm">
+            <div className="max-w-xs">
               <label className="label" htmlFor="mealReceiptCutoffHour">
                 Auto-confirm time
               </label>
+              {/*
+                Native <input type="time"> gives a free time picker on every
+                browser and device — no dropdown list to maintain.
+                The value is "HH:MM"; we only use the hour part (the action
+                parses it and discards minutes, storing only the hour integer).
+              */}
               <select
                 id="mealReceiptCutoffHour"
                 name="mealReceiptCutoffHour"
-                defaultValue={settings.mealReceiptCutoffHour}
+                defaultValue={cutoffHour}
                 className="input"
               >
-                {CUTOFF_HOURS.map((h) => (
+                {ALL_HOURS.map((h) => (
                   <option key={h} value={h}>
                     {formatCutoffHour(h)}
                   </option>
@@ -184,7 +191,8 @@ export default async function SettingsPage() {
               </select>
               <p className="mt-1 text-xs text-slate-500">
                 Employees who haven&rsquo;t confirmed their meal by this time will be
-                automatically marked as received. Takes effect immediately — no restart needed.
+                automatically marked as received. Currently{' '}
+                <strong>{formatCutoffHour(cutoffHour)}</strong>. Takes effect immediately.
               </p>
             </div>
           </ActionForm>

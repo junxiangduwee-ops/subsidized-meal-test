@@ -29,11 +29,7 @@ const settingsSchema = z.object({
   siteName: z.string().trim().min(2, 'Site name must be at least 2 characters.').max(120),
   supportEmail: z.string().trim().email('Must be a valid email address.').optional().or(z.literal('')),
   maintenanceMessage: z.string().trim().max(500, 'Keep the banner under 500 characters.').optional(),
-  mealReceiptCutoffHour: z.coerce
-    .number()
-    .int()
-    .min(10, 'Cutoff must be between 10:00 AM and 11:00 PM.')
-    .max(23, 'Cutoff must be between 10:00 AM and 11:00 PM.'),
+  mealReceiptCutoffHour: z.coerce.number().int().min(0).max(23),
 });
 
 export async function updateSiteSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
