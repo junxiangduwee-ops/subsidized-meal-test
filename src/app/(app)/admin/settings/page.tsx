@@ -5,7 +5,7 @@ import { getSiteSettings, DEFAULT_SETTINGS, formatCutoffHour } from '@/lib/setti
 import { PageHeader, Section } from '@/components/ui';
 import { ActionForm, InlineSubmit } from '@/components/action-form';
 
-import { updateSiteSettings, uploadBrandingImage, resetBrandingImage } from './actions';
+import { updateSiteSettings, updateSiteSettingsPlain, uploadBrandingImage, resetBrandingImage } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,7 +174,7 @@ export default async function SettingsPage({
             A real POST + server redirect re-mounts the page from scratch and
             the select always reflects the saved value immediately.
           */}
-          <form action={updateSiteSettings} className="p-5">
+          <form action={updateSiteSettingsPlain} className="p-5">
             <input type="hidden" name="siteName" value={settings.siteName} />
             <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
             <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />

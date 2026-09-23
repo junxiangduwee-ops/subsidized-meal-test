@@ -65,6 +65,16 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
   redirect('/admin/settings?saved=1');
 }
 
+/**
+ * Plain form-action wrapper for updateSiteSettings — no ActionState prev
+ * parameter, so it can be passed directly to a native <form action>.
+ * Used by the Ordering section which needs a real POST + redirect so the
+ * select re-mounts and shows the saved value without a manual refresh.
+ */
+export async function updateSiteSettingsPlain(formData: FormData): Promise<void> {
+  await updateSiteSettings({}, formData);
+}
+
 const brandingKindSchema = z.enum(['logo', 'favicon']);
 type BrandingKind = z.infer<typeof brandingKindSchema>;
 
