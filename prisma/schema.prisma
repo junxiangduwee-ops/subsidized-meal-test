@@ -213,38 +213,18 @@ model Dish {
 
 // ---------------------------------------------------------------------------
 // Weekly cycle
-//
-// Timeline for a cycle whose service week starts Monday W:
-//   W-2 (any time)  admin drafts the menu
-//   W-1 Monday      publish -> ordering opens
-//   W-1 Wednesday   cutoff  -> ordering closes, counts sent to restaurants
-//   W   Mon..Fri    food served
 // ---------------------------------------------------------------------------
 
 model MenuCycle {
   id               String      @id @default(cuid())
-  /// Monday 00:00 of the week the food is *served*. Identifies a cycle -
-  /// but no longer a hard unique constraint. A CANCELLED cycle keeps its
-  /// row (audit trail, refund note) without permanently occupying the
-  /// week; only one non-cancelled cycle may exist per week, enforced in
-  /// createCycle rather than the database.
   serviceWeekStart DateTime    @db.Date
   title            String?
   status           CycleStatus @default(DRAFT)
 
-  /// Ordering opens (defaults to Monday 00:00 of the week before service).
   orderOpenAt      DateTime
-  /// Ordering closes (defaults to Wednesday 17:00 of the week before service).
   orderCutoffAt    DateTime
 
   publishedAt      DateTime?
-  /// Subsidy rules frozen the moment this cycle actually becomes orderable
-  /// (orderOpenAt is reached), not when it's merely published - a cycle
-  /// can be published days ahead of its order-open date, and a rule
-  /// tweaked in that gap should still count since nobody could act on the
-  /// menu yet. See lib/orders.ts subsidyRulesForCycle. Every order placed
-  /// this week, whichever day, prices off this same frozen set. Null
-  /// before opening, or for a cycle that predates this column.
   subsidyRulesSnapshot Json?
   closedAt         DateTime?
   notes            String?
@@ -267,7 +247,6 @@ model MenuCycle {
 model MenuDay {
   id          String   @id @default(cuid())
   cycleId     String
-  /// Calendar date within the service week.
   serviceDate DateTime @db.Date
   slot        MealSlot @default(LUNCH)
   note        String?
@@ -283,10 +262,7 @@ model MenuItem {
   id          String  @id @default(cuid())
   menuDayId   String
   dishId      String
-  /// Price charged for this cycle, in sen. Snapshotted from Dish at add time
-  /// so later catalogue edits never change a published menu.
   priceSen    Int
-  /// Max portions the restaurant can supply that day. Null = unlimited.
   capacity    Int?
   sortOrder   Int     @default(0)
 
@@ -299,20 +275,16 @@ model MenuItem {
 }
 
 // ---------------------------------------------------------------------------
-// Subsidies - the company's contribution, applied before the user pays
+// Subsidies
 // ---------------------------------------------------------------------------
 
 model SubsidyRule {
   id            String       @id @default(cuid())
   name          String
   type          SubsidyType
-  /// PERCENTAGE -> whole percent (e.g. 50). Others -> sen.
   value         Int
-  /// Optional ceiling in sen. For PERCENTAGE/FIXED_PER_ITEM it caps the
-  /// per-item subsidy; for FIXED_PER_DAY it is ignored (value is the cap).
   capSen        Int?
   scope         SubsidyScope @default(ALL)
-  /// Required when scope = DEPARTMENT.
   department    String?
   priority      Int          @default(0)
   active        Boolean      @default(true)
@@ -324,9 +296,6 @@ model SubsidyRule {
   @@index([active, scope])
 }
 
-/// Where an order's food physically gets sent - one per Order, chosen at
-/// checkout. A managed list (not free text) so it can't accumulate typo'd
-/// duplicates like "Warehouse A" / "warehouse a".
 model DeliverySite {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -335,49 +304,24 @@ model DeliverySite {
   updatedAt DateTime @updatedAt
 
   orders    Order[]
-  /// Users for whom this is the current default (admin-pinned or learned -
-  /// see User.defaultDeliverySiteLocked).
   usersDefaultingHere User[] @relation("UserDefaultDeliverySite")
-  /// Reception accounts restricted to confirming deliveries at this site
-  /// only (see User.receptionSiteId).
   receptionists User[] @relation("UserReceptionSite")
   deliveryConfirmations DeliveryConfirmation[]
 
   @@index([active])
 }
 
-// ---------------------------------------------------------------------------
-// Delivery confirmation - reception's day-by-day proof that food for a
-// given delivery site actually arrived.
-//
-// One row per (cycle, delivery site, service date), created only once
-// reception acts on it - if no row exists, nothing has been confirmed yet.
-// A photo is the preferred evidence, but it is optional on purpose: a site
-// with no camera on hand, a bad connection, or a browser that refuses the
-// upload should never block reception from recording that the food arrived.
-// The record itself (who confirmed it, at what time) is what actually
-// counts as fulfilment - the photo is supporting evidence layered on top.
-// ---------------------------------------------------------------------------
 model DeliveryConfirmation {
   id             String   @id @default(cuid())
   cycleId        String
   deliverySiteId String
-  /// The calendar day the food was due at this site.
   serviceDate    DateTime @db.Date
 
-  /// Meals/orders expected at confirm time, snapshotted for the audit trail
-  /// so a later order cancellation can't quietly rewrite what reception saw.
   expectedMeals  Int      @default(0)
   expectedOrders Int      @default(0)
 
-  /// Null until reception confirms. Presence of this row + receivedAt is
-  /// what "fulfilled" means - everything else here is supporting detail.
   receivedAt     DateTime?
   receivedById   String?
-  /// Base64 data: URL of the proof-of-delivery photo. Optional - see above.
-  /// Kept as plain text so this works on either database connector with no
-  /// extra object-storage dependency; the app enforces a size ceiling
-  /// before it ever reaches here (see reception/actions.ts).
   photoDataUrl   String?
   note           String?
 
@@ -396,8 +340,6 @@ model DeliveryConfirmation {
 
 // ---------------------------------------------------------------------------
 // Orders
-//
-// One Order per (user, cycle). It starts as a CART and is checked out once.
 // ---------------------------------------------------------------------------
 
 model Order {
@@ -407,14 +349,10 @@ model Order {
   cycleId        String
   status         OrderStatus @default(CART)
 
-  /// Sum of line grossSen (what the food costs before company help).
   grossSen       Int         @default(0)
-  /// Sum of line subsidySen (what the company pays).
   subsidySen     Int         @default(0)
-  /// grossSen - subsidySen. What the employee pays through HitPay.
   netSen         Int         @default(0)
 
-  /// Snapshot of the subsidy rules applied at checkout, for audit.
   subsidySnapshot Json?
 
   submittedAt    DateTime?
@@ -422,9 +360,6 @@ model Order {
   cancelledAt    DateTime?
   cancelReason   String?
 
-  /// Where this order's food goes. Nullable here only so existing rows
-  /// don't break the migration - validateForCheckout requires it before
-  /// payment is allowed, so every real (paid) order has one in practice.
   deliverySiteId String?
   deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])
 
@@ -449,19 +384,21 @@ model OrderItem {
   menuItemId    String
   quantity      Int
 
-  /// Price snapshot at the time the line was added.
   unitPriceSen  Int
-  /// unitPriceSen * quantity
   grossSen      Int
-  /// Company contribution for the whole line.
   subsidySen    Int      @default(0)
-  /// grossSen - subsidySen
   netSen        Int      @default(0)
 
-  /// Denormalised for reporting stability if a menu item is later removed.
-  serviceDate   DateTime @db.Date
-  dishName      String
+  serviceDate    DateTime @db.Date
+  dishName       String
   restaurantName String
+
+  /// Set when the employee taps "I received my meal", OR by the automatic
+  /// 18:00 sweep if they never confirmed it themselves. NULL = not yet confirmed.
+  receivedAt       DateTime?
+  /// true when receivedAt was written by the auto-confirm cron at 18:00,
+  /// false when the employee confirmed it manually themselves.
+  receivedBySystem Boolean  @default(false)
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -472,6 +409,8 @@ model OrderItem {
   @@unique([orderId, menuItemId])
   @@index([serviceDate])
   @@index([menuItemId])
+  // Efficient sweep: only unconfirmed items, by service date
+  @@index([serviceDate, receivedAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -482,21 +421,15 @@ model Payment {
   id                String        @id @default(cuid())
   orderId           String
   provider          String        @default("hitpay")
-  /// HitPay payment_request id.
   requestId         String?       @unique
-  /// HitPay payment id, present once the charge settles.
   paymentId         String?
   status            PaymentStatus @default(PENDING)
   amountSen         Int
   currency          String        @default("MYR")
   checkoutUrl       String?
   paymentMethod     String?
-  /// Raw webhook body, kept for reconciliation and dispute handling.
   rawPayload        Json?
   failureReason     String?
-  /// The email HitPay was told to send the receipt/payment link to for
-  /// this one payment - normally the user's own email, but for an
-  /// employee with none on file, whatever they typed in at checkout.
   receiptEmail      String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -512,16 +445,12 @@ model Payment {
 // Site settings
 // ---------------------------------------------------------------------------
 
-/// Singleton row - always read/written by the fixed id in lib/settings.ts.
-/// One row for the whole deployment; there is no per-user settings concept.
 model AppSettings {
   id                 String   @id
   siteName           String   @default("MR DIY Food Ordering")
   logoUrl            String?
   faviconUrl         String?
   supportEmail       String?
-  /// Optional banner shown to every signed-in user (e.g. planned downtime).
-  /// Null/empty means no banner.
   maintenanceMessage String?
   updatedAt          DateTime @updatedAt
   updatedById        String?

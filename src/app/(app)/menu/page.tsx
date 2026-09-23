@@ -12,6 +12,7 @@ import { PageHeader, EmptyState, Alert } from '@/components/ui';
 import type { DayTab } from '@/components/day-tabs';
 
 import { MenuOrdering, type CartLine, type MenuDish } from './menu-ordering';
+import { TodayReceiptPanel } from './today-receipt-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,12 +23,6 @@ export default async function MenuPage({
 }) {
   const now = new Date();
 
-  // Independent of everything else on this page - user identity, the open
-  // cycle, delivery site options, subsidy rules, translations/locale, and
-  // the day query param don't depend on one another, so there is no reason
-  // to fetch them one after another. This is a read-only page: running
-  // these concurrently carries none of the atomicity/timeout risk that
-  // wrapping a write in a transaction would.
   const [user, cycle, deliverySites, t, locale, { day: requestedDay }] = await Promise.all([
     requireCapability('order:place'),
     prisma.menuCycle.findFirst({
@@ -69,27 +64,14 @@ export default async function MenuPage({
     );
   }
 
-  // Priced off the rules frozen once this cycle actually became orderable
-  // (see subsidyRulesForCycle in lib/orders.ts), not whatever subsidy
-  // rules happen to be active right now - so the price shown here always
-  // matches what checkout will actually charge, all week, however many
-  // times a rule is edited after the week opened.
   const rules = await subsidyRulesForCycle(cycle);
 
-  // Both of these only need cycle.id (orders also needs user.id) - neither
-  // depends on the other's result, so they run together instead of one
-  // after another.
   const [orders, days] = await Promise.all([
-    // A person may have several orders for this cycle - the open cart, plus
-    // any earlier ones they already paid for. Pulling all of them, rather
-    // than assuming there is exactly one, is what lets a paid Mon-Wed order
-    // sit alongside an untouched Thu/Fri instead of locking the whole week.
     prisma.order.findMany({
       where: { userId: user.id, cycleId: cycle.id },
       include: { items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] } },
       orderBy: { createdAt: 'asc' },
     }),
-    // Day tabs: dates and per-day dish counts only - not the dishes themselves.
     prisma.menuDay.findMany({
       where: { cycleId: cycle.id },
       orderBy: { serviceDate: 'asc' },
@@ -97,8 +79,6 @@ export default async function MenuPage({
     }),
   ]);
 
-  // The cart is created on first add, not on first view, so browsing alone
-  // does not litter the table with empty orders.
   const cart = orders.find((o) => o.status === 'CART');
   const settledOrders = orders.filter((o) => o.status !== 'CART');
 
@@ -122,14 +102,7 @@ export default async function MenuPage({
     );
   }
 
-  // Per-day state, derived from every order rather than one. A day is
-  // "locked" once a submitted (non-CART) order already has an item for it -
-  // that item is paid for and done. A day with no item at all is always
-  // still open, regardless of how many other days are locked.
   const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
-  // Lets a chosen-and-locked dish's tick render as "pending" vs "paid" -
-  // only meaningful for chosen items, so a lookup keyed by menuItemId is
-  // enough (one order item per menu item, per user, per cycle).
   const orderStatusByMenuItemId = new Map(orderItems.map((item) => [item.menuItemId, item.orderStatus]));
   const lockedDayKeys = new Set(
     orderItems.filter((item) => item.orderStatus !== 'CART').map((item) => toDateKey(item.serviceDate)),
@@ -140,9 +113,6 @@ export default async function MenuPage({
     .filter((d) => d._count.items > 0)
     .every((d) => lockedDayKeys.has(toDateKey(d.serviceDate)));
 
-  // A locked day is only truly "placed" once its order is PAID - one still
-  // sitting at AWAITING_PAYMENT is submitted but not confirmed, so the
-  // header must not read as fully paid until every locked item actually is.
   const lockedItems = orderItems.filter((item) => item.orderStatus !== 'CART');
   const anyLockedAwaitingPayment = lockedItems.some((item) => item.orderStatus === 'AWAITING_PAYMENT');
 
@@ -176,8 +146,6 @@ export default async function MenuPage({
     />
   );
 
-  // Honour ?day= when it names a real day, otherwise land on the first day
-  // that still needs a choice, or failing that the first day with dishes.
   const fallback =
     days.find((d) => d._count.items > 0 && !lockedDayKeys.has(toDateKey(d.serviceDate))) ??
     days.find((d) => d._count.items > 0) ??
@@ -194,25 +162,18 @@ export default async function MenuPage({
     muted: d._count.items === 0,
   }));
 
-  // ---- The only query that loads dishes, and only for the open tab. ----
   const menuItems = await prisma.menuItem.findMany({
     where: { menuDayId: activeDay.id },
     orderBy: { sortOrder: 'asc' },
     include: { dish: { include: { restaurant: { select: { name: true } } } } },
   });
 
-  // Stock only matters while this specific day can still be changed.
   const remaining = activeDayLocked
     ? new Map<string, number | null>()
     : await remainingCapacityMap(
         menuItems.map((i) => ({ id: i.id, capacity: i.capacity })),
         cart?.id,
       );
-
-  // `rules` was already resolved above (the cycle's frozen snapshot, or
-  // the live fallback) - employees see their own price, never the list
-  // price or the company's contribution, computed here per dish since it
-  // is one meal per service day.
 
   const dishes: MenuDish[] = menuItems.map((item) => ({
     menuItemId: item.id,
@@ -241,6 +202,10 @@ export default async function MenuPage({
   return (
     <>
       {header}
+
+      {/* Receipt confirmation panel — only shows on service days when the
+          employee has a paid meal. Returns null silently on all other days. */}
+      <TodayReceiptPanel userId={user.id} locale={locale} />
 
       {awaitingPayment ? (
         <div className="mb-4">
