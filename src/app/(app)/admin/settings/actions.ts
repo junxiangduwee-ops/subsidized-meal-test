@@ -4,6 +4,7 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -61,7 +62,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
   revalidatePath('/admin/settings');
   revalidateTag(CACHE_TAGS.siteSettings);
 
-  return { success: 'Settings saved.' };
+  redirect('/admin/settings?saved=1');
 }
 
 const brandingKindSchema = z.enum(['logo', 'favicon']);

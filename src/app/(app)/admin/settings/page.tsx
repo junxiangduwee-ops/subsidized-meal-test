@@ -66,10 +66,16 @@ function BrandingImageField({
   );
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
   await requireCapability('settings:manage');
   const t = await getTranslations('settingsAdmin');
   const settings = await getSiteSettings();
+  const params = await searchParams;
+  const justSaved = params.saved === '1';
 
   const cutoffHour = settings.mealReceiptCutoffHour;
   // All 24 hours available — no restriction, admin knows what they're doing.
@@ -78,6 +84,12 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+
+      {justSaved ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Settings saved successfully.
+        </div>
+      ) : null}
 
       <Section title={t('branding')} description={t('brandingHint')}>
         <div className="grid gap-6 p-5 sm:grid-cols-2">
@@ -155,14 +167,14 @@ export default async function SettingsPage() {
           title="Ordering"
           description="Controls that affect how employee meal orders are processed."
         >
-          <ActionForm
-            action={updateSiteSettings}
-            submitLabel={t('save')}
-            resetOnSuccess={false}
-            className="p-5"
-          >
-            {/* Carry the other settings through unchanged when only this
-                section's form is submitted. */}
+          {/*
+            Plain form action (not ActionForm) so the page fully reloads after
+            save. ActionForm keeps state client-side — React ignores defaultValue
+            on re-render, so the select appears stuck until a manual refresh.
+            A real POST + server redirect re-mounts the page from scratch and
+            the select always reflects the saved value immediately.
+          */}
+          <form action={updateSiteSettings} className="p-5">
             <input type="hidden" name="siteName" value={settings.siteName} />
             <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
             <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
@@ -171,12 +183,6 @@ export default async function SettingsPage() {
               <label className="label" htmlFor="mealReceiptCutoffHour">
                 Auto-confirm time
               </label>
-              {/*
-                Native <input type="time"> gives a free time picker on every
-                browser and device — no dropdown list to maintain.
-                The value is "HH:MM"; we only use the hour part (the action
-                parses it and discards minutes, storing only the hour integer).
-              */}
               <select
                 id="mealReceiptCutoffHour"
                 name="mealReceiptCutoffHour"
@@ -195,7 +201,13 @@ export default async function SettingsPage() {
                 <strong>{formatCutoffHour(cutoffHour)}</strong>. Takes effect immediately.
               </p>
             </div>
-          </ActionForm>
+
+            <div className="mt-4">
+              <button type="submit" className="btn-primary">
+                {t('save')}
+              </button>
+            </div>
+          </form>
         </Section>
       </div>
     </>
