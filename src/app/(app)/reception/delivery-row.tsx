@@ -28,6 +28,7 @@ export function ConfirmDeliveryForm({
       action={confirmDelivery}
       submitLabel={t('markReceived')}
       size="sm"
+      inline
       className="flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-center"
     >
       <input type="hidden" name="cycleId" value={cycleId} />

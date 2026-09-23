@@ -46,6 +46,7 @@ export function ActionForm({
   resetOnSuccess = true,
   footer,
   onSuccess,
+  inline = false,
 }: {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   children: ReactNode;
@@ -57,6 +58,15 @@ export function ActionForm({
   footer?: ReactNode;
   /** Fired once after a successful submit - dialogs use it to close. */
   onSuccess?: () => void;
+  /** True when `className` lays the fields out as a single row the button
+   * sits in (e.g. an inline table-row form) rather than the usual stacked
+   * fields. Drops the button row's top margin, which otherwise assumes
+   * the button is the next stacked block below the fields - with
+   * `align-items: center` on a shared row, that unconditional top margin
+   * makes only the button's margin box taller than its siblings, so
+   * centering the boxes still leaves the button's visible content sitting
+   * lower than the inputs beside it (see reception/delivery-row.tsx). */
+  inline?: boolean;
 }) {
   const [state, formAction] = useActionState(action, EMPTY_STATE);
   const ref = useRef<HTMLFormElement>(null);
@@ -81,7 +91,7 @@ export function ActionForm({
           {state.success}
         </p>
       ) : null}
-      <div className="mt-3 flex items-center gap-2">
+      <div className={inline ? 'flex items-center gap-2' : 'mt-3 flex items-center gap-2'}>
         <Submit label={submitLabel} variant={variant} size={size} />
         {footer}
       </div>
