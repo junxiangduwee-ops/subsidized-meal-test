@@ -1,9 +1,5 @@
 import { getSiteSettingsCached } from '@/lib/cache';
 
-/**
- * Site settings are a single row, always read/written by this fixed id -
- * there is no per-user or per-tenant settings concept in this app.
- */
 export const SETTINGS_ID = 'singleton';
 
 export type SiteSettings = {
@@ -12,29 +8,19 @@ export type SiteSettings = {
   faviconUrl: string;
   supportEmail: string | null;
   maintenanceMessage: string | null;
+  /// Hour (0–23) in APP_TIMEZONE after which unconfirmed meals are auto-confirmed.
+  mealReceiptCutoffHour: number;
 };
 
-/**
- * The logo/favicon shipped in `public/mr-diy-logo.png` are the defaults
- * until an admin uploads a replacement in Settings. Site name falls back to
- * this too if the row is missing entirely (first run, before anyone has
- * saved the settings form).
- */
 export const DEFAULT_SETTINGS: SiteSettings = {
   siteName: 'MR DIY Food Ordering',
   logoUrl: '/mr-diy-logo.png',
   faviconUrl: '/mr-diy-logo.png',
   supportEmail: null,
   maintenanceMessage: null,
+  mealReceiptCutoffHour: 18,
 };
 
-/**
- * Reads the site settings row, falling back to defaults field-by-field so
- * clearing an override (e.g. removing an uploaded logo) reverts just that
- * one field to the shipped default rather than requiring the whole row to
- * be absent. Safe to call from Server Components, layouts, and
- * `generateMetadata` - it never throws.
- */
 export async function getSiteSettings(): Promise<SiteSettings> {
   const row = await getSiteSettingsCached();
 
@@ -44,5 +30,12 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     faviconUrl: row?.faviconUrl || DEFAULT_SETTINGS.faviconUrl,
     supportEmail: row?.supportEmail ?? null,
     maintenanceMessage: row?.maintenanceMessage ?? null,
+    mealReceiptCutoffHour: row?.mealReceiptCutoffHour ?? DEFAULT_SETTINGS.mealReceiptCutoffHour,
   };
+}
+
+/** Formats the cutoff hour as a human-readable string, e.g. 18 → "6:00 PM" */
+export function formatCutoffHour(hour: number): string {
+  const date = new Date(2000, 0, 1, hour, 0, 0);
+  return date.toLocaleTimeString('en-MY', { hour: 'numeric', minute: '2-digit', hour12: true });
 }

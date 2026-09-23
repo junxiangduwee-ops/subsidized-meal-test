@@ -1,93 +1,58 @@
 /**
- * Lazy auto-confirm: no cron job, no scheduler.
+ * Lazy auto-confirm — no cron job, no scheduler.
  *
- * The system auto-confirms past-6-PM service dates whenever this function
- * is called — typically at the start of any request that reads OrderItems
- * (the menu page, orders page, kitchen page, etc.).
- *
- * How it works:
- * - On every relevant page load, call autoConfirmPastMeals(userId).
- * - It finds any PAID OrderItem for this user where:
- *     - serviceDate is today or earlier
- *     - receivedAt is still null
- *     - it is past 18:00 on that service date in APP_TIMEZONE
- * - Those items are silently marked receivedBySystem = true.
- * - The next read of those items will already show them as confirmed.
- *
- * This is cheap: the index on (serviceDate, receivedAt) means the query
- * only scans unconfirmed rows. On most requests it touches zero rows
- * (once confirmed, items are never re-checked). The update is fire-and-
- * forget — we await it so the page always shows the correct state, but
- * it adds only one fast indexed query per page load.
- *
- * For admin/kitchen views that need totals across all employees, call
- * autoConfirmAllPastMeals() instead (no userId filter).
+ * Called at the top of any server component that reads meal receipt data.
+ * Marks PAID OrderItems as received when the configurable cutoff hour
+ * (set by admin in /admin/settings) has passed on their service date.
  */
 
 import { prisma } from './prisma';
 import { todayInAppTz, toDateKey, zonedToUtc, APP_TIMEZONE } from './cycle';
+import { getSiteSettings } from './settings';
 
-/**
- * Returns all service dates that are in the past AND past 18:00 — i.e.
- * dates where the auto-confirm deadline has already passed.
- * "Past" means: date < today, OR (date = today AND now >= 18:00 local).
- */
-function getAutoConfirmCutoffDates(now: Date): { beforeDate: Date; todayIfPast6pm: Date | null } {
+function getCutoffUtc(year: number, month: number, day: number, cutoffHour: number): Date {
+  return zonedToUtc(year, month, day, cutoffHour, 0, APP_TIMEZONE);
+}
+
+function buildServiceDateFilter(now: Date, cutoffHour: number) {
   const today = todayInAppTz(now);
   const todayKey = toDateKey(today);
   const [y, m, d] = todayKey.split('-').map(Number);
-  const cutoff6pm = zonedToUtc(y, m, d, 18, 0, APP_TIMEZONE);
+  const cutoffUtc = getCutoffUtc(y, m, d, cutoffHour);
 
-  return {
-    // Any service date strictly before today is unconditionally past 18:00
-    beforeDate: today,
-    // Today itself only qualifies if the clock has passed 18:00
-    todayIfPast6pm: now >= cutoff6pm ? today : null,
-  };
+  // Dates strictly before today are unconditionally past cutoff.
+  // Today itself only qualifies if the clock has passed the cutoff hour.
+  return now >= cutoffUtc
+    ? { lte: today }   // today and all earlier dates
+    : { lt: today };   // only strictly past dates
 }
 
 /**
- * Auto-confirm unconfirmed PAID meal items for a specific employee.
- * Call this at the top of any server component/action that renders
- * today's or past meals for the employee.
+ * Auto-confirm unconfirmed PAID meal items for one employee.
+ * Call before reading that employee's order items for display.
  */
 export async function autoConfirmPastMeals(userId: string): Promise<void> {
   const now = new Date();
-  const { beforeDate, todayIfPast6pm } = getAutoConfirmCutoffDates(now);
-
-  // Build the serviceDate filter: all dates before today, plus today
-  // if it's past 18:00.
-  const serviceDateFilter = todayIfPast6pm
-    ? { lte: todayIfPast6pm }    // covers today AND all earlier dates
-    : { lt: beforeDate };        // only strictly past dates
+  const { mealReceiptCutoffHour } = await getSiteSettings();
+  const serviceDateFilter = buildServiceDateFilter(now, mealReceiptCutoffHour);
 
   await prisma.orderItem.updateMany({
     where: {
       receivedAt: null,
       serviceDate: serviceDateFilter,
-      order: {
-        userId,
-        status: 'PAID',
-      },
+      order: { userId, status: 'PAID' },
     },
-    data: {
-      receivedAt: now,
-      receivedBySystem: true,
-    },
+    data: { receivedAt: now, receivedBySystem: true },
   });
 }
 
 /**
- * Auto-confirm across ALL employees — for admin/kitchen pages that show
- * system-wide receipt totals. Uses the same date logic.
+ * Auto-confirm across ALL employees — for admin/kitchen/receipt pages.
  */
 export async function autoConfirmAllPastMeals(): Promise<void> {
   const now = new Date();
-  const { beforeDate, todayIfPast6pm } = getAutoConfirmCutoffDates(now);
-
-  const serviceDateFilter = todayIfPast6pm
-    ? { lte: todayIfPast6pm }
-    : { lt: beforeDate };
+  const { mealReceiptCutoffHour } = await getSiteSettings();
+  const serviceDateFilter = buildServiceDateFilter(now, mealReceiptCutoffHour);
 
   await prisma.orderItem.updateMany({
     where: {
@@ -95,9 +60,17 @@ export async function autoConfirmAllPastMeals(): Promise<void> {
       serviceDate: serviceDateFilter,
       order: { status: 'PAID' },
     },
-    data: {
-      receivedAt: now,
-      receivedBySystem: true,
-    },
+    data: { receivedAt: now, receivedBySystem: true },
   });
+}
+
+/**
+ * Returns whether the cutoff has already passed for a given service date
+ * (today). Used by the panel and receipt button to decide whether to offer
+ * the undo option and what hint text to show.
+ */
+export async function isCutoffPassed(serviceDateKey: string): Promise<boolean> {
+  const { mealReceiptCutoffHour } = await getSiteSettings();
+  const [y, m, d] = serviceDateKey.split('-').map(Number);
+  return new Date() >= getCutoffUtc(y, m, d, mealReceiptCutoffHour);
 }

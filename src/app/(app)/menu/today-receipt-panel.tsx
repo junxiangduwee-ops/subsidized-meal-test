@@ -1,50 +1,47 @@
 /**
  * TodayReceiptPanel — server component.
  *
- * Shown at the top of /menu on service days when the employee has a PAID
- * meal. Calls autoConfirmPastMeals() first so that by the time we read
- * the items, anything past 18:00 is already marked — no cron needed.
- *
- * Returns null silently on non-service days or when there are no paid meals.
+ * Shown at the top of /menu on service days when the employee has a PAID meal.
+ * Reads the configurable cutoff hour from AppSettings so the hint text always
+ * reflects whatever the admin has set (e.g. "5:00 PM" instead of "6:00 PM").
  */
 
 import { prisma } from '@/lib/prisma';
-import { autoConfirmPastMeals } from '@/lib/meal-receipt';
-import { todayInAppTz, toDateKey, formatDate, formatDateTime, zonedToUtc, APP_TIMEZONE } from '@/lib/cycle';
+import { autoConfirmPastMeals, isCutoffPassed } from '@/lib/meal-receipt';
+import { getSiteSettings, formatCutoffHour } from '@/lib/settings';
+import { todayInAppTz, toDateKey, formatDate, formatDateTime } from '@/lib/cycle';
 import { MealReceiptButton } from '@/components/meal-receipt-button';
 
 export async function TodayReceiptPanel({ userId, locale }: { userId: string; locale?: string }) {
-  // Run the lazy auto-confirm BEFORE reading items — this is what makes
-  // the "past 18:00" auto-confirm happen without a cron job. If it's
-  // already past 6 PM and the employee hasn't tapped the button, the
-  // items will show as auto-confirmed when we read them below.
+  // Auto-confirm anything past cutoff before we read — lazy, no cron needed.
   await autoConfirmPastMeals(userId);
 
   const today = todayInAppTz();
   const todayKey = toDateKey(today);
 
-  const items = await prisma.orderItem.findMany({
-    where: {
-      serviceDate: today,
-      order: { userId, status: 'PAID' },
-    },
-    select: {
-      id: true,
-      dishName: true,
-      restaurantName: true,
-      serviceDate: true,
-      receivedAt: true,
-      receivedBySystem: true,
-    },
-    orderBy: { dishName: 'asc' },
-  });
+  const [items, settings] = await Promise.all([
+    prisma.orderItem.findMany({
+      where: {
+        serviceDate: today,
+        order: { userId, status: 'PAID' },
+      },
+      select: {
+        id: true,
+        dishName: true,
+        restaurantName: true,
+        serviceDate: true,
+        receivedAt: true,
+        receivedBySystem: true,
+      },
+      orderBy: { dishName: 'asc' },
+    }),
+    getSiteSettings(),
+  ]);
 
   if (items.length === 0) return null;
 
-  const now = new Date();
-  const [y, m, d] = todayKey.split('-').map(Number);
-  const cutoff6pm = zonedToUtc(y, m, d, 18, 0, APP_TIMEZONE);
-  const before6pm = now < cutoff6pm;
+  const cutoffPassed = await isCutoffPassed(todayKey);
+  const cutoffLabel = formatCutoffHour(settings.mealReceiptCutoffHour);
   const allConfirmed = items.every((i) => i.receivedAt !== null);
 
   return (
@@ -64,7 +61,7 @@ export async function TodayReceiptPanel({ userId, locale }: { userId: string; lo
       ) : (
         <p className="mb-3 text-xs text-emerald-700">
           Please confirm you received your meal. If you don&rsquo;t, it will be automatically
-          confirmed at <strong>6:00 PM</strong>.
+          confirmed at <strong>{cutoffLabel}</strong>.
         </p>
       )}
 
@@ -80,7 +77,7 @@ export async function TodayReceiptPanel({ userId, locale }: { userId: string; lo
               orderItemId={item.id}
               receivedAt={item.receivedAt}
               receivedBySystem={item.receivedBySystem}
-              canUndo={before6pm && item.receivedAt !== null && !item.receivedBySystem}
+              canUndo={!cutoffPassed && item.receivedAt !== null && !item.receivedBySystem}
               receivedAtLabel={item.receivedAt ? formatDateTime(item.receivedAt, locale) : undefined}
             />
           </li>
@@ -89,7 +86,7 @@ export async function TodayReceiptPanel({ userId, locale }: { userId: string; lo
 
       {!allConfirmed && (
         <p className="mt-3 text-xs text-slate-400">
-          Auto-confirm runs at 6:00 PM {APP_TIMEZONE.replace(/_/g, ' ')}.
+          Auto-confirm runs at {cutoffLabel}.
         </p>
       )}
     </section>

@@ -1,13 +1,16 @@
 import { getTranslations } from 'next-intl/server';
 
 import { requireCapability } from '@/lib/session';
-import { getSiteSettings, DEFAULT_SETTINGS } from '@/lib/settings';
+import { getSiteSettings, DEFAULT_SETTINGS, formatCutoffHour } from '@/lib/settings';
 import { PageHeader, Section } from '@/components/ui';
 import { ActionForm, InlineSubmit } from '@/components/action-form';
 
 import { updateSiteSettings, uploadBrandingImage, resetBrandingImage } from './actions';
 
 export const dynamic = 'force-dynamic';
+
+// Hours available in the dropdown: 10 AM – 11 PM (10–23)
+const CUTOFF_HOURS = Array.from({ length: 14 }, (_, i) => i + 10);
 
 function BrandingImageField({
   kind,
@@ -144,6 +147,49 @@ export default async function SettingsPage() {
           </div>
         </ActionForm>
       </Section>
+
+      {/* ── Ordering settings ───────────────────────────────────────────── */}
+      <div className="mt-6">
+        <Section
+          title="Ordering"
+          description="Controls that affect how employee meal orders are processed."
+        >
+          <ActionForm
+            action={updateSiteSettings}
+            submitLabel={t('save')}
+            resetOnSuccess={false}
+            className="p-5"
+          >
+            {/* Hidden fields to carry the other settings through unchanged
+                when only this section's form is submitted. */}
+            <input type="hidden" name="siteName" value={settings.siteName} />
+            <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
+            <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
+
+            <div className="max-w-sm">
+              <label className="label" htmlFor="mealReceiptCutoffHour">
+                Auto-confirm time
+              </label>
+              <select
+                id="mealReceiptCutoffHour"
+                name="mealReceiptCutoffHour"
+                defaultValue={settings.mealReceiptCutoffHour}
+                className="input"
+              >
+                {CUTOFF_HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {formatCutoffHour(h)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Employees who haven&rsquo;t confirmed their meal by this time will be
+                automatically marked as received. Takes effect immediately — no restart needed.
+              </p>
+            </div>
+          </ActionForm>
+        </Section>
+      </div>
     </>
   );
 }

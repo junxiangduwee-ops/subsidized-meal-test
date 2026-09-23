@@ -10,12 +10,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // Queries. On Supabase/Neon this is the transaction pooler (pgbouncer).
   url       = env("DATABASE_URL")
-  // Schema changes. `db push` and migrations cannot run through a
-  // transaction-mode pooler, so they need a direct/session connection.
-  // scripts/prisma.mjs defaults this to DATABASE_URL when it is unset, so a
-  // plain unpooled Postgres still works with only one variable.
   directUrl = env("DIRECT_URL")
 }
 
@@ -38,11 +33,6 @@ enum AuthProvider {
   JOGET
 }
 
-/// DRAFT      - admin is still planning; invisible to users
-/// PUBLISHED  - menu is locked-in and the ordering window is open
-/// CLOSED     - cutoff passed; no further orders, kitchen counts are final
-/// FULFILLED  - service week finished
-/// CANCELLED  - cycle abandoned; paid orders must be refunded
 enum CycleStatus {
   DRAFT
   PUBLISHED
@@ -57,11 +47,6 @@ enum MealSlot {
   DINNER
 }
 
-/// CART             - user is still building the order, nothing committed
-/// AWAITING_PAYMENT - HitPay request created, waiting for webhook
-/// PAID             - payment confirmed
-/// CANCELLED        - user or admin cancelled before payment
-/// REFUNDED         - money returned after payment
 enum OrderStatus {
   CART
   AWAITING_PAYMENT
@@ -77,9 +62,6 @@ enum PaymentStatus {
   REFUNDED
 }
 
-/// PERCENTAGE     - company pays `value` percent of the line price
-/// FIXED_PER_ITEM - company pays up to `value` sen off each item
-/// FIXED_PER_DAY  - company pays up to `value` sen across all items on one day
 enum SubsidyType {
   PERCENTAGE
   FIXED_PER_ITEM
@@ -97,52 +79,23 @@ enum SubsidyScope {
 
 model User {
   id           String       @id @default(cuid())
-  /// Optional so an employee with no email account can still be provisioned
-  /// off their employee code alone (see staffId). App code enforces "at
-  /// least one of email or staffId" on every create/provision path - see
-  /// lib/auth.ts and admin/users/actions.ts.
   email        String?      @unique
   name         String
-  /// The employee code - #currentUser.employee.code# on the Joget side.
-  /// The one identifier guaranteed to exist for every real employee, so
-  /// it's tried first when matching a Joget/directory identity, and is
-  /// the required fallback login identifier for anyone without an email.
   staffId      String?      @unique
   department   String?
   role         Role         @default(USER)
-  /// Null for LDAP/OIDC accounts - those never hold a local credential.
   passwordHash String?
   authProvider AuthProvider @default(LOCAL)
-  /// External subject id from LDAP (dn) or OIDC (sub).
   externalId   String?
   active       Boolean      @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  /// App-owned ordering preference, pre-fills a brand-new cart (see
-  /// getOrCreateCart in lib/orders.ts). Deliberately NEVER touched by
-  /// provisionFromDirectory() - Joget/LDAP/OIDC have no concept of this at
-  /// all, so it must not be treated as identity data the way name/role are.
-  /// Null until either an admin sets one (defaultDeliverySiteLocked = true,
-  /// see admin/users) or the person has ordered at least once
-  /// (defaultDeliverySiteLocked stays false, and it then auto-tracks their
-  /// most recent choice - see setDeliverySite in lib/orders.ts).
   defaultDeliverySiteId     String?
   defaultDeliverySite       DeliverySite? @relation("UserDefaultDeliverySite", fields: [defaultDeliverySiteId], references: [id])
-  /// true only when an admin explicitly picked a site in Admin -> Users.
-  /// While locked, order-time site changes stop auto-updating the default
-  /// (see setDeliverySite) - an admin-pinned value is never silently
-  /// overwritten by someone ordering for a different site once. Clearing
-  /// the field back to blank in Admin -> Users unlocks it again.
   defaultDeliverySiteLocked Boolean       @default(false)
 
-  /// Restricts a RECEPTION account to confirming deliveries for one site
-  /// only (enforced in reception/actions.ts, not just hidden in the UI).
-  /// Null means this person can see and confirm every site - appropriate
-  /// for someone covering several sites, but not the norm. Meaningless for
-  /// any other role and always cleared back to null if the role changes
-  /// away from RECEPTION (see admin/users/actions.ts).
   receptionSiteId           String?
   receptionSite             DeliverySite? @relation("UserReceptionSite", fields: [receptionSiteId], references: [id], onDelete: SetNull)
 
@@ -150,7 +103,6 @@ model User {
   createdCycles MenuCycle[] @relation("CycleCreatedBy")
   auditLogs    AuditLog[]
   settingsUpdates AppSettings[] @relation("SettingsUpdatedBy")
-  /// Deliveries this person (typically RECEPTION) has confirmed as arrived.
   deliveryConfirmations DeliveryConfirmation[] @relation("DeliveryConfirmedBy")
 
   @@index([role])
@@ -159,14 +111,11 @@ model User {
 }
 
 // ---------------------------------------------------------------------------
-// Catalogue - owned by ADMIN
+// Catalogue
 // ---------------------------------------------------------------------------
 
 model Restaurant {
   id          String   @id @default(cuid())
-  /// Short, stable identifier (e.g. "R-001") admins can put in a CSV/Excel
-  /// sheet to select this restaurant - unlike `name`, it never changes when
-  /// the business is renamed. Used to validate weekly-menu imports.
   code        String?  @unique
   name        String   @unique
   description String?
@@ -186,18 +135,12 @@ model Restaurant {
 model Dish {
   id           String   @id @default(cuid())
   restaurantId String
-  /// Short, stable identifier (e.g. "D-001"), unique across every dish in
-  /// the catalogue (not just within its restaurant). Lets a weekly-menu
-  /// CSV/Excel import reference an exact dish without relying on the
-  /// (editable) name matching exactly.
   code         String?  @unique
   name         String
   description  String?
-  /// Catalogue list price in sen. A MenuItem may override it for one cycle.
   priceSen     Int
   category     String?
   imageUrl     String?
-  /// Free-form tags: "halal", "vegetarian", "contains-nuts", ...
   tags         String[] @default([])
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -394,10 +337,10 @@ model OrderItem {
   restaurantName String
 
   /// Set when the employee taps "I received my meal", OR by the automatic
-  /// 18:00 sweep if they never confirmed it themselves. NULL = not yet confirmed.
+  /// sweep if they never confirmed it themselves. NULL = not yet confirmed.
   receivedAt       DateTime?
-  /// true when receivedAt was written by the auto-confirm cron at 18:00,
-  /// false when the employee confirmed it manually themselves.
+  /// true when receivedAt was written by the auto-confirm sweep,
+  /// false when the employee confirmed it manually.
   receivedBySystem Boolean  @default(false)
 
   createdAt     DateTime @default(now())
@@ -409,7 +352,6 @@ model OrderItem {
   @@unique([orderId, menuItemId])
   @@index([serviceDate])
   @@index([menuItemId])
-  // Efficient sweep: only unconfirmed items, by service date
   @@index([serviceDate, receivedAt])
 }
 
@@ -447,11 +389,18 @@ model Payment {
 
 model AppSettings {
   id                 String   @id
+
   siteName           String   @default("MR DIY Food Ordering")
   logoUrl            String?
   faviconUrl         String?
   supportEmail       String?
   maintenanceMessage String?
+
+  /// Hour (0–23, in APP_TIMEZONE) after which unconfirmed PAID meal items
+  /// are automatically marked as received on each service day.
+  /// Default 18 = 6:00 PM. Editable by ADMIN in /admin/settings.
+  mealReceiptCutoffHour Int @default(18)
+
   updatedAt          DateTime @updatedAt
   updatedById        String?
 
