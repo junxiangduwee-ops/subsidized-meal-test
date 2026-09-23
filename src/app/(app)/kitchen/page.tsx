@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { cyclePhase, formatDate, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { kitchenSheet } from '@/lib/reporting';
-import { autoConfirmAllPastMeals } from '@/lib/meal-receipt';
 import { PageHeader, Section, EmptyState, PhaseBadge, Alert, Stat } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -15,11 +14,6 @@ export default async function KitchenPage({
   searchParams: Promise<{ cycle?: string }>;
 }) {
   await requireCapability('kitchen:view');
-
-  // Auto-confirm any meals past 18:00 across all employees before reading
-  // receipt totals — ensures the numbers shown are always up to date.
-  await autoConfirmAllPastMeals();
-
   const params = await searchParams;
   const t = await getTranslations('kitchenAdmin');
   const locale = await getLocale();
@@ -43,30 +37,6 @@ export default async function KitchenPage({
   const selected = cycles.find((c) => c.id === params.cycle) ?? cycles[0];
   const phase = cyclePhase(selected);
   const sheet = await kitchenSheet(selected.id);
-
-  // Receipt confirmation summary — counts per service date
-  const [receiptTotalRows, receiptConfirmedRows, receiptAutoRows] = await Promise.all([
-    prisma.orderItem.groupBy({
-      by: ['serviceDate'],
-      where: { order: { cycleId: selected.id, status: 'PAID' } },
-      _count: { id: true },
-    }),
-    prisma.orderItem.groupBy({
-      by: ['serviceDate'],
-      where: { order: { cycleId: selected.id, status: 'PAID' }, receivedAt: { not: null } },
-      _count: { id: true },
-    }),
-    prisma.orderItem.groupBy({
-      by: ['serviceDate'],
-      where: { order: { cycleId: selected.id, status: 'PAID' }, receivedAt: { not: null }, receivedBySystem: true },
-      _count: { id: true },
-    }),
-  ]);
-
-  const receiptTotalMap = new Map(receiptTotalRows.map((r) => [toDateKey(r.serviceDate), r._count.id]));
-  const receiptConfirmedMap = new Map(receiptConfirmedRows.map((r) => [toDateKey(r.serviceDate), r._count.id]));
-  const receiptAutoMap = new Map(receiptAutoRows.map((r) => [toDateKey(r.serviceDate), r._count.id]));
-  const receiptDates = [...receiptTotalRows].sort((a, b) => a.serviceDate.getTime() - b.serviceDate.getTime());
 
   const byRestaurant = new Map<string, typeof sheet>();
   for (const row of sheet) {
@@ -120,56 +90,6 @@ export default async function KitchenPage({
         <Stat label={t('distinctDishes')} value={new Set(sheet.map((r) => r.dishName)).size} />
       </div>
 
-      {receiptDates.length > 0 && (
-        <Section
-          title="Employee Receipt Confirmation"
-          description="Auto-confirm fires at 6:00 PM on each service day for any unconfirmed paid meals."
-        >
-          <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Service Date</th>
-                  <th className="num">Paid Meals</th>
-                  <th className="num">Confirmed by Employee</th>
-                  <th className="num">Auto-confirmed (6 PM)</th>
-                  <th className="num">Pending</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receiptDates.map((row) => {
-                  const key = toDateKey(row.serviceDate);
-                  const total = receiptTotalMap.get(key) ?? 0;
-                  const confirmed = receiptConfirmedMap.get(key) ?? 0;
-                  const auto = receiptAutoMap.get(key) ?? 0;
-                  const manual = confirmed - auto;
-                  const pending = total - confirmed;
-                  return (
-                    <tr key={key}>
-                      <td className="font-medium text-slate-900 whitespace-nowrap">
-                        {formatDate(row.serviceDate, 'weekday', locale)} · {formatDate(row.serviceDate, 'long', locale)}
-                      </td>
-                      <td className="num text-slate-600">{total}</td>
-                      <td className="num text-slate-600">{manual}</td>
-                      <td className="num text-slate-400">{auto}</td>
-                      <td className="num">
-                        {pending > 0 ? (
-                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                            {pending} pending
-                          </span>
-                        ) : (
-                          <span className="text-xs text-emerald-600">✓ All done</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      )}
-
       {sheet.length === 0 ? (
         <EmptyState title={t('nothingOrderedYet')} />
       ) : (
@@ -183,6 +103,7 @@ export default async function KitchenPage({
               else byDate.set(key, [r]);
             }
             const restaurantTotal = rows.reduce((s, r) => s + r.quantity, 0);
+
             return (
               <Section
                 key={restaurant}
@@ -204,7 +125,9 @@ export default async function KitchenPage({
                         dayRows.map((r, i) => (
                           <tr key={`${dateKey}-${r.dishName}-${r.deliverySiteName}`}>
                             <td className={i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>
-                              {i === 0 ? `${formatDate(r.serviceDate, 'weekday', locale)} · ${formatDate(r.serviceDate, 'long', locale)}` : ''}
+                              {i === 0
+                                ? `${formatDate(r.serviceDate, 'weekday', locale)} · ${formatDate(r.serviceDate, 'long', locale)}`
+                                : ''}
                             </td>
                             <td className="text-slate-700">{r.dishName}</td>
                             <td className="text-slate-600">{r.deliverySiteName}</td>

@@ -49,6 +49,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
   if (can(user.role, 'kitchen:view'))
     insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
+  // Receipt confirmation tab — visible to anyone who can view analytics
+  if (can(user.role, 'analytics:view'))
+    insights.items.push({ href: '/receipt', label: 'Receipt Confirmation' });
   if (insights.items.length) groups.push(insights);
 
   if (can(user.role, 'delivery:confirm')) {
@@ -66,9 +69,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
-      {/* The header (logo, site name, user menu) is Joget's own page chrome
-          duplicated - hide it when the app is embedded inside a Joget
-          iframe, since Joget already frames the page for the person. */}
       {!user.embed ? (
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
@@ -93,8 +93,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileNav groups={groups} />
         </header>
       ) : (
-        // Still embedded, still needs to navigate between sections on
-        // small screens - just without the branding bar above it.
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <MobileNav groups={groups} />
         </div>
