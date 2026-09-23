@@ -180,11 +180,11 @@ export default async function SettingsPage() {
               <select
                 id="mealReceiptCutoffHour"
                 name="mealReceiptCutoffHour"
-                defaultValue={cutoffHour}
+                defaultValue={String(cutoffHour)}
                 className="input"
               >
                 {ALL_HOURS.map((h) => (
-                  <option key={h} value={h}>
+                  <option key={h} value={String(h)}>
                     {formatCutoffHour(h)}
                   </option>
                 ))}

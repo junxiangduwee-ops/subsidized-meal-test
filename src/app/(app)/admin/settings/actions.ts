@@ -58,6 +58,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
   });
 
   revalidatePath('/', 'layout');
+  revalidatePath('/admin/settings');
   revalidateTag(CACHE_TAGS.siteSettings);
 
   return { success: 'Settings saved.' };
