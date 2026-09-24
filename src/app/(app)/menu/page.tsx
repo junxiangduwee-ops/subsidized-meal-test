@@ -44,6 +44,10 @@ export default async function MenuPage({
     return (
       <>
         <PageHeader title={t('nextWeeksMenu')} />
+        {/* Show receipt panel even when ordering is closed — the service
+            week runs AFTER the order cutoff, so this is the normal case
+            when food is being served. */}
+        <TodayReceiptPanel userId={user.id} locale={locale} />
         <EmptyState
           title={t('closedTitle')}
           hint={
