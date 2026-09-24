@@ -24,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       heading: t('order'),
       items: [
         { href: '/menu', label: t('nextWeeksMenu') },
+        { href: '/my-meals', label: 'My Meals' },
         { href: '/orders', label: t('myOrders') },
       ],
     });
