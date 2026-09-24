@@ -41,6 +41,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   if (type === 'kitchen' && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  if (type === 'kitchen-employees' && !can(user.role, 'kitchen:view')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (type === 'reconciliation' && !can(user.role, 'finance:export')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   if ((type === 'restaurants' || type === 'dishes') && !can(user.role, 'catalogue:manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -57,6 +63,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportSubsidy(user.id, url.searchParams.get('weeks'));
     case 'kitchen':
       return exportKitchen(user.id, cycleId);
+    case 'kitchen-employees':
+      return exportKitchenEmployees(user.id, cycleId);
+    case 'reconciliation':
+      return exportReconciliation(user.id, url.searchParams.get('weeks'));
     case 'my-orders':
       return exportMyOrders(user.id, url.searchParams.get('month'));
     case 'restaurants':
@@ -405,3 +415,151 @@ async function exportWeeklyMenuTemplate(actorId: string) {
   return csvResponse('weekly-menu-template.csv', csv);
 }
 
+async function exportKitchenEmployees(actorId: string, cycleId: string | null) {
+  if (!cycleId) return NextResponse.json({ error: 'Missing cycle' }, { status: 400 });
+
+  const cycle = await prisma.menuCycle.findUnique({ where: { id: cycleId } });
+  if (!cycle) return NextResponse.json({ error: 'Cycle not found' }, { status: 404 });
+
+  // One row per employee per dish per service date — the full per-person breakdown
+  // the kitchen can use to check off individual orders on delivery day.
+  const items = await prisma.orderItem.findMany({
+    where: { order: { cycleId, status: 'PAID' } },
+    orderBy: [
+      { serviceDate: 'asc' },
+      { restaurantName: 'asc' },
+      { dishName: 'asc' },
+      { order: { user: { name: 'asc' } } },
+    ],
+    select: {
+      serviceDate: true,
+      restaurantName: true,
+      dishName: true,
+      quantity: true,
+      order: {
+        select: {
+          user: { select: { name: true, staffId: true, department: true } },
+          deliverySite: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  const rows = items.map((i) => [
+    toDateKey(i.serviceDate),
+    i.restaurantName,
+    i.dishName,
+    i.quantity,
+    i.order.user.staffId ?? '',
+    i.order.user.name,
+    i.order.user.department ?? '',
+    i.order.deliverySite?.name ?? 'Unassigned',
+  ]);
+
+  const csv = toCsv(
+    ['Service date', 'Restaurant', 'Dish', 'Qty', 'Staff ID', 'Name', 'Department', 'Delivery site'],
+    rows,
+  );
+
+  await audit(actorId, 'export.kitchen_employees', 'MenuCycle', cycleId, { rows: rows.length });
+  return csvResponse(`kitchen-employees-${toDateKey(cycle.serviceWeekStart)}.csv`, csv);
+}
+
+async function exportReconciliation(actorId: string, weeksRaw: string | null) {
+  const weeks = clampWeeks(weeksRaw);
+  const window = trailingWeeks(weeks);
+
+  const orders = await prisma.order.findMany({
+    where: {
+      status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] },
+      cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
+    },
+    orderBy: { submittedAt: 'desc' },
+    take: 10000,
+    select: {
+      reference: true,
+      status: true,
+      grossSen: true,
+      subsidySen: true,
+      netSen: true,
+      submittedAt: true,
+      paidAt: true,
+      user: { select: { name: true, staffId: true, department: true, email: true } },
+      cycle: { select: { serviceWeekStart: true } },
+      deliverySite: { select: { name: true } },
+      items: { select: { dishName: true, quantity: true } },
+      payments: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          status: true,
+          amountSen: true,
+          paymentId: true,
+          requestId: true,
+          paymentMethod: true,
+          failureReason: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  const rows = orders.map((o) => {
+    const p = o.payments[0] ?? null;
+    const mealSummary = o.items
+      .map((i) => (i.quantity > 1 ? `${i.dishName} x${i.quantity}` : i.dishName))
+      .join('; ');
+
+    return [
+      o.reference,
+      formatWeekRange(o.cycle.serviceWeekStart),
+      o.user.staffId ?? '',
+      o.user.name,
+      o.user.email ?? '',
+      o.user.department ?? '',
+      o.deliverySite?.name ?? 'Unassigned',
+      mealSummary,
+      o.status,
+      csvAmount(o.grossSen),
+      csvAmount(o.subsidySen),
+      csvAmount(o.netSen),
+      p?.status ?? '',
+      csvAmount(p?.amountSen ?? 0),
+      p?.paymentId ?? '',
+      p?.requestId ?? '',
+      p?.paymentMethod ?? '',
+      p?.failureReason ?? '',
+      o.submittedAt ? o.submittedAt.toISOString() : '',
+      o.paidAt ? o.paidAt.toISOString() : '',
+    ];
+  });
+
+  const csv = toCsv(
+    [
+      'Order reference',
+      'Service week',
+      'Staff ID',
+      'Name',
+      'Email',
+      'Department',
+      'Delivery site',
+      'Meals ordered',
+      'Order status',
+      'Food total (RM)',
+      'Subsidy (RM)',
+      'Staff paid (RM)',
+      'Payment status',
+      'Amount charged (RM)',
+      'HitPay payment ID',
+      'HitPay request ID',
+      'Payment method',
+      'Failure reason',
+      'Submitted at (UTC)',
+      'Paid at (UTC)',
+    ],
+    rows,
+  );
+
+  await audit(actorId, 'export.reconciliation', 'Report', null, { weeks, rows: rows.length });
+  return csvResponse(`reconciliation-last-${weeks}-weeks.csv`, csv);
+}
