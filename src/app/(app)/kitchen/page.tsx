@@ -41,10 +41,9 @@ export default async function KitchenPage({
   const phase = cyclePhase(selected);
   const sheet = await kitchenSheet(selected.id);
 
-  // The currently expanded row key — format: "restaurant|dateKey|dish|site"
   const expandKey = params.expand ?? null;
 
-  // If a row is expanded, fetch the employees who ordered that specific dish
+  // Fetch employees for the expanded row
   let expandedEmployees: {
     name: string;
     staffId: string | null;
@@ -66,7 +65,9 @@ export default async function KitchenPage({
           order: {
             status: 'PAID',
             cycleId: selected.id,
-            deliverySite: { name: site === 'Unassigned' ? undefined : site },
+            ...(site === 'Unassigned'
+              ? { deliverySiteId: null }
+              : { deliverySite: { name: site } }),
           },
         },
         select: {
@@ -89,11 +90,10 @@ export default async function KitchenPage({
     }
   }
 
-  // Helper: build URL that toggles a row open/closed
   function expandUrl(restaurant: string, dateKey: string, dish: string, site: string) {
     const key = `${restaurant}|${dateKey}|${dish}|${site}`;
     const qs = new URLSearchParams({ cycle: selected.id });
-    if (expandKey !== key) qs.set('expand', key); // open; omit to close
+    if (expandKey !== key) qs.set('expand', key);
     return `/kitchen?${qs.toString()}`;
   }
 
@@ -105,6 +105,9 @@ export default async function KitchenPage({
   }
 
   const totalPortions = sheet.reduce((s, r) => s + r.quantity, 0);
+
+  // Shared cell style: the link fills the entire cell so the whole row is clickable
+  const cellLink = 'block w-full h-full';
 
   return (
     <>
@@ -188,41 +191,55 @@ export default async function KitchenPage({
                         dayRows.map((r, i) => {
                           const rowKey = `${restaurant}|${dateKey}|${r.dishName}|${r.deliverySiteName}`;
                           const isExpanded = expandKey === rowKey;
+                          const href = expandUrl(restaurant, dateKey, r.dishName, r.deliverySiteName);
 
                           return (
                             <>
-                              <tr
-                                key={rowKey}
-                                className={isExpanded ? 'bg-brand-50' : 'hover:bg-slate-50'}
-                              >
-                                <td className={i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>
-                                  {i === 0
-                                    ? `${formatDate(r.serviceDate, 'weekday', locale)} · ${formatDate(r.serviceDate, 'long', locale)}`
-                                    : ''}
+                              {/*
+                                Each <td> contains a block-level <Link> that fills
+                                the full cell — no text is underlined, no row is
+                                highlighted, but every part of the row is clickable.
+                              */}
+                              <tr key={rowKey} className="cursor-pointer">
+                                <td className="p-0">
+                                  <Link href={href} className={`${cellLink} px-4 py-3 ${i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}`}>
+                                    {i === 0
+                                      ? `${formatDate(r.serviceDate, 'weekday', locale)} · ${formatDate(r.serviceDate, 'long', locale)}`
+                                      : ''}
+                                  </Link>
                                 </td>
-                                <td className="text-slate-700">{r.dishName}</td>
-                                <td className="text-slate-600">{r.deliverySiteName}</td>
-                                <td className="num font-medium text-slate-900 text-left">{r.quantity}</td>
-                                <td className="text-right">
-                                  <Link
-                                    href={expandUrl(restaurant, dateKey, r.dishName, r.deliverySiteName)}
-                                    className="text-xs text-brand-600 hover:underline whitespace-nowrap"
-                                  >
-                                    {isExpanded ? '▲ Hide' : '▼ Who ordered'}
+                                <td className="p-0">
+                                  <Link href={href} className={`${cellLink} px-4 py-3 text-slate-700`}>
+                                    {r.dishName}
+                                  </Link>
+                                </td>
+                                <td className="p-0">
+                                  <Link href={href} className={`${cellLink} px-4 py-3 text-slate-600`}>
+                                    {r.deliverySiteName}
+                                  </Link>
+                                </td>
+                                <td className="p-0">
+                                  <Link href={href} className={`${cellLink} px-4 py-3 font-medium text-slate-900 text-right`}>
+                                    {r.quantity}
+                                  </Link>
+                                </td>
+                                <td className="p-0">
+                                  <Link href={href} className={`${cellLink} px-4 py-3 text-slate-400 text-xs text-right`}>
+                                    {isExpanded ? '▲' : '▼'}
                                   </Link>
                                 </td>
                               </tr>
 
-                              {/* Expanded employee list — only renders for the active row */}
+                              {/* Expanded employee sub-table */}
                               {isExpanded ? (
-                                <tr key={`${rowKey}-expanded`} className="bg-brand-50">
-                                  <td colSpan={5} className="px-6 pb-4 pt-0">
+                                <tr key={`${rowKey}-expanded`}>
+                                  <td colSpan={5} className="border-t-0 bg-slate-50 px-6 pb-4 pt-2">
                                     {expandedEmployees.length === 0 ? (
                                       <p className="text-xs text-slate-400">No employees found.</p>
                                     ) : (
                                       <table className="w-full text-xs">
                                         <thead>
-                                          <tr className="border-b border-brand-100 text-slate-500">
+                                          <tr className="border-b border-slate-200 text-slate-500">
                                             <th className="py-1.5 text-left font-medium">#</th>
                                             <th className="py-1.5 text-left font-medium">Name</th>
                                             <th className="py-1.5 text-left font-medium">Staff ID</th>
@@ -230,20 +247,14 @@ export default async function KitchenPage({
                                             <th className="py-1.5 text-left font-medium">Delivery Site</th>
                                           </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-brand-100">
+                                        <tbody className="divide-y divide-slate-100">
                                           {expandedEmployees.map((emp, idx) => (
-                                            <tr key={idx} className="text-slate-700">
+                                            <tr key={idx}>
                                               <td className="py-1.5 text-slate-400">{idx + 1}</td>
-                                              <td className="py-1.5 font-medium">{emp.name}</td>
-                                              <td className="py-1.5 font-mono text-slate-500">
-                                                {emp.staffId ?? '—'}
-                                              </td>
-                                              <td className="py-1.5 text-slate-500">
-                                                {emp.department ?? '—'}
-                                              </td>
-                                              <td className="py-1.5 text-slate-500">
-                                                {emp.deliverySiteName}
-                                              </td>
+                                              <td className="py-1.5 font-medium text-slate-900">{emp.name}</td>
+                                              <td className="py-1.5 font-mono text-slate-500">{emp.staffId ?? '—'}</td>
+                                              <td className="py-1.5 text-slate-500">{emp.department ?? '—'}</td>
+                                              <td className="py-1.5 text-slate-500">{emp.deliverySiteName}</td>
                                             </tr>
                                           ))}
                                         </tbody>
