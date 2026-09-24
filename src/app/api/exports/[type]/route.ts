@@ -471,7 +471,7 @@ async function exportReconciliation(actorId: string, weeksRaw: string | null) {
 
   const orders = await prisma.order.findMany({
     where: {
-      status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] },
+      status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
       cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
     },
     orderBy: { submittedAt: 'desc' },

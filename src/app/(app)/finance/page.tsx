@@ -326,7 +326,7 @@ export default async function FinancePage({
   const page = parsePage(params.page);
 
   const reconWhere = {
-    status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as const },
+    status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
     cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
   };
 
