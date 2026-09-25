@@ -119,6 +119,8 @@ export default async function SettingsPage({
           resetOnSuccess={false}
           className="border-t border-slate-100 p-5"
         >
+          {/* Carry the cutoff hour through so the Ordering section value is not lost */}
+          <input type="hidden" name="mealReceiptCutoffHour" value={String(cutoffHour)} />
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="label">{t('siteName')}</label>
