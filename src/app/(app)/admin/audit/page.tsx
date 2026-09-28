@@ -214,7 +214,7 @@ export default async function AuditLogPage({
       />
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
-      <form method="get" className="mb-6 flex flex-wrap items-end gap-3">
+      <form method="get" className="mb-6 flex flex-wrap gap-3">
         <div>
           <label className="label">Category</label>
           <select name="category" defaultValue={category} className="input !w-44 !py-1.5 text-sm">
