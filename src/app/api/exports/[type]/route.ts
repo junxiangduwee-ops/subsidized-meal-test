@@ -66,7 +66,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
     case 'kitchen-employees':
       return exportKitchenEmployees(user.id, cycleId);
     case 'reconciliation':
-      return exportReconciliation(user.id, url.searchParams.get('weeks'));
+      return exportReconciliation(user.id, url.searchParams.get('weeks'), url.searchParams.get('cycle'));
     case 'my-orders':
       return exportMyOrders(user.id, url.searchParams.get('month'));
     case 'restaurants':
@@ -468,14 +468,21 @@ async function exportKitchenEmployees(actorId: string, cycleId: string | null) {
   return csvResponse(`kitchen-employees-${toDateKey(cycle.serviceWeekStart)}.csv`, csv);
 }
 
-async function exportReconciliation(actorId: string, weeksRaw: string | null) {
+async function exportReconciliation(actorId: string, weeksRaw: string | null, cycleId: string | null = null) {
+  // If a specific cycleId is provided, export just that service week.
+  // Otherwise fall back to the trailing-weeks window.
+  const byCycle = Boolean(cycleId);
   const weeks = clampWeeks(weeksRaw);
   const window = trailingWeeks(weeks);
+
+  const whereFilter = byCycle
+    ? { cycleId: cycleId! }
+    : { cycle: { serviceWeekStart: { gte: window.from, lt: window.to } } };
 
   const orders = await prisma.order.findMany({
     where: {
       status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
-      cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
+      ...whereFilter,
     },
     orderBy: { submittedAt: 'desc' },
     take: 10000,
@@ -563,6 +570,19 @@ async function exportReconciliation(actorId: string, weeksRaw: string | null) {
     rows,
   );
 
-  await audit(actorId, 'export.reconciliation', 'Report', null, { weeks, rows: rows.length });
-  return csvResponse(`reconciliation-last-${weeks}-weeks.csv`, csv);
+  // Fetch cycle label for filename when exporting by cycle
+  let filenameLabel = `last-${weeks}-weeks`;
+  let auditMeta: Record<string, unknown> = { weeks, rows: rows.length };
+  if (byCycle && cycleId) {
+    const cycle = await prisma.menuCycle.findUnique({
+      where: { id: cycleId },
+      select: { serviceWeekStart: true },
+    });
+    if (cycle) {
+      filenameLabel = toDateKey(cycle.serviceWeekStart);
+      auditMeta = { cycleId, serviceWeek: filenameLabel, rows: rows.length };
+    }
+  }
+  await audit(actorId, 'export.reconciliation', 'Report', cycleId, auditMeta);
+  return csvResponse(`reconciliation-${filenameLabel}.csv`, csv);
 }

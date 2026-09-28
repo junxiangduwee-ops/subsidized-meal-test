@@ -19,7 +19,7 @@ const RECON_PAGE_SIZE = 25;
 export default async function FinancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ weeks?: string; tab?: string; page?: string }>;
+  searchParams: Promise<{ weeks?: string; tab?: string; page?: string; cycle?: string }>;
 }) {
   const user = await requireCapability('finance:view');
   const params = await searchParams;
@@ -324,11 +324,34 @@ export default async function FinancePage({
   // ════════════════════════════════════════════════════════════════════════
 
   const page = parsePage(params.page);
+  const selectedCycleId = params.cycle ?? null;
 
-  const reconWhere = {
-    status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
-    cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-  };
+  // Table filter: if a specific cycle is selected use it, otherwise fall
+  // back to the trailing-weeks window. Both the table and the aggregate
+  // stats use the same filter so the reconciliation indicator always
+  // matches what the table shows.
+  const reconWhere = selectedCycleId
+    ? {
+        status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
+        cycleId: selectedCycleId,
+      }
+    : {
+        status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
+        cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
+      };
+
+  // Same filter shape for the aggregate queries (no status filter needed there)
+  const reconAggWhere = selectedCycleId
+    ? { cycleId: selectedCycleId }
+    : { cycle: { serviceWeekStart: { gte: window.from, lt: window.to } } };
+
+  // Cycles for the per-cycle export picker
+  const exportCycles = await prisma.menuCycle.findMany({
+    where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] as const } },
+    orderBy: { serviceWeekStart: 'desc' },
+    take: 26,
+    select: { id: true, serviceWeekStart: true },
+  });
 
   const [reconTotal, reconOrders, unmatchedLogs, reconAgg, paymentAgg] = await Promise.all([
     prisma.order.count({ where: reconWhere }),
@@ -385,22 +408,17 @@ export default async function FinancePage({
       take: 50,
       select: { id: true, createdAt: true, metadata: true },
     }),
-    // Aggregate: sum of netSen for PAID orders in window
+    // Aggregate: sum of netSen for PAID orders matching current filter
     prisma.order.aggregate({
-      where: {
-        status: 'PAID',
-        cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-      },
+      where: { status: 'PAID', ...reconAggWhere },
       _sum: { netSen: true },
       _count: { _all: true },
     }),
-    // Aggregate: sum of SUCCEEDED payments in window
+    // Aggregate: sum of SUCCEEDED payments matching current filter
     prisma.payment.aggregate({
       where: {
         status: 'SUCCEEDED',
-        order: {
-          cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-        },
+        order: reconAggWhere,
       },
       _sum: { amountSen: true },
       _count: { _all: true },
@@ -527,14 +545,90 @@ export default async function FinancePage({
         </div>
       ) : null}
 
+      {/* ── Table filter ─────────────────────────────────────────────────── */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <form method="get" className="flex items-center gap-2">
+          <input type="hidden" name="tab" value="reconciliation" />
+          <input type="hidden" name="weeks" value={String(weeks)} />
+          <select
+            name="cycle"
+            defaultValue={selectedCycleId ?? ''}
+            className="input !w-52 !py-1 text-xs"
+          >
+            <option value="">All — last {weeks} weeks</option>
+            {exportCycles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {formatWeekRange(c.serviceWeekStart, locale)}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="btn-secondary btn-sm">Filter</button>
+          {selectedCycleId ? (
+            <a href={`?tab=reconciliation&weeks=${weeks}`} className="text-xs text-slate-400 hover:text-slate-600">
+              Clear
+            </a>
+          ) : null}
+        </form>
+
+        {selectedCycleId ? (
+          <span className="text-xs text-slate-500">
+            Showing {reconTotal} orders for{' '}
+            <strong>
+              {formatWeekRange(
+                exportCycles.find((c) => c.id === selectedCycleId)?.serviceWeekStart ?? new Date(),
+                locale,
+              )}
+            </strong>
+          </span>
+        ) : (
+          <span className="text-xs text-slate-500">
+            Showing {reconTotal} orders for the last {weeks} weeks
+          </span>
+        )}
+      </div>
+      {/* ─────────────────────────────────────────────────────────────────── */}
+
       <Section
         title="Order & Payment Matching"
-        description={`${reconTotal} orders in the last ${weeks} weeks — showing order reference, employee, meals ordered, and matched HitPay payment.`}
+        description={
+          selectedCycleId
+            ? `${reconTotal} orders for the selected service week`
+            : `${reconTotal} orders in the last ${weeks} weeks — showing order reference, employee, meals ordered, and matched HitPay payment.`
+        }
         action={
           exportable ? (
-            <a href={`/api/exports/reconciliation?weeks=${weeks}`} className="btn-secondary btn-sm">
-              Export CSV
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Smart export: matches what the table is currently showing */}
+              {selectedCycleId ? (
+                <a
+                  href={`/api/exports/reconciliation?cycle=${selectedCycleId}`}
+                  className="btn-secondary btn-sm"
+                >
+                  Export this week CSV
+                </a>
+              ) : (
+                <a
+                  href={`/api/exports/reconciliation?weeks=${weeks}`}
+                  className="btn-secondary btn-sm"
+                >
+                  Export last {weeks} weeks CSV
+                </a>
+              )}
+              {/* Also allow picking any specific week to export */}
+              <form method="get" action="/api/exports/reconciliation" className="flex items-center gap-1.5">
+                <select name="cycle" defaultValue={selectedCycleId ?? ''} className="input !w-44 !py-1 text-xs" required>
+                  <option value="">Pick a week…</option>
+                  {exportCycles.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {formatWeekRange(c.serviceWeekStart, locale)}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn-secondary btn-sm whitespace-nowrap">
+                  Export week CSV
+                </button>
+              </form>
+            </div>
           ) : null
         }
       >
@@ -651,7 +745,11 @@ export default async function FinancePage({
               page={page}
               pageSize={RECON_PAGE_SIZE}
               total={reconTotal}
-              searchParams={{ tab: 'reconciliation', weeks: String(weeks) }}
+              searchParams={{
+                tab: 'reconciliation',
+                weeks: String(weeks),
+                ...(selectedCycleId ? { cycle: selectedCycleId } : {}),
+              }}
             />
           </>
         )}
