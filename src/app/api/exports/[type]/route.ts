@@ -272,12 +272,14 @@ async function exportMyOrders(userId: string, monthRaw: string | null) {
     },
     orderBy: { createdAt: 'asc' },
     include: {
+      user: { select: { staffId: true } },
       cycle: { select: { serviceWeekStart: true } },
       payments: { where: { status: 'SUCCEEDED' }, orderBy: { createdAt: 'desc' }, take: 1 },
     },
   });
 
   const rows = orders.map((o) => [
+    o.user.staffId ?? '',
     o.reference,
     formatWeekRange(o.cycle.serviceWeekStart),
     o.status,
@@ -289,6 +291,7 @@ async function exportMyOrders(userId: string, monthRaw: string | null) {
 
   const csv = toCsv(
     [
+      'Staff ID',
       'Order reference',
       'Service week',
       'Status',
