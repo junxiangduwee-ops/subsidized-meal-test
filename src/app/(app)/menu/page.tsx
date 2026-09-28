@@ -6,7 +6,7 @@ import { requireCapability } from '@/lib/session';
 import { decodeTags } from '@/lib/db-compat';
 import { employeePriceFor } from '@/lib/subsidy';
 import { formatDate, formatDateTime, formatWeekRange, timeUntil, toDateKey } from '@/lib/cycle';
-import { remainingCapacityMap, subsidyRulesForCycle } from '@/lib/orders';
+import { enforceCartMealsPerDay, remainingCapacityMap, subsidyRulesForCycle } from '@/lib/orders';
 import { getActiveDeliverySites } from '@/lib/cache';
 import { PageHeader, EmptyState, Alert } from '@/components/ui';
 import type { DayTab } from '@/components/day-tabs';
@@ -62,6 +62,10 @@ export default async function MenuPage({
       </>
     );
   }
+
+  // Silently trim the cart if the admin lowered the meals-per-day limit
+  // since the cart was built. Must run before reading order items below.
+  await enforceCartMealsPerDay(user.id, cycle.id);
 
   const rules = await subsidyRulesForCycle(cycle);
 

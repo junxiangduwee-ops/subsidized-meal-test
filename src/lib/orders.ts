@@ -178,8 +178,9 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
     }
   }
 
-  // How many items the employee already has in cart for this service date,
-  // excluding the dish being added (in case they are re-selecting the same one).
+  // How many distinct dishes the employee already has in cart for this
+  // service date, excluding the one being added (re-selecting the same dish
+  // is an idempotent update, not a new addition).
   const existingForDay = await prisma.orderItem.findMany({
     where: {
       orderId: order.id,
@@ -189,13 +190,12 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
     select: { id: true },
   });
 
-  const alreadyHas = existingForDay.length; // dishes chosen today (excluding this one)
+  const alreadyHas = existingForDay.length;
 
   if (alreadyHas >= mealsPerDay) {
-    // At the limit — if limit is 1 silently replace (original behaviour);
-    // if limit > 1 return an error so the employee knows they must remove one first.
+    // At or over the current limit.
     if (mealsPerDay === 1) {
-      // Replace: remove the existing choice for the day, then add the new one.
+      // Limit is 1: replace silently (original single-meal behaviour).
       await prisma.orderItem.deleteMany({
         where: {
           orderId: order.id,
@@ -204,11 +204,20 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
         },
       });
     } else {
+      // Limit > 1: tell the employee to remove one first. We intentionally
+      // do NOT auto-remove here — the employee should choose which to drop.
       return {
         ok: false,
-        error: `You have already selected ${mealsPerDay} meal${mealsPerDay === 1 ? '' : 's'} for this day (the maximum). Remove one before adding another.`,
+        error: `You already have ${alreadyHas} meal${alreadyHas === 1 ? '' : 's'} selected for this day (maximum is ${mealsPerDay}). Remove one before adding another.`,
       };
     }
+  } else if (alreadyHas > mealsPerDay) {
+    // Cart was built under a higher limit that has since been lowered.
+    // Block adding more — employee must remove excess items first.
+    return {
+      ok: false,
+      error: `The daily meal limit was recently reduced to ${mealsPerDay}. You currently have ${alreadyHas} meals selected for this day — please remove ${alreadyHas - mealsPerDay} before adding more.`,
+    };
   }
 
   const gross = menuItem.priceSen;
@@ -423,6 +432,19 @@ export async function validateForCheckout(orderId: string): Promise<CheckoutVali
     }
   }
 
+  // Hard block: if the cart violates the current limit (e.g. admin lowered
+  // it after the cart was built), checkout is refused until the employee
+  // trims their cart. We do not auto-remove here — the employee picks which
+  // dish to drop.
+  for (const [key, count] of perDay) {
+    if (count > mealsPerDay) {
+      return {
+        ok: false,
+        error: `The daily meal limit is now ${mealsPerDay}. You have ${count} meals selected for ${key} — remove ${count - mealsPerDay} before checking out.`,
+      };
+    }
+  }
+
   for (const item of order.items) {
     const menuItem = await prisma.menuItem.findUnique({
       where: { id: item.menuItemId },
@@ -450,4 +472,48 @@ export async function audit(
   await prisma.auditLog.create({
     data: { actorId, action, entityType, entityId: entityId ?? null, metadata },
   });
+}
+
+/**
+ * Trim a CART order's items so no service date exceeds the current
+ * mealsPerDay limit. Called when the menu page loads so a cart built
+ * under a higher limit is silently brought into compliance — keeping the
+ * most recently added items and dropping the oldest ones (lowest id sort).
+ *
+ * This is intentionally silent: the employee sees the updated cart on the
+ * next page render without an error, which is less jarring than blocking
+ * them at checkout.
+ */
+export async function enforceCartMealsPerDay(userId: string, cycleId: string): Promise<void> {
+  const mealsPerDay = await getMealsPerDay();
+
+  const order = await prisma.order.findFirst({
+    where: { userId, cycleId, status: 'CART' },
+    include: { items: { orderBy: { id: 'asc' } } },
+  });
+  if (!order) return;
+
+  // Group items by service date
+  const byDate = new Map<string, typeof order.items>();
+  for (const item of order.items) {
+    const key = toDateKey(item.serviceDate);
+    const bucket = byDate.get(key);
+    if (bucket) bucket.push(item);
+    else byDate.set(key, [item]);
+  }
+
+  const toDelete: string[] = [];
+  for (const [, items] of byDate) {
+    if (items.length > mealsPerDay) {
+      // Keep the last `mealsPerDay` items (most recently added by id sort),
+      // drop the oldest ones.
+      const excess = items.slice(0, items.length - mealsPerDay);
+      toDelete.push(...excess.map((i) => i.id));
+    }
+  }
+
+  if (toDelete.length === 0) return;
+
+  await prisma.orderItem.deleteMany({ where: { id: { in: toDelete } } });
+  await repriceOrder(order.id);
 }
