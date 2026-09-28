@@ -48,6 +48,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   if (type === 'reconciliation' && !can(user.role, 'finance:export')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  if (type === 'audit' && !can(user.role, 'settings:manage')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   if ((type === 'restaurants' || type === 'dishes') && !can(user.role, 'catalogue:manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -68,6 +71,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportKitchenEmployees(user.id, cycleId);
     case 'reconciliation':
       return exportReconciliation(user.id, url.searchParams.get('weeks'), url.searchParams.get('cycle'));
+    case 'audit':
+      return exportAudit(user.id, url.searchParams);
     case 'my-orders':
       return exportMyOrders(user.id, url.searchParams.get('month'));
     case 'restaurants':
@@ -586,4 +591,72 @@ async function exportReconciliation(actorId: string, weeksRaw: string | null, cy
   }
   await audit(actorId, 'export.reconciliation', 'Report', cycleId, auditMeta);
   return csvResponse(`reconciliation-${filenameLabel}.csv`, csv);
+}
+
+async function exportAudit(actorId: string, params: URLSearchParams) {
+  const toDate   = params.get('to')   ? new Date(params.get('to')! + 'T23:59:59Z')   : new Date();
+  const fromDate = params.get('from') ? new Date(params.get('from')! + 'T00:00:00Z') : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const category = params.get('category') ?? '';
+  const q = params.get('q')?.trim() ?? '';
+
+  const CATEGORY_PREFIXES: Record<string, string[]> = {
+    Orders:   ['order.', 'meal.'],
+    Payments: ['payment.'],
+    Exports:  ['export.'],
+    Cycles:   ['cycle.', 'menuitem.'],
+    Delivery: ['delivery.'],
+    Users:    ['user.', 'auth.'],
+    Settings: ['settings.', 'subsidy.', 'dish.', 'restaurant.', 'delivery_site.'],
+  };
+
+  const prefixes = category ? (CATEGORY_PREFIXES[category] ?? []) : [];
+
+  const where: Parameters<typeof prisma.auditLog.findMany>[0]['where'] = {
+    createdAt: { gte: fromDate, lte: toDate },
+    ...(prefixes.length > 0
+      ? { OR: prefixes.map((p) => ({ action: { startsWith: p } })) }
+      : {}),
+  };
+
+  if (q) {
+    const matchingUsers = await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { staffId: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+    });
+    where.OR = [
+      ...(matchingUsers.length > 0 ? [{ actorId: { in: matchingUsers.map((u) => u.id) } }] : []),
+      { entityId: { contains: q, mode: 'insensitive' } },
+    ];
+  }
+
+  const logs = await prisma.auditLog.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: 50000,
+    include: { actor: { select: { name: true, staffId: true, role: true } } },
+  });
+
+  const rows = logs.map((log) => [
+    log.createdAt.toISOString(),
+    log.actor?.name ?? 'System',
+    log.actor?.staffId ?? '',
+    log.actor?.role ?? '',
+    log.action,
+    log.entityType,
+    log.entityId ?? '',
+    JSON.stringify(log.metadata ?? {}),
+  ]);
+
+  const csv = toCsv(
+    ['Timestamp (UTC)', 'Actor', 'Staff ID', 'Role', 'Action', 'Entity Type', 'Entity ID', 'Metadata'],
+    rows,
+  );
+
+  await audit(actorId, 'export.audit', 'AuditLog', null, { rows: rows.length, from: fromDate.toISOString(), to: toDate.toISOString() } as Prisma.JsonObject);
+  return csvResponse(`audit-log-${toDateKey(fromDate)}-to-${toDateKey(toDate)}.csv`, csv);
 }

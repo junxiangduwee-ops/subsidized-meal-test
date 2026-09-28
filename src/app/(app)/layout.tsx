@@ -40,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/admin/dishes', label: t('dishesPrices') },
         { href: '/admin/subsidies', label: t('subsidies') },
         { href: '/admin/users', label: t('usersRoles') },
-        ...(can(user.role, 'settings:manage') ? [{ href: '/admin/settings', label: t('settings') }] : []),
+        ...(can(user.role, 'settings:manage') ? [{ href: '/admin/settings', label: t('settings') }, { href: '/admin/audit', label: 'Audit Log' }] : []),
       ],
     });
   }
