@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { can } from '@/lib/rbac';
@@ -572,7 +573,7 @@ async function exportReconciliation(actorId: string, weeksRaw: string | null, cy
 
   // Fetch cycle label for filename when exporting by cycle
   let filenameLabel = `last-${weeks}-weeks`;
-  let auditMeta: Record<string, unknown> = { weeks, rows: rows.length };
+  let auditMeta: Prisma.JsonObject = { weeks, rows: rows.length };
   if (byCycle && cycleId) {
     const cycle = await prisma.menuCycle.findUnique({
       where: { id: cycleId },
