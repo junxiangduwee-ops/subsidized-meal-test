@@ -173,43 +173,66 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
 
   if (menuItem.capacity != null) {
     const others = await committedQuantity(menuItemId, order.id);
-    if (others + mealsPerDay > menuItem.capacity) {
+    if (others + 1 > menuItem.capacity) {
       return { ok: false, error: 'That dish is sold out for the day.' };
     }
   }
 
-  const gross = menuItem.priceSen * mealsPerDay;
+  // How many items the employee already has in cart for this service date,
+  // excluding the dish being added (in case they are re-selecting the same one).
+  const existingForDay = await prisma.orderItem.findMany({
+    where: {
+      orderId: order.id,
+      serviceDate: menuItem.menuDay.serviceDate,
+      NOT: { menuItemId },
+    },
+    select: { id: true },
+  });
 
-  await prisma.$transaction([
-    // Enforce meals-per-day: anything over the limit for this date makes way.
-    prisma.orderItem.deleteMany({
-      where: {
-        orderId: order.id,
-        serviceDate: menuItem.menuDay.serviceDate,
-        NOT: { menuItemId },
-      },
-    }),
-    prisma.orderItem.upsert({
-      where: { orderId_menuItemId: { orderId: order.id, menuItemId } },
-      create: {
-        orderId: order.id,
-        menuItemId,
-        quantity: mealsPerDay,
-        unitPriceSen: menuItem.priceSen,
-        grossSen: gross,
-        subsidySen: 0,
-        netSen: gross,
-        serviceDate: menuItem.menuDay.serviceDate,
-        dishName: menuItem.dish.name,
-        restaurantName: menuItem.dish.restaurant.name,
-      },
-      update: {
-        quantity: mealsPerDay,
-        unitPriceSen: menuItem.priceSen,
-        grossSen: gross,
-      },
-    }),
-  ]);
+  const alreadyHas = existingForDay.length; // dishes chosen today (excluding this one)
+
+  if (alreadyHas >= mealsPerDay) {
+    // At the limit — if limit is 1 silently replace (original behaviour);
+    // if limit > 1 return an error so the employee knows they must remove one first.
+    if (mealsPerDay === 1) {
+      // Replace: remove the existing choice for the day, then add the new one.
+      await prisma.orderItem.deleteMany({
+        where: {
+          orderId: order.id,
+          serviceDate: menuItem.menuDay.serviceDate,
+          NOT: { menuItemId },
+        },
+      });
+    } else {
+      return {
+        ok: false,
+        error: `You have already selected ${mealsPerDay} meal${mealsPerDay === 1 ? '' : 's'} for this day (the maximum). Remove one before adding another.`,
+      };
+    }
+  }
+
+  const gross = menuItem.priceSen;
+
+  await prisma.orderItem.upsert({
+    where: { orderId_menuItemId: { orderId: order.id, menuItemId } },
+    create: {
+      orderId: order.id,
+      menuItemId,
+      quantity: 1,
+      unitPriceSen: menuItem.priceSen,
+      grossSen: gross,
+      subsidySen: 0,
+      netSen: gross,
+      serviceDate: menuItem.menuDay.serviceDate,
+      dishName: menuItem.dish.name,
+      restaurantName: menuItem.dish.restaurant.name,
+    },
+    update: {
+      quantity: 1,
+      unitPriceSen: menuItem.priceSen,
+      grossSen: gross,
+    },
+  });
 
   await repriceOrder(order.id);
   return { ok: true };
