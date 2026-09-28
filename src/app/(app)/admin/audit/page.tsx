@@ -1,5 +1,6 @@
 import { getLocale } from 'next-intl/server';
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { formatDateTime } from '@/lib/cycle';
@@ -147,7 +148,7 @@ export default async function AuditLogPage({
   // Build where clause
   const actionPrefixes = category ? categoryToActions(category) : [];
 
-  const where: Parameters<typeof prisma.auditLog.findMany>[0]['where'] = {
+  const where: Prisma.AuditLogWhereInput = {
     createdAt: { gte: fromDate, lte: toDate },
     ...(actionPrefixes.length > 0
       ? { OR: actionPrefixes.map((p) => ({ action: { startsWith: p } })) }

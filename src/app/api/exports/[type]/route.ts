@@ -611,7 +611,7 @@ async function exportAudit(actorId: string, params: URLSearchParams) {
 
   const prefixes = category ? (CATEGORY_PREFIXES[category] ?? []) : [];
 
-  const where: Parameters<typeof prisma.auditLog.findMany>[0]['where'] = {
+  const where: Prisma.AuditLogWhereInput = {
     createdAt: { gte: fromDate, lte: toDate },
     ...(prefixes.length > 0
       ? { OR: prefixes.map((p) => ({ action: { startsWith: p } })) }
