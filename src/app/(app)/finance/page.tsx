@@ -330,7 +330,7 @@ export default async function FinancePage({
     cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
   };
 
-  const [reconTotal, reconOrders, unmatchedLogs, reconAgg, paymentAgg] = await Promise.all([
+  const [reconTotal, reconOrders, unmatchedLogs] = await Promise.all([
     prisma.order.count({ where: reconWhere }),
     prisma.order.findMany({
       where: reconWhere,
@@ -385,110 +385,12 @@ export default async function FinancePage({
       take: 50,
       select: { id: true, createdAt: true, metadata: true },
     }),
-    // Aggregate: sum of netSen for PAID orders in window
-    prisma.order.aggregate({
-      where: {
-        status: 'PAID',
-        cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-      },
-      _sum: { netSen: true },
-      _count: { _all: true },
-    }),
-    // Aggregate: sum of SUCCEEDED payments in window
-    prisma.payment.aggregate({
-      where: {
-        status: 'SUCCEEDED',
-        order: {
-          cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-        },
-      },
-      _sum: { amountSen: true },
-      _count: { _all: true },
-    }),
   ]);
-
-  // Reconciliation indicator
-  const totalOrdersSen = reconAgg._sum.netSen ?? 0;
-  const totalPaidSen = paymentAgg._sum.amountSen ?? 0;
-  const diffSen = totalPaidSen - totalOrdersSen;
-  const isReconciled = diffSen === 0;
-  const hasOrphanPayments = paymentAgg._count._all > reconAgg._count._all;
 
   return (
     <>
       {header}
       {tabBar}
-
-      {/* ── Live reconciliation indicator ───────────────────────────────── */}
-      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Reconciliation Status</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Comparing total PAID order amounts vs total SUCCEEDED HitPay payments
-              for the last {weeks} weeks.
-            </p>
-          </div>
-          {isReconciled ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-              Reconciled
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-              </svg>
-              Discrepancy Detected
-            </span>
-          )}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-4">
-          <div className="rounded-lg bg-slate-50 px-4 py-3">
-            <p className="text-xs text-slate-500">PAID Orders Total</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{formatSen(totalOrdersSen)}</p>
-            <p className="text-xs text-slate-400">{reconAgg._count._all} orders</p>
-          </div>
-          <div className="rounded-lg bg-slate-50 px-4 py-3">
-            <p className="text-xs text-slate-500">HitPay Collected</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{formatSen(totalPaidSen)}</p>
-            <p className="text-xs text-slate-400">{paymentAgg._count._all} payments</p>
-          </div>
-          <div className={`rounded-lg px-4 py-3 ${isReconciled ? 'bg-emerald-50' : 'bg-red-50'}`}>
-            <p className="text-xs text-slate-500">Difference</p>
-            <p className={`mt-1 text-lg font-semibold ${isReconciled ? 'text-emerald-700' : 'text-red-700'}`}>
-              {diffSen === 0 ? 'RM 0.00' : `${diffSen > 0 ? '+' : ''}${formatSen(diffSen)}`}
-            </p>
-            <p className="text-xs text-slate-400">
-              {isReconciled ? 'Fully matched' : diffSen > 0 ? 'HitPay collected more' : 'HitPay collected less'}
-            </p>
-          </div>
-          <div className={`rounded-lg px-4 py-3 ${unmatchedLogs.length > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
-            <p className="text-xs text-slate-500">Unmatched Webhooks</p>
-            <p className={`mt-1 text-lg font-semibold ${unmatchedLogs.length > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
-              {unmatchedLogs.length}
-            </p>
-            <p className="text-xs text-slate-400">
-              {unmatchedLogs.length === 0 ? 'None — all matched' : 'Need investigation'}
-            </p>
-          </div>
-        </div>
-
-        {!isReconciled && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
-            <strong>Action required:</strong> The {diffSen > 0 ? 'excess' : 'shortfall'} of{' '}
-            <strong>{formatSen(Math.abs(diffSen))}</strong> needs investigation.
-            {diffSen > 0
-              ? ' HitPay received more than the order total — check for duplicate payments or unmatched webhooks below.'
-              : ' HitPay received less than the order total — check for failed payments or orders marked PAID without a matching HitPay SUCCEEDED record.'}
-            {' '}Export the CSV below and cross-reference with your HitPay dashboard.
-          </div>
-        )}
-      </div>
-      {/* ─────────────────────────────────────────────────────────────────── */}
 
       {unmatchedLogs.length > 0 ? (
         <div className="mb-6">
