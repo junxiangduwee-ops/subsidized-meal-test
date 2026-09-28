@@ -10,6 +10,8 @@ export type SiteSettings = {
   maintenanceMessage: string | null;
   /// Hour (0–23) in APP_TIMEZONE after which unconfirmed meals are auto-confirmed.
   mealReceiptCutoffHour: number;
+  /// Maximum subsidised meals per employee per service day.
+  maxMealsPerDay: number;
 };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -19,6 +21,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   supportEmail: null,
   maintenanceMessage: null,
   mealReceiptCutoffHour: 18,
+  maxMealsPerDay: 1,
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -31,6 +34,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     supportEmail: row?.supportEmail ?? null,
     maintenanceMessage: row?.maintenanceMessage ?? null,
     mealReceiptCutoffHour: row?.mealReceiptCutoffHour ?? DEFAULT_SETTINGS.mealReceiptCutoffHour,
+    maxMealsPerDay: row?.maxMealsPerDay ?? DEFAULT_SETTINGS.maxMealsPerDay,
   };
 }
 

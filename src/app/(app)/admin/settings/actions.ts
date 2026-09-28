@@ -31,6 +31,7 @@ const settingsSchema = z.object({
   supportEmail: z.string().trim().email('Must be a valid email address.').optional().or(z.literal('')),
   maintenanceMessage: z.string().trim().max(500, 'Keep the banner under 500 characters.').optional(),
   mealReceiptCutoffHour: z.coerce.number().int().min(0).max(23),
+  maxMealsPerDay: z.coerce.number().int().min(1, 'Must be at least 1.').max(10, 'Maximum is 10.'),
 });
 
 export async function updateSiteSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -44,6 +45,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
     supportEmail: parsed.data.supportEmail || null,
     maintenanceMessage: parsed.data.maintenanceMessage?.trim() || null,
     mealReceiptCutoffHour: parsed.data.mealReceiptCutoffHour,
+    maxMealsPerDay: parsed.data.maxMealsPerDay,
     updatedById: actor.id,
   };
 
@@ -56,6 +58,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
   await audit(actor.id, 'settings.update', 'AppSettings', SETTINGS_ID, {
     siteName: data.siteName,
     mealReceiptCutoffHour: data.mealReceiptCutoffHour,
+    maxMealsPerDay: data.maxMealsPerDay,
   });
 
   revalidatePath('/', 'layout');

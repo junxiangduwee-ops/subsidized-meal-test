@@ -80,6 +80,7 @@ export default async function SettingsPage({
   const cutoffHour = settings.mealReceiptCutoffHour;
   // All 24 hours available — no restriction, admin knows what they're doing.
   const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i);
+  const maxMealsPerDay = settings.maxMealsPerDay;
 
   return (
     <>
@@ -119,8 +120,9 @@ export default async function SettingsPage({
           resetOnSuccess={false}
           className="border-t border-slate-100 p-5"
         >
-          {/* Carry the cutoff hour through so the Ordering section value is not lost */}
+          {/* Carry the ordering settings through so they are not lost */}
           <input type="hidden" name="mealReceiptCutoffHour" value={String(cutoffHour)} />
+          <input type="hidden" name="maxMealsPerDay" value={String(maxMealsPerDay)} />
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="label">{t('siteName')}</label>
@@ -180,6 +182,7 @@ export default async function SettingsPage({
             <input type="hidden" name="siteName" value={settings.siteName} />
             <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
             <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
+            <input type="hidden" name="mealReceiptCutoffHour" value={String(cutoffHour)} />
 
             <div className="max-w-xs">
               <label className="label" htmlFor="mealReceiptCutoffHour">
@@ -202,6 +205,28 @@ export default async function SettingsPage({
                 automatically marked as received. Currently{' '}
                 <strong>{formatCutoffHour(cutoffHour)}</strong>. Takes effect immediately.
               </p>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="maxMealsPerDay">
+                  Max meals per employee per day
+                </label>
+                <input
+                  id="maxMealsPerDay"
+                  name="maxMealsPerDay"
+                  type="number"
+                  min={1}
+                  max={10}
+                  defaultValue={maxMealsPerDay}
+                  className="input"
+                  required
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  How many subsidised meals one employee may order per service day.
+                  Currently <strong>{maxMealsPerDay}</strong>. Takes effect immediately.
+                </p>
+              </div>
             </div>
 
             <div className="mt-4">

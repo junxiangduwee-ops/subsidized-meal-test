@@ -14,6 +14,7 @@ import {
   type SubsidyRuleLike,
 } from './subsidy';
 import { getActiveSubsidyRules } from './cache';
+import { getSiteSettings } from './settings';
 
 /** Statuses that hold a portion against a menu item's capacity. */
 const COMMITTED_STATUSES = ['AWAITING_PAYMENT', 'PAID'] as const;
@@ -125,13 +126,13 @@ export type CartMutationResult = { ok: true } | { ok: false; error: string };
 
 /**
  * How many meals one person may order for a single service day.
- *
- * The rule is enforced here rather than in the UI, so it holds for every
- * caller. Raising this alone will not enable multi-meal ordering - the
- * ordering screen is a single-choice control by design - but it keeps the
- * constraint in one named place.
+ * Reads from AppSettings so it can be changed by admin without a redeploy.
+ * Falls back to 1 (the safe default) if settings cannot be read.
  */
-export const MEALS_PER_DAY = 1;
+export async function getMealsPerDay(): Promise<number> {
+  const settings = await getSiteSettings();
+  return Math.max(1, settings.maxMealsPerDay ?? 1);
+}
 
 /**
  * Choose the meal for one service day.
@@ -168,17 +169,19 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
 
   const order = await getOrCreateCart(userId, cycle.id);
 
+  const mealsPerDay = await getMealsPerDay();
+
   if (menuItem.capacity != null) {
     const others = await committedQuantity(menuItemId, order.id);
-    if (others + MEALS_PER_DAY > menuItem.capacity) {
+    if (others + mealsPerDay > menuItem.capacity) {
       return { ok: false, error: 'That dish is sold out for the day.' };
     }
   }
 
-  const gross = menuItem.priceSen * MEALS_PER_DAY;
+  const gross = menuItem.priceSen * mealsPerDay;
 
   await prisma.$transaction([
-    // One meal per day: anything else already chosen for this date makes way.
+    // Enforce meals-per-day: anything over the limit for this date makes way.
     prisma.orderItem.deleteMany({
       where: {
         orderId: order.id,
@@ -191,7 +194,7 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
       create: {
         orderId: order.id,
         menuItemId,
-        quantity: MEALS_PER_DAY,
+        quantity: mealsPerDay,
         unitPriceSen: menuItem.priceSen,
         grossSen: gross,
         subsidySen: 0,
@@ -201,7 +204,7 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
         restaurantName: menuItem.dish.restaurant.name,
       },
       update: {
-        quantity: MEALS_PER_DAY,
+        quantity: mealsPerDay,
         unitPriceSen: menuItem.priceSen,
         grossSen: gross,
       },
@@ -387,11 +390,12 @@ export async function validateForCheckout(orderId: string): Promise<CheckoutVali
     const key = toDateKey(item.serviceDate);
     perDay.set(key, (perDay.get(key) ?? 0) + item.quantity);
   }
+  const mealsPerDay = await getMealsPerDay();
   for (const [key, count] of perDay) {
-    if (count > MEALS_PER_DAY) {
+    if (count > mealsPerDay) {
       return {
         ok: false,
-        error: `Only ${MEALS_PER_DAY} meal per day is allowed, but ${count} are selected for ${key}. Remove the extras and try again.`,
+        error: `Only ${mealsPerDay} meal${mealsPerDay === 1 ? '' : 's'} per day is allowed, but ${count} are selected for ${key}. Remove the extras and try again.`,
       };
     }
   }

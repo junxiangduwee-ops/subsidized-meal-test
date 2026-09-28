@@ -401,6 +401,10 @@ model AppSettings {
   /// Default 18 = 6:00 PM. Editable by ADMIN in /admin/settings.
   mealReceiptCutoffHour Int @default(18)
 
+  /// Maximum number of subsidised meals an employee may order per service day.
+  /// Default 1. Editable by ADMIN in /admin/settings without a code change.
+  maxMealsPerDay        Int @default(1)
+
   updatedAt          DateTime @updatedAt
   updatedById        String?
 
