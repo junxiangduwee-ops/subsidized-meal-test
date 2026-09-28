@@ -545,91 +545,42 @@ export default async function FinancePage({
         </div>
       ) : null}
 
-      {/* ── Table filter ─────────────────────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <form method="get" className="flex items-center gap-2">
-          <input type="hidden" name="tab" value="reconciliation" />
-          <input type="hidden" name="weeks" value={String(weeks)} />
-          <select
-            name="cycle"
-            defaultValue={selectedCycleId ?? ''}
-            className="input !w-52 !py-1 text-xs"
-          >
-            <option value="">All — last {weeks} weeks</option>
-            {exportCycles.map((c) => (
-              <option key={c.id} value={c.id}>
-                {formatWeekRange(c.serviceWeekStart, locale)}
-              </option>
-            ))}
-          </select>
-          <button type="submit" className="btn-secondary btn-sm">Filter</button>
-          {selectedCycleId ? (
-            <a href={`?tab=reconciliation&weeks=${weeks}`} className="text-xs text-slate-400 hover:text-slate-600">
-              Clear
-            </a>
-          ) : null}
-        </form>
-
-        {selectedCycleId ? (
-          <span className="text-xs text-slate-500">
-            Showing {reconTotal} orders for{' '}
-            <strong>
-              {formatWeekRange(
-                exportCycles.find((c) => c.id === selectedCycleId)?.serviceWeekStart ?? new Date(),
-                locale,
-              )}
-            </strong>
-          </span>
-        ) : (
-          <span className="text-xs text-slate-500">
-            Showing {reconTotal} orders for the last {weeks} weeks
-          </span>
-        )}
-      </div>
-      {/* ─────────────────────────────────────────────────────────────────── */}
-
       <Section
         title="Order & Payment Matching"
-        description={
-          selectedCycleId
-            ? `${reconTotal} orders for the selected service week`
-            : `${reconTotal} orders in the last ${weeks} weeks — showing order reference, employee, meals ordered, and matched HitPay payment.`
-        }
+        description={`${reconTotal} order${reconTotal === 1 ? '' : 's'} — ${selectedCycleId ? `week of ${formatWeekRange(exportCycles.find((c) => c.id === selectedCycleId)?.serviceWeekStart ?? new Date(), locale)}` : `last ${weeks} weeks`}`}
         action={
-          exportable ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Smart export: matches what the table is currently showing */}
-              {selectedCycleId ? (
-                <a
-                  href={`/api/exports/reconciliation?cycle=${selectedCycleId}`}
-                  className="btn-secondary btn-sm"
-                >
-                  Export this week CSV
-                </a>
-              ) : (
-                <a
-                  href={`/api/exports/reconciliation?weeks=${weeks}`}
-                  className="btn-secondary btn-sm"
-                >
-                  Export last {weeks} weeks CSV
-                </a>
-              )}
-              {/* Also allow picking any specific week to export */}
-              <form method="get" action="/api/exports/reconciliation" className="flex items-center gap-1.5">
-                <select name="cycle" defaultValue={selectedCycleId ?? ''} className="input !w-44 !py-1 text-xs" required>
-                  <option value="">Pick a week…</option>
-                  {exportCycles.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {formatWeekRange(c.serviceWeekStart, locale)}
-                    </option>
-                  ))}
-                </select>
-                <button type="submit" className="btn-secondary btn-sm whitespace-nowrap">
-                  Export week CSV
-                </button>
-              </form>
-            </div>
-          ) : null
+          <div className="flex items-center gap-2">
+            {/* Single filter form — table + export both follow this selection */}
+            <form method="get" className="flex items-center gap-2">
+              <input type="hidden" name="tab" value="reconciliation" />
+              <input type="hidden" name="weeks" value={String(weeks)} />
+              <select
+                name="cycle"
+                defaultValue={selectedCycleId ?? ''}
+                className="input !w-48 !py-1 text-xs"
+              >
+                <option value="">Last {weeks} weeks</option>
+                {exportCycles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {formatWeekRange(c.serviceWeekStart, locale)}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn-secondary btn-sm">Filter</button>
+            </form>
+            {exportable ? (
+              <a
+                href={
+                  selectedCycleId
+                    ? `/api/exports/reconciliation?cycle=${selectedCycleId}`
+                    : `/api/exports/reconciliation?weeks=${weeks}`
+                }
+                className="btn-secondary btn-sm"
+              >
+                Export CSV
+              </a>
+            ) : null}
+          </div>
         }
       >
         {reconOrders.length === 0 ? (
