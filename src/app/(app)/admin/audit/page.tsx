@@ -132,7 +132,7 @@ export default async function AuditLogPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireCapability('settings:manage');
+  await requireCapability('audit:view');
 
   const params = await searchParams;
   const locale = await getLocale();

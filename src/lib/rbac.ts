@@ -17,6 +17,7 @@ export const CAPABILITIES = [
   'kitchen:view', // per-restaurant production counts after cutoff
   'settings:manage', // site branding, favicon, support email, maintenance banner
   'delivery:confirm', // reception marks a site's delivery as received, with optional photo proof
+  'audit:view', // view the system audit log
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -34,9 +35,10 @@ const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'kitchen:view',
     'settings:manage',
     'delivery:confirm',
+    'audit:view',
   ],
   ANALYTICS: ['analytics:view', 'kitchen:view', 'order:place'],
-  FINANCE: ['finance:view', 'finance:export', 'analytics:view', 'order:place'],
+  FINANCE: ['finance:view', 'finance:export', 'analytics:view', 'audit:view', 'order:place'],
   RECEPTION: ['delivery:confirm', 'order:place'],
   USER: ['order:place'],
 };
