@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
+import type { InvoiceStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -19,14 +20,19 @@ const RECON_PAGE_SIZE = 25;
 export default async function FinancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ weeks?: string; tab?: string; page?: string; cycle?: string }>;
+  searchParams: Promise<{ weeks?: string; tab?: string; page?: string; cycle?: string; restaurant?: string; status?: string }>;
 }) {
   const user = await requireCapability('finance:view');
   const params = await searchParams;
   const t = await getTranslations('financeAdmin');
   const locale = await getLocale();
 
-  const activeTab = params.tab === 'reconciliation' ? 'reconciliation' : 'summary';
+  const activeTab =
+    params.tab === 'reconciliation'
+      ? 'reconciliation'
+      : params.tab === 'invoices'
+      ? 'invoices'
+      : 'summary';
 
   const requested = Number.parseInt(params.weeks ?? '', 10);
   const weeks = (RANGES as readonly number[]).includes(requested) ? requested : 12;
@@ -56,6 +62,16 @@ export default async function FinancePage({
         }`}
       >
         Order &amp; Payment Matching
+      </a>
+      <a
+        href={`?weeks=${weeks}&tab=invoices`}
+        className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+          activeTab === 'invoices'
+            ? 'bg-white text-slate-900 shadow-sm'
+            : 'text-slate-500 hover:text-slate-700'
+        }`}
+      >
+        Vendor Invoices
       </a>
     </div>
   );
@@ -310,6 +326,223 @@ export default async function FinancePage({
             </div>
           </div>
         )}
+      </>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // TAB 3 — Vendor Invoices (finance read-only view)
+  // ════════════════════════════════════════════════════════════════════════
+
+  if (activeTab === 'invoices') {
+    const invoicePage = parsePage(params.page);
+    const invoicePageSize = parsePageSize(params.page, 25);
+    const invCycleId = params.cycle ?? '';
+    const invRestaurantId = params.restaurant ?? '';
+    const invStatus = params.status ?? '';
+
+    const INVOICE_STATUS_LABEL: Record<string, string> = {
+      PENDING: 'Pending', APPROVED: 'Approved', PAID: 'Paid', DISPUTED: 'Disputed',
+    };
+    const INVOICE_STATUS_BADGE: Record<string, string> = {
+      PENDING: 'bg-amber-100 text-amber-800',
+      APPROVED: 'bg-emerald-100 text-emerald-800',
+      PAID: 'bg-blue-100 text-blue-800',
+      DISPUTED: 'bg-red-100 text-red-800',
+    };
+
+    const invWhere = {
+      ...(invCycleId ? { cycleId: invCycleId } : {}),
+      ...(invRestaurantId ? { restaurantId: invRestaurantId } : {}),
+      ...(invStatus ? { status: invStatus as InvoiceStatus } : {}),
+    };
+
+    const [invCycles, invRestaurants, invTotal, invSummary, invoices] = await Promise.all([
+      prisma.menuCycle.findMany({
+        where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] } },
+        orderBy: { serviceWeekStart: 'desc' },
+        take: 26,
+        select: { id: true, serviceWeekStart: true },
+      }),
+      prisma.restaurant.findMany({
+        where: { active: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      prisma.vendorInvoice.count({ where: invWhere }),
+      prisma.vendorInvoice.groupBy({
+        by: ['status'],
+        where: invWhere,
+        _count: { _all: true },
+        _sum: { amountSen: true },
+      }),
+      prisma.vendorInvoice.findMany({
+        where: invWhere,
+        orderBy: [{ cycle: { serviceWeekStart: 'desc' } }, { restaurant: { name: 'asc' } }],
+        skip: (invoicePage - 1) * 25,
+        take: 25,
+        include: {
+          restaurant: { select: { name: true } },
+          cycle: { select: { serviceWeekStart: true } },
+          uploadedBy: { select: { name: true } },
+          reviewedBy: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const invTotalAmount = invSummary.reduce((s, g) => s + (g._sum.amountSen ?? 0), 0);
+    const pendingAmount = invSummary.find((g) => g.status === 'PENDING')?._sum.amountSen ?? 0;
+    const pendingCount = invSummary.find((g) => g.status === 'PENDING')?._count._all ?? 0;
+    const approvedAmount = invSummary.find((g) => g.status === 'APPROVED')?._sum.amountSen ?? 0;
+
+    const invFilterParams = {
+      tab: 'invoices',
+      weeks: String(weeks),
+      ...(invCycleId ? { cycle: invCycleId } : {}),
+      ...(invRestaurantId ? { restaurant: invRestaurantId } : {}),
+      ...(invStatus ? { status: invStatus } : {}),
+    };
+
+    return (
+      <>
+        {header}
+        {tabBar}
+
+        {/* Summary strip */}
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+            <p className="text-xs text-slate-500">Total Invoiced</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{formatSen(invTotalAmount)}</p>
+            <p className="text-xs text-slate-400">{invTotal} invoice{invTotal !== 1 ? 's' : ''}</p>
+          </div>
+          <div className={`rounded-xl border px-5 py-4 ${pendingCount > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+            <p className="text-xs text-slate-500">Pending Review</p>
+            <p className={`mt-1 text-2xl font-semibold ${pendingCount > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+              {formatSen(pendingAmount)}
+            </p>
+            <p className="text-xs text-slate-400">{pendingCount} invoice{pendingCount !== 1 ? 's' : ''} awaiting approval</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+            <p className="text-xs text-slate-500">Approved (Pending Payment)</p>
+            <p className="mt-1 text-2xl font-semibold text-emerald-700">{formatSen(approvedAmount)}</p>
+            <p className="text-xs text-slate-400">
+              {invSummary.find((g) => g.status === 'APPROVED')?._count._all ?? 0} approved
+            </p>
+          </div>
+        </div>
+
+        <Section
+          title={`${invTotal} Vendor Invoice${invTotal !== 1 ? 's' : ''}`}
+          description="Invoices uploaded by admin — review status and cross-reference with order summaries."
+          action={
+            <form method="get" className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="tab" value="invoices" />
+              <input type="hidden" name="weeks" value={String(weeks)} />
+              <select name="cycle" defaultValue={invCycleId} className="input !w-44 !py-1 text-xs">
+                <option value="">All weeks</option>
+                {invCycles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {formatWeekRange(c.serviceWeekStart, locale)}
+                  </option>
+                ))}
+              </select>
+              <select name="restaurant" defaultValue={invRestaurantId} className="input !w-40 !py-1 text-xs">
+                <option value="">All restaurants</option>
+                {invRestaurants.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+              <select name="status" defaultValue={invStatus} className="input !w-32 !py-1 text-xs">
+                <option value="">All statuses</option>
+                {Object.entries(INVOICE_STATUS_LABEL).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+              <button type="submit" className="btn-secondary btn-sm">Filter</button>
+              {Object.keys(invFilterParams).length > 3 && (
+                <a href="?tab=invoices" className="text-xs text-slate-400 hover:text-slate-600">Clear</a>
+              )}
+            </form>
+          }
+        >
+          {invoices.length === 0 ? (
+            <EmptyState
+              title="No invoices found"
+              hint="Admin hasn't uploaded any invoices yet, or your filters returned no results."
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Restaurant</th>
+                      <th>Service Week</th>
+                      <th>Invoice No.</th>
+                      <th>Invoice Date</th>
+                      <th className="num">Amount</th>
+                      <th>Status</th>
+                      <th>File</th>
+                      <th>Review Note</th>
+                      <th>Reviewed By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv) => (
+                      <tr key={inv.id}>
+                        <td className="font-medium text-slate-900">{inv.restaurant.name}</td>
+                        <td className="whitespace-nowrap text-sm text-slate-600">
+                          {formatWeekRange(inv.cycle.serviceWeekStart, locale)}
+                        </td>
+                        <td className="font-mono text-xs text-slate-700">
+                          {inv.invoiceNumber ?? '—'}
+                        </td>
+                        <td className="text-xs text-slate-600 whitespace-nowrap">
+                          {inv.invoiceDate
+                            ? new Date(inv.invoiceDate).toLocaleDateString(locale)
+                            : '—'}
+                        </td>
+                        <td className="num font-semibold text-slate-900">{formatSen(inv.amountSen)}</td>
+                        <td>
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${INVOICE_STATUS_BADGE[inv.status] ?? ''}`}>
+                            {INVOICE_STATUS_LABEL[inv.status] ?? inv.status}
+                          </span>
+                        </td>
+                        <td>
+                          {inv.fileUrl ? (
+                            <a
+                              href={inv.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-brand-700 hover:underline"
+                            >
+                              {inv.fileName ?? 'View'}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="max-w-[200px] text-xs text-slate-500 truncate" title={inv.reviewNote ?? ''}>
+                          {inv.reviewNote ?? '—'}
+                        </td>
+                        <td className="text-xs text-slate-600">
+                          {inv.reviewedBy?.name ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                basePath="/finance"
+                page={invoicePage}
+                pageSize={25}
+                total={invTotal}
+                searchParams={invFilterParams}
+              />
+            </>
+          )}
+        </Section>
       </>
     );
   }
