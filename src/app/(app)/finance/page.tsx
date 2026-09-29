@@ -1,7 +1,6 @@
-import React from 'react';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { OrderDetailRow } from './order-detail-row';
+import { OrderDetailDialog } from './order-detail-dialog';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -609,63 +608,69 @@ export default async function FinancePage({
                 </thead>
                 <tbody>
                   {reconOrders.map((o) => {
+                    // The latest / most relevant payment — SUCCEEDED first, then
+                    // latest by createdAt (which is the default sort).
                     const successPayment = o.payments.find((p) => p.status === 'SUCCEEDED');
                     const latestPayment = successPayment ?? o.payments[0] ?? null;
+
+                    // Mismatch flag: order is PAID but no SUCCEEDED payment found
                     const mismatch = o.status === 'PAID' && !successPayment;
 
+
                     return (
-                      <React.Fragment key={o.id}>
-                        <tr className={mismatch ? 'bg-amber-50' : undefined}>
-                          <td>
-                            <Link
-                              href={`/orders/${o.reference}`}
-                              className="font-mono text-xs font-medium text-brand-700 hover:underline"
-                            >
-                              {o.reference}
-                            </Link>
-                            {mismatch ? (
-                              <div className="mt-0.5 text-xs text-amber-700">⚠ No matched payment</div>
-                            ) : null}
-                          </td>
-                          <td className="text-xs text-slate-600 whitespace-nowrap">
-                            {formatWeekRange(o.cycle.serviceWeekStart, locale)}
-                          </td>
-                          <td className="num text-slate-700">{formatSen(o.grossSen)}</td>
-                          <td className="num text-emerald-700">−{formatSen(o.subsidySen)}</td>
-                          <td className="num font-medium text-slate-900">{formatSen(o.netSen)}</td>
-                          <td><StatusBadge status={o.status} /></td>
-                          <td className="font-mono text-xs text-slate-600">
-                            {latestPayment?.paymentId ?? '—'}
-                          </td>
-                          <td className="text-xs text-slate-600 whitespace-nowrap">
-                            {latestPayment?.paymentMethod ?? '—'}
-                          </td>
-                          <td className="num text-slate-900">
-                            {latestPayment ? formatSen(latestPayment.amountSen) : '—'}
-                          </td>
-                          <td>
-                            {latestPayment ? (
-                              <>
-                                <StatusBadge status={latestPayment.status} />
-                                {latestPayment.failureReason ? (
-                                  <div className="mt-0.5 text-xs text-red-600">
-                                    {latestPayment.failureReason}
-                                  </div>
-                                ) : null}
-                              </>
-                            ) : (
-                              <span className="text-xs text-slate-400">No payment</span>
-                            )}
-                          </td>
-                          <td className="text-xs text-slate-500 whitespace-nowrap">
-                            {o.paidAt ? formatDateTime(o.paidAt, locale) : '—'}
-                          </td>
-                          <OrderDetailRow order={o} colSpan={12} locale={locale} />
-                        </tr>
-                      </React.Fragment>
+                      <tr key={o.id} className={mismatch ? 'bg-amber-50' : undefined}>
+                        <td>
+                          <Link
+                            href={`/orders/${o.reference}`}
+                            className="font-mono text-xs font-medium text-brand-700 hover:underline"
+                          >
+                            {o.reference}
+                          </Link>
+                          {mismatch ? (
+                            <div className="mt-0.5 text-xs text-amber-700">⚠ No matched payment</div>
+                          ) : null}
+                        </td>
+                        <td className="text-xs text-slate-600 whitespace-nowrap">
+                          {formatWeekRange(o.cycle.serviceWeekStart, locale)}
+                        </td>
+                        <td className="num text-slate-700">{formatSen(o.grossSen)}</td>
+                        <td className="num text-emerald-700">−{formatSen(o.subsidySen)}</td>
+                        <td className="num font-medium text-slate-900">{formatSen(o.netSen)}</td>
+                        <td><StatusBadge status={o.status} /></td>
+                        <td className="font-mono text-xs text-slate-600">
+                          {latestPayment?.paymentId ?? '—'}
+                        </td>
+                        <td className="text-xs text-slate-600 whitespace-nowrap">
+                          {latestPayment?.paymentMethod ?? '—'}
+                        </td>
+                        <td className="num text-slate-900">
+                          {latestPayment ? formatSen(latestPayment.amountSen) : '—'}
+                        </td>
+                        <td>
+                          {latestPayment ? (
+                            <>
+                              <StatusBadge status={latestPayment.status} />
+                              {latestPayment.failureReason ? (
+                                <div className="mt-0.5 text-xs text-red-600">
+                                  {latestPayment.failureReason}
+                                </div>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400">No payment</span>
+                          )}
+                        </td>
+                        <td className="text-xs text-slate-500 whitespace-nowrap">
+                          {o.paidAt ? formatDateTime(o.paidAt, locale) : '—'}
+                        </td>
+                        <td>
+                          <OrderDetailDialog order={o} locale={locale} />
+                        </td>
+                      </tr>
                     );
                   })}
-                </tbody>              </table>
+                </tbody>
+              </table>
             </div>
             <Pagination
               basePath="/finance"
