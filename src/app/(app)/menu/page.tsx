@@ -34,6 +34,13 @@ export default async function MenuPage({
     searchParams,
   ]);
 
+  // Fetch the employee's default delivery site separately — it is not part of
+  // SessionUser (kept small for the JWT) so we read it directly from the DB.
+  const userProfile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { defaultDeliverySiteId: true },
+  });
+
   if (!cycle) {
     const upcoming = await prisma.menuCycle.findFirst({
       where: { status: 'PUBLISHED', orderOpenAt: { gt: now } },
@@ -225,7 +232,7 @@ export default async function MenuPage({
         hasSettledOrders={settledOrders.length > 0}
         deliverySites={deliverySites}
         selectedDeliverySiteId={cart?.deliverySiteId ?? null}
-        defaultDeliverySiteId={user.defaultDeliverySiteId ?? null}
+        defaultDeliverySiteId={userProfile?.defaultDeliverySiteId ?? null}
         needsReceiptEmail={!user.email}
       />
     </>
