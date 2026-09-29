@@ -79,6 +79,7 @@ export function MenuOrdering({
   hasSettledOrders = false,
   deliverySites,
   selectedDeliverySiteId,
+  defaultDeliverySiteId = null,
   needsReceiptEmail = false,
 }: {
   cycleId: string;
@@ -97,6 +98,8 @@ export function MenuOrdering({
   deliverySites: Array<{ id: string; name: string }>;
   /** The open cart's current choice, if one has been made yet. */
   selectedDeliverySiteId: string | null;
+  /** The employee's usual/default delivery site from their profile. */
+  defaultDeliverySiteId?: string | null;
   /** True when the signed-in employee has no email on file, so checkout must collect one just for the payment receipt. */
   needsReceiptEmail?: boolean;
 }) {
@@ -193,6 +196,7 @@ export function MenuOrdering({
         hasSettledOrders={hasSettledOrders}
         deliverySites={deliverySites}
         selectedDeliverySiteId={selectedDeliverySiteId}
+        defaultDeliverySiteId={defaultDeliverySiteId}
         needsReceiptEmail={needsReceiptEmail}
       />
     </div>
@@ -354,6 +358,7 @@ function OrderSummary({
   hasSettledOrders,
   deliverySites,
   selectedDeliverySiteId,
+  defaultDeliverySiteId = null,
   needsReceiptEmail = false,
 }: {
   cartLines: CartLine[];
@@ -365,6 +370,7 @@ function OrderSummary({
   hasSettledOrders: boolean;
   deliverySites: Array<{ id: string; name: string }>;
   selectedDeliverySiteId: string | null;
+  defaultDeliverySiteId?: string | null;
   /** True when the signed-in employee has no email on file, so checkout must collect one just for the payment receipt. */
   needsReceiptEmail?: boolean;
 }) {
@@ -393,6 +399,17 @@ function OrderSummary({
 
   function changeSite(deliverySiteId: string) {
     setError(null);
+
+    // Warn if the employee picks somewhere other than their usual site
+    if (defaultDeliverySiteId && deliverySiteId !== defaultDeliverySiteId) {
+      const chosenSite = deliverySites.find((s) => s.id === deliverySiteId);
+      const defaultSite = deliverySites.find((s) => s.id === defaultDeliverySiteId);
+      const confirmed = window.confirm(
+        `You've selected "${chosenSite?.name ?? 'a different location'}" which is different from your usual location${defaultSite ? ` "${defaultSite.name}"` : ''}. Are you sure?`,
+      );
+      if (!confirmed) return;
+    }
+
     setSiteSaving(true);
     startTransition(async () => {
       const result = await chooseDeliverySite(cycleId, deliverySiteId);
