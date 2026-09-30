@@ -132,3 +132,115 @@ The uploaded project already included:
    1. Batch 1 (nothing here depends on anything else): auth check, the open-cycle lookup, cached delivery sites, cached subsidy rules, translations, locale, and the ?day= query param.
    2. Batch 2 (both only need cycle.id): the user's orders for this cycle, and the day-tabs list.
    3. Batch 3: the active day's dishes, then capacity-remaining (this one genuinely has to wait on Batch 3's own result).
+
+---
+
+## 12 - Fix Embed hide both top bar in website views and embedded view - 14 Sept 2026
+1. **Uncomment condition checking for embedded view and website view**
+   *Files: `src\app\(app)\layout.tsx`, `src\app\login\actions.ts` - uncomment condition checking & reads value to determine whether it is embedded*
+2. **Fix website view and embedded view will force logged in into the same account in same browser and add new error page for account deactivated and joget user do not have email**
+   *Files: `src\app\login\actions.ts`, `src\app\api\auth\joget-identify\route.ts`, `src\lib\session.ts` - added params, page and redirect page for new error page and checking embedding*
+
+---
+
+## 13 - Fix embedded view cannot proceed with payment in payment gatewat - 14 Sept 2026
+1. **Added Popup page for user to proceed payment in embedded view**
+   *Files: `src\app\(app)\orders\[reference]\payment-status.tsx`, `src\app\api\orders\[reference]\status\route.ts`, `src\app\(app)\menu\actions.ts`, `src\app\(app)\menu\menu-ordering.tsx`, `src\app\(app)\orders\[reference]\page.tsx` - Popup window with new added page and redirect url to proceed payment and checking once payment done*
+
+---
+
+## 14 - UI update to differentiate pending payment and paid with update tags for meals in cart - 14 Sept 2026
+1. **Added pending, in cart, cancelled, refunded tags in cart and differentiate pending payment and paid**
+   *Files: `src\app\(app)\menu\page.tsx`, `src\app\(app)\menu\menu-ordering.tsx`*
+
+---
+
+## 15 - Fix: language switcher not showing in embedded view 14 Sept 2026
+1. **Add language switcher on top of the side bar as top menu is hidden**
+   *Files: `src\app\(app)\layout.tsx`, `src\components\language-switcher.tsx`, `src\i18n\actions.ts` - determine the cookie whether it is embedded or web view and display it based on the session*
+
+---
+
+## 16 - Fix: Last Sign In from did not record and display in admin's user & roles tab - 15 Sept 2026
+1. **Add checking and write to database from whether the logged in user is embedded or from webview**
+   *Files: `src\lib\auth.ts`*
+
+---
+
+## 17 - added code id and export function for Admin's restaurant and dishes tab - 15 Sept 2026
+1. **Added Code and export function for Restaurant tab**
+   *Files: `prisma\schema.prisma`, `src\app\(app)\admin\restaurants\actions.ts`, `src\app\(app)\admin\restaurants\forms.tsx`, `src\app\(app)\admin\restaurants\page.tsx`, `src\app\api\exports\[type]\route.ts`, `src\lib\codes.ts`*
+2. **Added Code and export function for Restaurant tab**
+   *Files: `prisma\schema.prisma`, `src\app\(app)\admin\dishes\dish-form.tsx`, `src\app\(app)\admin\dishes\page.tsx`*
+
+---
+
+## 18 - Fix: role did not update from joget role - 16 Sept 2026
+1. **Checked and added write to database based on the roles given from joget(embedded)**
+   *Files: `src\lib\auth.ts`*
+
+---
+
+## 19 - Add: CSV upload for menu adding - 18 Sept 2026
+1. **Added upload csv function in Weekly Menus**
+   *Files: `src\app\(app)\admin\cycles\[id]\import-dialog.tsx`, `src\app\(app)\admin\cycles\[id]\page.tsx`, `src\app\(app)\admin\cycles\actions.ts`, `src\app\(app)\admin\cycles\actions.ts`, `src\lib\menu-import.ts`*
+
+---
+
+## 20 - Set Deadlock on Subsidy and Enable login using email and staff id - 21 Sept 2026
+1. **Set Deadlock on Subsidy for current serving cycle**
+   *Files: `src\app\(app)\admin\cycles\actions.ts`, `src\app\(app)\menu\page.tsx`, `src\lib\orders.ts`, `src\lib\subsidy.ts`, `tests\logic.ts`*
+2. **Enabled login using email and staff id**
+   *Files: `src\app\(app)\admin\users\actions.ts`, `src\app\(app)\admin\users\user-forms.tsx`, `src\app\(app)\menu\actions.ts`, `src\app\(app)\menu\menu-ordering.tsx`, `src\app\(app)\menu\page.tsx`, `src\app\api\auth\joget-identify\route.ts`, `src\app\login\actions.ts`, `src\app\login\login-form.tsx`, `src\lib\auth.ts`, `src\lib\auth\providers.ts`, `src\lib\session.ts`*
+
+---
+
+## 21 - Added default delivery site - 22 Sept 2026
+1. **Add default delivery site**
+   *Files: `src\app\(app)\admin\delivery-sites\actions.ts`, `src\app\(app)\admin\users\actions.ts`, `src\app\(app)\admin\users\actions.ts`, `src\app\(app)\admin\users\user-forms.tsx`, `src\app\globals.css`, `src\lib\orders.ts`*
+
+---
+
+## 22 - Add new role and added user confirmation on receival of the meal -23 Sept 2026
+1. **Add reception role for the deliver of meals to site**
+   *Files: `src\app\(app)\admin\users\actions.ts`, `src\app\(app)\admin\users\page.tsx`, `src\app\(app)\admin\users\user-forms.tsx`, `src\app\(app)\layout.tsx`, `src\app\(app)\reception\actions.ts`, `src\app\(app)\reception\delivery-row.tsx`, `src\app\(app)\reception\page.tsx`, `src\components\action-form.tsx`, `src\components\action-form.tsx`, `src\lib\rbac.ts`*
+2. **Added user receival confirmation of meals**
+   *Files: `src\app\(app)\admin\settings\actions.ts`, `src\app\(app)\admin\settings\page.tsx`, `src\app\(app)\layout.tsx`, `src\app\(app)\menu\page.tsx`, `src\app\(app)\menu\today-receipt-panel.tsx`, `src\app\(app)\my-meals\page.tsx`, `src\lib\meal-receipt.ts`, `src\lib\settings.ts`*
+
+---
+
+## 23 - Add receive button for user, Finance Recon page and Kitchen shows order and the employee ordered - 24 Sept 2026
+1. **Add receive button and cutoff time for receive confirmation**
+   *Files: `src\app\(app)\admin\settings\actions.ts`, `src\app\(app)\admin\settings\page.tsx`, `src\app\(app)\layout.tsx`, `src\app\(app)\menu\page.tsx`, `src\app\(app)\menu\today-receipt-panel.tsx`, `src\app\(app)\my-meals\page.tsx`, `src\lib\meal-receipt.ts`, `src\lib\settings.ts`*
+2. **Add finance reconciliation page and kitchen show order details with each employee info**
+   *Files: `src\app\(app)\finance\page.tsx`, `src\app\(app)\kitchen\page.tsx`, `src\app\api\exports\[type]\route.ts`*
+
+---
+
+## 24 - Fix: Settings unable to change - 25 Sept 2026
+1. **Fixed: Unable to save any changed settings**
+   *Files: `src\app\(app)\admin\settings\page.tsx`*
+
+---
+
+## 25 - Add staff id in order history extraction, Add configurable meals limit per day, Finance reconciliation page shows table - 28 Sept 2026
+1. **Add staff id in the extraction of order history**
+   *Files: `src\app\api\exports\[type]\route.ts`*
+2. **Add configurable meal limit per day**
+   *Files: `src\app\(app)\admin\settings\actions.ts`, `src\app\(app)\admin\settings\page.tsx`, `src\app\(app)\menu\page.tsx`, `src\lib\orders.ts`, `src\lib\settings.ts`*
+3. **Show reconciliation table instead of export function only**
+   *Files: `src\app\(app)\finance\page.tsx`, `src\app\api\exports\[type]\route.ts`*
+
+---
+
+## 26 - Add Audit Log for finance and admin, Add admin upload vendor invoice, Modify finance view details, Add notification upon change of delivery site - 29 Sept 2026
+1. **Add audit log for finance and admin to check the usage of the app**
+   *Files: `src\app\(app)\admin\audit\page.tsx`, `src\app\api\exports\[type]\route.ts`, `src\app\(app)\layout.tsx`, `src\lib\rbac.ts`*
+2. **Add admin upload invoice of vendor and needed finance to approve**
+   *Files: `src\app\(app)\admin\invoices\actions.ts`, `src\app\(app)\admin\invoices\invoice-dialogs.tsx`, `src\app\(app)\admin\invoices\page.tsx`, `src\app\(app)\finance\page.tsx`, `src\app\(app)\layout.tsx`*
+3. **Modify Finance Reconciliation Page to be able to view the table**
+   *Files: `src\app\(app)\finance\order-detail-dialog.tsx`, `src\app\(app)\finance\order-detail-dialog.tsx`*
+4. **Add Notification when changing delivery site during order**
+   *Files: `src\app\(app)\menu\menu-ordering.tsx`, `src\app\(app)\menu\page.tsx`*
+
+---
