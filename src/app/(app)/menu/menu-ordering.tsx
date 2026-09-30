@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Fragment, useState, useTransition } from 'react';
+import { Fragment, useRef, useState, useTransition } from 'react';
 
 import { formatSen } from '@/lib/money';
 import { DayTabs, type DayTab } from '@/components/day-tabs';
@@ -381,6 +381,12 @@ function OrderSummary({
   const [siteSaving, setSiteSaving] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState('');
 
+  // Capture the site selected when the page first loaded — this is the stable
+  // reference for the confirmation prompt. We cannot use defaultDeliverySiteId
+  // because setDeliverySite() updates it in the DB on every change, so it
+  // drifts to whatever was last picked rather than the employee's real home site.
+  const initialSiteId = useRef<string | null>(selectedDeliverySiteId);
+
   // Group by day so people see their whole week at a glance, paid and
   // pending days together.
   const byDay = new Map<string, { label: string; lines: CartLine[] }>();
@@ -400,12 +406,11 @@ function OrderSummary({
   function changeSite(deliverySiteId: string) {
     setError(null);
 
-    // Warn if the employee picks somewhere other than their usual site
-    if (defaultDeliverySiteId && deliverySiteId !== defaultDeliverySiteId) {
-      const chosenSite = deliverySites.find((s) => s.id === deliverySiteId);
-      const defaultSite = deliverySites.find((s) => s.id === defaultDeliverySiteId);
+    if (cartLines.length > 0 && initialSiteId.current && deliverySiteId !== initialSiteId.current) {
+      const chosenSite  = deliverySites.find((s) => s.id === deliverySiteId);
+      const originalSite = deliverySites.find((s) => s.id === initialSiteId.current!);
       const confirmed = window.confirm(
-        `You've selected "${chosenSite?.name ?? 'a different location'}" which is different from your usual location${defaultSite ? ` "${defaultSite.name}"` : ''}. Are you sure?`,
+        `You're changing your delivery location from "${originalSite?.name ?? 'your usual location'}" to "${chosenSite?.name ?? 'a new location'}". Your cart items will be delivered to the new location. Are you sure?`,
       );
       if (!confirmed) return;
     }
@@ -520,24 +525,26 @@ function OrderSummary({
             )
           ) : (
             <>
-              <label className="mb-3 block text-xs font-medium text-slate-600">
-                {t('deliverTo')}
-                <select
-                  className="input mt-1"
-                  value={selectedDeliverySiteId ?? ''}
-                  disabled={siteSaving}
-                  onChange={(e) => changeSite(e.target.value)}
-                >
-                  <option value="" disabled>
-                    {t('chooseSite')}
-                  </option>
-                  {deliverySites.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.name}
+              {cartLines.length > 0 ? (
+                <label className="mb-3 block text-xs font-medium text-slate-600">
+                  {t('deliverTo')}
+                  <select
+                    className="input mt-1"
+                    value={selectedDeliverySiteId ?? ''}
+                    disabled={siteSaving}
+                    onChange={(e) => changeSite(e.target.value)}
+                  >
+                    <option value="" disabled>
+                      {t('chooseSite')}
                     </option>
-                  ))}
-                </select>
-              </label>
+                    {deliverySites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
               {needsReceiptEmail && !nothingToPay ? (
                 <label className="mb-3 block text-xs font-medium text-slate-600">
