@@ -12,6 +12,27 @@ import { CACHE_TAGS } from '@/lib/cache';
 import { CODE_MAX_LENGTH, CODE_PATTERN, generateUniqueCode, nextSequentialCode, normalizeCode } from '@/lib/codes';
 import type { ActionState } from '@/components/action-form';
 
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+const ALLOWED_IMAGE_TYPES: Record<string, boolean> = {
+  'image/png':  true,
+  'image/jpeg': true,
+  'image/webp': true,
+};
+
+async function parseImageFile(
+  formData: FormData,
+): Promise<{ dataUrl: string | null } | { error: string }> {
+  const file = formData.get('imageFile');
+  if (!(file instanceof File) || file.size === 0) return { dataUrl: null };
+  if (file.size > MAX_IMAGE_BYTES)
+    return { error: 'Image is too large — please keep it under 2 MB.' };
+  if (!ALLOWED_IMAGE_TYPES[file.type])
+    return { error: 'Unsupported image type. Use PNG, JPEG, or WEBP.' };
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return { dataUrl: `data:${file.type};base64,${buffer.toString('base64')}` };
+}
+
+
 const dishSchema = z.object({
   restaurantId: z.string().min(1, 'Choose a restaurant.'),
   code: z
@@ -25,7 +46,6 @@ const dishSchema = z.object({
   price: z.string().min(1, 'Enter a price.'),
   category: z.string().trim().max(60).optional().or(z.literal('')),
   description: z.string().trim().max(500).optional().or(z.literal('')),
-  imageUrl: z.string().trim().url('Image URL must be a valid URL.').optional().or(z.literal('')),
   tags: z.string().trim().max(200).optional().or(z.literal('')),
 });
 
@@ -68,6 +88,9 @@ export async function createDish(_prev: ActionState, formData: FormData): Promis
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
 
+  const image = await parseImageFile(formData);
+  if ('error' in image) return { error: image.error };
+
   const price = parsePrice(d.price);
   if ('error' in price) return { error: price.error };
 
@@ -88,7 +111,7 @@ export async function createDish(_prev: ActionState, formData: FormData): Promis
       priceSen: price.sen,
       category: d.category?.trim() || null,
       description: d.description?.trim() || null,
-      imageUrl: d.imageUrl?.trim() || null,
+      imageUrl: image.dataUrl,
       tags: encodeTags(parseTags(d.tags)),
     },
   });
@@ -109,10 +132,13 @@ export async function updateDish(_prev: ActionState, formData: FormData): Promis
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
 
+  const image = await parseImageFile(formData);
+  if ('error' in image) return { error: image.error };
+
   const price = parsePrice(d.price);
   if ('error' in price) return { error: price.error };
 
-  const before = await prisma.dish.findUnique({ where: { id }, select: { priceSen: true } });
+  const before = await prisma.dish.findUnique({ where: { id }, select: { priceSen: true, imageUrl: true } });
 
   const clash = await prisma.dish.findFirst({
     where: { restaurantId: d.restaurantId, name: d.name, NOT: { id } },
@@ -134,7 +160,7 @@ export async function updateDish(_prev: ActionState, formData: FormData): Promis
       priceSen: price.sen,
       category: d.category?.trim() || null,
       description: d.description?.trim() || null,
-      imageUrl: d.imageUrl?.trim() || null,
+      imageUrl: image.dataUrl !== null ? image.dataUrl : (before?.imageUrl ?? null),
       tags: encodeTags(parseTags(d.tags)),
     },
   });

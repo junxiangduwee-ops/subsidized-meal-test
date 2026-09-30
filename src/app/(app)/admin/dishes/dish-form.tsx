@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Dialog } from '@/components/dialog';
@@ -20,6 +21,68 @@ type DishFields = {
   imageUrl: string | null;
   tags: string[];
 };
+
+// ── Image picker with live preview ────────────────────────────────────────────
+
+function ImageField({ existing }: { existing?: string | null }) {
+  const [preview, setPreview] = useState<string | null>(existing ?? null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div>
+      <label className="label">Dish Image</label>
+      <div className="flex items-start gap-3">
+        {/* Preview box */}
+        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+          {preview ? (
+            <img src={preview} alt="Preview" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl text-slate-300">
+              🍽
+            </div>
+          )}
+        </div>
+
+        {/* File input */}
+        <div className="flex-1">
+          <input
+            type="file"
+            name="imageFile"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleFile}
+            className="block w-full text-sm text-slate-600
+              file:mr-3 file:rounded-md file:border-0
+              file:bg-slate-100 file:px-3 file:py-1.5
+              file:text-sm file:font-medium file:text-slate-700
+              hover:file:bg-slate-200 cursor-pointer"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            PNG, JPEG or WEBP — max 2 MB.
+            {existing ? ' Leave empty to keep the current image.' : ''}
+          </p>
+          {preview && (
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              className="mt-1 text-xs text-red-500 hover:underline"
+            >
+              Remove image
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared form fields ────────────────────────────────────────────────────────
 
 function Fields({
   restaurants,
@@ -97,13 +160,13 @@ function Fields({
         <textarea name="description" rows={2} defaultValue={dish?.description ?? ''} className="input" />
       </div>
 
-      <div>
-        <label className="label">{t('imageUrl')}</label>
-        <input name="imageUrl" type="url" defaultValue={dish?.imageUrl ?? ''} className="input" />
-      </div>
+      {/* Image upload with preview */}
+      <ImageField existing={dish?.imageUrl} />
     </>
   );
 }
+
+// ── Add dish dialog ───────────────────────────────────────────────────────────
 
 export function AddDishButton({ restaurants }: { restaurants: RestaurantOption[] }) {
   const t = useTranslations('dishesAdmin');
@@ -134,6 +197,8 @@ export function AddDishButton({ restaurants }: { restaurants: RestaurantOption[]
     </Dialog>
   );
 }
+
+// ── Edit dish dialog ──────────────────────────────────────────────────────────
 
 export function EditDishDialog({
   dish,

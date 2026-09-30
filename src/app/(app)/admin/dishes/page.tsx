@@ -109,6 +109,7 @@ export default async function DishesPage({
                   <thead>
                     <tr>
                       <th>{t('code')}</th>
+                      <th />
                       <th>{t('dish')}</th>
                       <th>{t('restaurant')}</th>
                       <th>{t('category')}</th>
@@ -121,6 +122,19 @@ export default async function DishesPage({
                     {rows.map((d) => (
                       <tr key={d.id}>
                         <td className="font-mono text-xs text-slate-500">{d.code ?? '—'}</td>
+                        <td className="w-10">
+                          {d.imageUrl ? (
+                            <img
+                              src={d.imageUrl}
+                              alt={d.name}
+                              className="h-9 w-9 rounded-md object-cover border border-slate-100"
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-lg text-slate-300">
+                              🍽
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <div className="font-medium text-slate-900">{d.name}</div>
                           {d.tags.length > 0 ? (
