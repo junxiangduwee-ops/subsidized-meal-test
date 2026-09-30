@@ -1,8 +1,5 @@
 'use server';
 
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -11,20 +8,17 @@ import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import type { ActionState } from '@/components/action-form';
 
-// ── File storage — same pattern as settings/actions.ts ──────────────────────
-
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'invoices');
-const UPLOAD_URL_PREFIX = '/uploads/invoices';
+// ── File validation ──────────────────────────────────────────────────────────
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES: Record<string, string> = {
-  'application/pdf':  '.pdf',
-  'image/png':        '.png',
-  'image/jpeg':       '.jpg',
-  'image/webp':       '.webp',
+  'application/pdf': '.pdf',
+  'image/png':       '.png',
+  'image/jpeg':      '.jpg',
+  'image/webp':      '.webp',
 };
 
-// ── Upload invoice ──────────────────────────────────────────────────────────
+// ── Upload invoice ───────────────────────────────────────────────────────────
 
 const uploadSchema = z.object({
   restaurantId:  z.string().min(1, 'Restaurant is required.'),
@@ -56,7 +50,6 @@ export async function uploadInvoice(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
 
-  // ── Validate restaurant + cycle ──────────────────────────────────────────
   const [restaurant, cycle] = await Promise.all([
     prisma.restaurant.findUnique({ where: { id: d.restaurantId }, select: { name: true } }),
     prisma.menuCycle.findUnique({ where: { id: d.cycleId }, select: { serviceWeekStart: true } }),
@@ -64,7 +57,6 @@ export async function uploadInvoice(
   if (!restaurant) return { error: 'Restaurant not found.' };
   if (!cycle)      return { error: 'Service week not found.' };
 
-  // Prevent duplicate invoice number per restaurant + cycle
   if (d.invoiceNumber) {
     const clash = await prisma.vendorInvoice.findFirst({
       where: { restaurantId: d.restaurantId, cycleId: d.cycleId, invoiceNumber: d.invoiceNumber },
@@ -73,7 +65,7 @@ export async function uploadInvoice(
       return { error: `Invoice "${d.invoiceNumber}" already exists for ${restaurant.name} this week.` };
   }
 
-  // ── Handle file upload — same as settings/actions.ts ────────────────────
+  // ── Convert file to base64 data URL (same as reception photo) ───────────
   let fileUrl:  string | null = null;
   let fileName: string | null = null;
 
@@ -81,37 +73,14 @@ export async function uploadInvoice(
   if (file instanceof File && file.size > 0) {
     if (file.size > MAX_UPLOAD_BYTES)
       return { error: 'File is too large — please keep it under 10 MB.' };
-
-    const extension = ALLOWED_TYPES[file.type];
-    if (!extension)
+    if (!ALLOWED_TYPES[file.type])
       return { error: 'Unsupported file type. Use PDF, PNG, JPEG, or WEBP.' };
 
-    // Slug the restaurant name for a readable filename
-    const slug = restaurant.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40);
-
-    const storedName = `${slug}-${d.cycleId.slice(0, 8)}-${Date.now()}${extension}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
-
-    try {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-      await writeFile(path.join(UPLOAD_DIR, storedName), bytes);
-    } catch (err) {
-      console.error('[invoices] Failed to save uploaded invoice', err);
-      return {
-        error:
-          'Could not save the file on the server. If this is a serverless deployment, a file storage integration is required.',
-      };
-    }
-
-    fileUrl  = `${UPLOAD_URL_PREFIX}/${storedName}`;
-    fileName = file.name; // original filename shown in the UI
+    const buffer = Buffer.from(await file.arrayBuffer());
+    fileUrl  = `data:${file.type};base64,${buffer.toString('base64')}`;
+    fileName = file.name;
   }
 
-  // ── Create DB record ─────────────────────────────────────────────────────
   const invoice = await prisma.vendorInvoice.create({
     data: {
       restaurantId:  d.restaurantId,
@@ -139,7 +108,7 @@ export async function uploadInvoice(
   return { success: `Invoice uploaded for ${restaurant.name}.` };
 }
 
-// ── Update invoice status / review ──────────────────────────────────────────
+// ── Review / update status ───────────────────────────────────────────────────
 
 const reviewSchema = z.object({
   id:            z.string().min(1),
@@ -171,7 +140,7 @@ export async function reviewInvoice(
   });
   if (!existing) return { error: 'Invoice not found.' };
 
-  // ── Optional replacement file ────────────────────────────────────────────
+  // Optional file replacement — also base64
   let fileUrl  = existing.fileUrl;
   let fileName: string | undefined;
 
@@ -179,34 +148,11 @@ export async function reviewInvoice(
   if (file instanceof File && file.size > 0) {
     if (file.size > MAX_UPLOAD_BYTES)
       return { error: 'File is too large — please keep it under 10 MB.' };
-
-    const extension = ALLOWED_TYPES[file.type];
-    if (!extension)
+    if (!ALLOWED_TYPES[file.type])
       return { error: 'Unsupported file type. Use PDF, PNG, JPEG, or WEBP.' };
 
-    const slug = existing.restaurant.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40);
-
-    const storedName = `${slug}-${d.id.slice(0, 8)}-${Date.now()}${extension}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
-
-    try {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-      await writeFile(path.join(UPLOAD_DIR, storedName), bytes);
-    } catch (err) {
-      console.error('[invoices] Failed to save replacement invoice file', err);
-      return { error: 'Could not save the file on the server.' };
-    }
-
-    // Delete old file if it was stored locally
-    if (existing.fileUrl?.startsWith(UPLOAD_URL_PREFIX + '/')) {
-      void unlink(path.join(process.cwd(), 'public', existing.fileUrl)).catch(() => {});
-    }
-
-    fileUrl  = `${UPLOAD_URL_PREFIX}/${storedName}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+    fileUrl  = `data:${file.type};base64,${buffer.toString('base64')}`;
     fileName = file.name;
   }
 
@@ -245,19 +191,11 @@ export async function deleteInvoice(formData: FormData): Promise<void> {
 
   const inv = await prisma.vendorInvoice.findUnique({
     where: { id },
-    select: {
-      fileUrl: true,
-      restaurant: { select: { name: true } },
-      invoiceNumber: true,
-    },
+    select: { restaurant: { select: { name: true } }, invoiceNumber: true },
   });
   if (!inv) return;
 
-  // Clean up local file
-  if (inv.fileUrl?.startsWith(UPLOAD_URL_PREFIX + '/')) {
-    void unlink(path.join(process.cwd(), 'public', inv.fileUrl)).catch(() => {});
-  }
-
+  // No disk file to clean up — base64 is stored in the DB row
   await prisma.vendorInvoice.delete({ where: { id } });
   await audit(actor.id, 'invoice.delete', 'VendorInvoice', id, {
     restaurantName: inv.restaurant.name,
