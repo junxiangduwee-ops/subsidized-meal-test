@@ -28,11 +28,11 @@ info:
     email: ai.automation@mrdiy.com
 
 servers:
-  - url: '{APP_URL}'
-    description: Application server (set APP_URL in .env)
-    variables:
-      APP_URL:
-        default: http://localhost:3000
+  servers:
+  - url: https://subsidized-meal-test.vercel.app
+    description: Production (Vercel)
+  - url: http://localhost:3000
+    description: Local development
 
 tags:
   - name: Auth – Joget
