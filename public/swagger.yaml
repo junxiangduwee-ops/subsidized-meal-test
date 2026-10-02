@@ -28,7 +28,6 @@ info:
     email: ai.automation@mrdiy.com
 
 servers:
-  servers:
   - url: https://subsidized-meal-test.vercel.app
     description: Production (Vercel)
   - url: http://localhost:3000
