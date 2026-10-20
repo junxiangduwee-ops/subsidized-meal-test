@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
-import { formatWeekRange, formatDateTime, todayInAppTz } from '@/lib/cycle';
+import { formatWeekRange, formatDateTime, todayInAppTz, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, StatusBadge, Stat } from '@/components/ui';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
@@ -16,7 +16,7 @@ const DEFAULT_PAGE_SIZE = 25;
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; pageSize?: string }>;
+  searchParams: Promise<{ page?: string; pageSize?: string; week?: string }>;
 }) {
   const user = await requireCapability('order:place');
   const params = await searchParams;
@@ -24,16 +24,36 @@ export default async function OrdersPage({
   const locale = await getLocale();
   const page = parsePage(params.page);
   const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
+  const selectedWeek = params.week;
 
-  const where = { userId: user.id, status: { not: 'CART' as const } };
+  // Resolve selected week date for filtering
+  const selectedWeekDate = selectedWeek ? new Date(selectedWeek + 'T00:00:00.000Z') : null;
 
-  // The three summary stats (orders placed / paid / saved) always reflect
-  // the employee's whole history, not just the current page, so they're
-  // counted separately from the paginated table rows below.
+  // Base where clause — always excludes CART; optionally filtered by week
+  const where = {
+    userId: user.id,
+    status: { not: 'CART' as const },
+    ...(selectedWeekDate
+      ? { cycle: { serviceWeekStart: selectedWeekDate } }
+      : {}),
+  };
+
+  // Summary stats always reflect the employee's whole history (no week filter)
+  const allTimeWhere = { userId: user.id, status: { not: 'CART' as const } };
+
+  // Fetch available service weeks for the dropdown — only weeks with orders
+  const availableWeeks = await prisma.menuCycle.findMany({
+    where: {
+      orders: { some: { userId: user.id, status: { not: 'CART' as const } } },
+    },
+    select: { serviceWeekStart: true },
+    orderBy: { serviceWeekStart: 'desc' },
+  });
+
   const [total, allPaid, orders] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
-      where: { ...where, status: 'PAID' },
+      where: { ...allTimeWhere, status: 'PAID' },
       select: { netSen: true, subsidySen: true },
     }),
     prisma.order.findMany({
@@ -50,8 +70,6 @@ export default async function OrdersPage({
 
   const spent = allPaid.reduce((s, o) => s + o.netSen, 0);
 
-  // The company's contribution is not the employee's business - only roles
-  // that already have finance access see it.
   const showSubsidy = can(user.role, 'finance:view');
   const saved = allPaid.reduce((s, o) => s + o.subsidySen, 0);
   const currentMonth = todayInAppTz().toISOString().slice(0, 7);
@@ -79,29 +97,60 @@ export default async function OrdersPage({
       <Section
         title={t('history')}
         action={
-          <form method="get" action="/api/exports/my-orders" className="flex items-center gap-2">
-            <label htmlFor="export-month" className="text-xs text-slate-500">
-              {t('exportMonthLabel')}
-            </label>
-            <input
-              id="export-month"
-              type="month"
-              name="month"
-              defaultValue={currentMonth}
-              max={currentMonth}
-              required
-              className="input !w-36 !py-1 text-xs"
-            />
-            <button type="submit" className="btn-secondary btn-sm">
-              {t('exportMonth')}
-            </button>
-          </form>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* ── Service week filter ── */}
+            {availableWeeks.length > 0 && (
+              <form method="get" className="flex items-center gap-2">
+                <label htmlFor="week-filter" className="text-xs text-slate-500 whitespace-nowrap">
+                  Service Week
+                </label>
+                <select
+                  id="week-filter"
+                  name="week"
+                  defaultValue={selectedWeek ?? ''}
+                  className="input !py-1 text-xs"
+                >
+                  <option value="">All weeks</option>
+                  {availableWeeks.map((c) => {
+                    const key = toDateKey(c.serviceWeekStart);
+                    return (
+                      <option key={key} value={key}>
+                        {formatWeekRange(c.serviceWeekStart, locale)}
+                      </option>
+                    );
+                  })}
+                </select>
+                <button type="submit" className="btn-secondary btn-sm">
+                  Filter
+                </button>
+              </form>
+            )}
+
+            {/* ── Export ── */}
+            <form method="get" action="/api/exports/my-orders" className="flex items-center gap-2">
+              <label htmlFor="export-month" className="text-xs text-slate-500">
+                {t('exportMonthLabel')}
+              </label>
+              <input
+                id="export-month"
+                type="month"
+                name="month"
+                defaultValue={currentMonth}
+                max={currentMonth}
+                required
+                className="input !w-36 !py-1 text-xs"
+              />
+              <button type="submit" className="btn-secondary btn-sm">
+                {t('exportMonth')}
+              </button>
+            </form>
+          </div>
         }
       >
         {orders.length === 0 ? (
           <EmptyState
             title={t('noOrdersYet')}
-            hint={t('noOrdersHint')}
+            hint={selectedWeek ? 'Try selecting a different week or clear the filter.' : t('noOrdersHint')}
             action={
               <Link href="/menu" className="btn-primary">
                 {t('browseMenu')}
