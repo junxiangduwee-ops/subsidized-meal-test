@@ -11,6 +11,48 @@ export const dynamic = 'force-dynamic';
 
 const RANGES = [4, 8, 12, 26] as const;
 
+// ── HitPay balance fetch ──────────────────────────────────────────────────────
+type HitPayWallet = {
+  available: number;
+  pending: number;
+  reserve: number;
+};
+
+async function fetchHitPayBalance(): Promise<HitPayWallet | null> {
+  const apiKey = process.env.HITPAY_API_KEY;
+  if (!apiKey) return null;
+
+  const base =
+    process.env.HITPAY_MODE === 'live'
+      ? 'https://api.hit-pay.com/v1'
+      : 'https://api.sandbox.hit-pay.com/v1';
+
+  try {
+    const res = await fetch(`${base}/balances`, {
+      headers: {
+        'X-BUSINESS-API-KEY': apiKey,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as Array<{
+      currency: string;
+      wallets: HitPayWallet;
+    }>;
+
+    // Find MYR balance — fall back to first entry
+    const currency = (process.env.HITPAY_CURRENCY ?? 'MYR').toUpperCase();
+    const entry = data.find((d) => d.currency.toUpperCase() === currency) ?? data[0];
+    return entry?.wallets ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 export default async function AnalyticsPage({
   searchParams,
 }: {
@@ -24,12 +66,15 @@ export default async function AnalyticsPage({
   const requested = Number.parseInt(params.weeks ?? '', 10);
   const weeks = (RANGES as readonly number[]).includes(requested) ? requested : 12;
 
-  const { weekly, dishes, restaurants, weekday, departments, take } = await getAnalyticsDashboard(weeks, locale);
+  const [{ weekly, dishes, restaurants, weekday, departments, take }, hitpay] =
+    await Promise.all([getAnalyticsDashboard(weeks, locale), fetchHitPayBalance()]);
 
   const totalMeals = weekly.reduce((s, w) => s + w.meals, 0);
   const totalOrders = weekly.reduce((s, w) => s + w.orders, 0);
   const totalGross = weekly.reduce((s, w) => s + w.grossSen, 0);
   const weeksWithData = weekly.filter((w) => w.orders > 0).length;
+
+  const isSandbox = process.env.HITPAY_MODE !== 'live';
 
   const rangeSwitcher = (
     <form method="get" className="flex items-center gap-2">
@@ -62,6 +107,44 @@ export default async function AnalyticsPage({
     <>
       <PageHeader title={t('title')} subtitle={t('subtitlePaid', { weeks })} action={rangeSwitcher} />
 
+      {/* ── HitPay Wallet Balance ─────────────────────────────────────── */}
+      {hitpay !== null && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-700">HitPay Wallet</h2>
+            {isSandbox && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                Sandbox
+              </span>
+            )}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-slate-500">Available (ready to settle)</p>
+              <p className="mt-0.5 text-xl font-semibold text-emerald-700">
+                RM {hitpay.available.toFixed(2)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Pending (unsettled)</p>
+              <p className="mt-0.5 text-xl font-semibold text-amber-600">
+                RM {hitpay.pending.toFixed(2)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Reserve</p>
+              <p className="mt-0.5 text-xl font-semibold text-slate-700">
+                RM {hitpay.reserve.toFixed(2)}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Live from HitPay · Refreshes on every page load
+          </p>
+        </div>
+      )}
+
+      {/* ── 4 stat boxes ─────────────────────────────────────────────── */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label={t('mealsServed')} value={totalMeals.toLocaleString()} hint={t('ordersHint', { count: totalOrders })} />
         <Stat
