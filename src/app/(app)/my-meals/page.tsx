@@ -51,7 +51,13 @@ export default async function MyMealsPage({
         serviceDate: true,
         receivedAt: true,
         receivedBySystem: true,
-        order: { select: { cycle: { select: { serviceWeekStart: true } } } },
+        order: {
+          select: {
+            cycle: { select: { serviceWeekStart: true } },
+            paidAt: true,
+            submittedAt: true,
+          },
+        },
       },
       orderBy: { dishName: 'asc' },
     }),
@@ -75,7 +81,13 @@ export default async function MyMealsPage({
         serviceDate: true,
         receivedAt: true,
         receivedBySystem: true,
-        order: { select: { cycle: { select: { serviceWeekStart: true } } } },
+        order: {
+          select: {
+            cycle: { select: { serviceWeekStart: true } },
+            paidAt: true,
+            submittedAt: true,
+          },
+        },
       },
       orderBy: { serviceDate: 'desc' },
       take: 60,
@@ -209,11 +221,13 @@ export default async function MyMealsPage({
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>Date</th>
+                        <th>Meal Date</th>
                         <th>Dish</th>
                         <th>Restaurant</th>
-                        <th>Receipt</th>
-                        <th>Confirmed At</th>
+                        <th>Order Date</th>
+                        <th>Payment Date</th>
+                        <th>Status</th>
+                        <th>Receive Confirmation Date</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -224,11 +238,21 @@ export default async function MyMealsPage({
                           </td>
                           <td className="font-medium text-slate-900">{item.dishName}</td>
                           <td className="text-slate-600">{item.restaurantName}</td>
+                          <td className="text-xs text-slate-500 whitespace-nowrap">
+                            {item.order.submittedAt
+                              ? formatDateTime(item.order.submittedAt, locale)
+                              : '—'}
+                          </td>
+                          <td className="text-xs text-slate-500 whitespace-nowrap">
+                            {item.order.paidAt
+                              ? formatDateTime(item.order.paidAt, locale)
+                              : '—'}
+                          </td>
                           <td>
                             {item.receivedAt ? (
                               <span className="badge bg-emerald-100 text-emerald-800">Confirmed</span>
                             ) : (
-                              <span className="badge bg-amber-100 text-amber-800">Pending</span>
+                              <span className="badge bg-blue-100 text-blue-800">Paid</span>
                             )}
                           </td>
                           <td className="text-xs text-slate-500 whitespace-nowrap">
