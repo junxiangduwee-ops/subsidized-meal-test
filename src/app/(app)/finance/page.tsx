@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { OrderDetailDialog } from './order-detail-dialog';
+import { VerifyPaymentButton } from './verify-payment-button';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
@@ -603,6 +604,7 @@ export default async function FinancePage({
                     <th className="num">Amount Paid</th>
                     <th>Payment Status</th>
                     <th>Paid At</th>
+                    <th>Verify</th>
                     <th />
                   </tr>
                 </thead>
@@ -662,6 +664,11 @@ export default async function FinancePage({
                         </td>
                         <td className="text-xs text-slate-500 whitespace-nowrap">
                           {o.paidAt ? formatDateTime(o.paidAt, locale) : '—'}
+                        </td>
+                        <td>
+                          {o.status === 'AWAITING_PAYMENT' ? (
+                            <VerifyPaymentButton reference={o.reference} />
+                          ) : null}
                         </td>
                         <td>
                           <OrderDetailDialog order={o} locale={locale} />

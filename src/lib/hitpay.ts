@@ -260,3 +260,37 @@ export async function fetchPaymentType(
   }
 }
 
+
+/** Get the full payment request status from HitPay — used for manual admin verification. */
+export async function getHitPayPaymentStatus(
+  paymentRequestId: string,
+): Promise<{ status: string; payments: Array<{ id: string; status: string }> } | null> {
+  if (!hitpayConfigured()) return null;
+
+  try {
+    const res = await fetch(`${baseUrl()}/payment-requests/${paymentRequestId}`, {
+      headers: {
+        Accept: 'application/json',
+        'X-BUSINESS-API-KEY': process.env.HITPAY_API_KEY!,
+      },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.warn('[hitpay] Payment status lookup failed', paymentRequestId, res.status);
+      return null;
+    }
+
+    const json = (await res.json()) as {
+      status: string;
+      payments?: Array<{ id: string; status: string }>;
+    };
+
+    return {
+      status: json.status ?? 'pending',
+      payments: json.payments ?? [],
+    };
+  } catch (err) {
+    console.warn('[hitpay] Payment status lookup errored', paymentRequestId, err);
+    return null;
+  }
+}
