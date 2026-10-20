@@ -103,6 +103,8 @@ export function MenuOrdering({
   defaultDeliverySiteId?: string | null;
   /** True when the signed-in employee has no email on file, so checkout must collect one just for the payment receipt. */
   needsReceiptEmail?: boolean;
+  /** True when running inside the Joget embedded iframe. */
+  isEmbed?: boolean;
 }) {
   const t = useTranslations('menu');
   const router = useRouter();
