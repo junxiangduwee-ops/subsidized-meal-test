@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing order reference' }, { status: 400 });
   }
 
-  // Find the order and its latest payment request
+  // Find the order and its latest non-failed payment request
   const order = await prisma.order.findUnique({
     where: { reference },
     select: {
@@ -58,11 +58,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to reach HitPay API. Try again later.' }, { status: 502 });
   }
 
-  // Audit log regardless of outcome
+  // Audit log regardless of outcome — using correct AuditLog schema fields
   await prisma.auditLog.create({
     data: {
-      userId: user.id,
+      actorId: user.id,
       action: 'payment.manual_verify',
+      entityType: 'Order',
+      entityId: order.id,
       metadata: {
         reference,
         hitpayStatus: hitpayStatus.status,
