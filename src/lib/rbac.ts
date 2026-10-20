@@ -60,7 +60,7 @@ export function capabilitiesFor(role: Role): readonly Capability[] {
 export function landingPathFor(role: Role): string {
   switch (role) {
     case 'ADMIN':
-      return '/admin/cycles';
+      return '/analytics';
     case 'ANALYTICS':
       return '/analytics';
     case 'FINANCE':
