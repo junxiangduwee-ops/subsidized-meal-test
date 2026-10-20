@@ -206,7 +206,7 @@ export default async function AnalyticsPage({
                 <tr>
                   <th>{t('dish')}</th>
                   <th>{t('restaurant')}</th>
-                  <th className="num">{t('portions')}</th>
+                  <th className="text-center">{t('portions')}</th>
                   <th className="num">{t('foodValue')}</th>
                 </tr>
               </thead>
@@ -215,8 +215,8 @@ export default async function AnalyticsPage({
                   <tr key={`${d.restaurantName}-${d.dishName}`}>
                     <td className="font-medium text-slate-900">{d.dishName}</td>
                     <td className="text-slate-600">{d.restaurantName}</td>
-                    <td className="num text-slate-900 text-left">{d.quantity}</td>
-                    <td className="num text-slate-600 text-left">{formatSen(d.grossSen)}</td>
+                    <td className="text-center text-slate-900">{d.quantity}</td>
+                    <td className="num text-slate-600">{formatSen(d.grossSen)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -230,8 +230,8 @@ export default async function AnalyticsPage({
               <thead>
                 <tr>
                   <th>{t('department')}</th>
-                  <th className="num">{t('people')}</th>
-                  <th className="num">{t('orders')}</th>
+                  <th className="text-center">{t('people')}</th>
+                  <th className="text-center">{t('orders')}</th>
                   <th className="num">{t('foodValue')}</th>
                   <th className="num">{t('subsidy')}</th>
                 </tr>
@@ -240,10 +240,10 @@ export default async function AnalyticsPage({
                 {departments.map((d) => (
                   <tr key={d.department}>
                     <td className="font-medium text-slate-900">{d.department}</td>
-                    <td className="num text-slate-600 text-left">{d.people}</td>
-                    <td className="num text-slate-600 text-left">{d.orders}</td>
-                    <td className="num text-slate-900 text-left">{formatSen(d.grossSen)}</td>
-                    <td className="num text-emerald-700 text-left">{formatSen(d.subsidySen)}</td>
+                    <td className="text-center text-slate-600">{d.people}</td>
+                    <td className="text-center text-slate-600">{d.orders}</td>
+                    <td className="num text-slate-900">{formatSen(d.grossSen)}</td>
+                    <td className="num text-emerald-700">{formatSen(d.subsidySen)}</td>
                   </tr>
                 ))}
               </tbody>

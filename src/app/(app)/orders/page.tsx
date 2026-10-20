@@ -26,10 +26,8 @@ export default async function OrdersPage({
   const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
   const selectedWeek = params.week;
 
-  // Resolve selected week date for filtering
   const selectedWeekDate = selectedWeek ? new Date(selectedWeek + 'T00:00:00.000Z') : null;
 
-  // Base where clause — always excludes CART; optionally filtered by week
   const where = {
     userId: user.id,
     status: { not: 'CART' as const },
@@ -38,10 +36,8 @@ export default async function OrdersPage({
       : {}),
   };
 
-  // Summary stats always reflect the employee's whole history (no week filter)
   const allTimeWhere = { userId: user.id, status: { not: 'CART' as const } };
 
-  // Fetch available service weeks for the dropdown — only weeks with orders
   const availableWeeks = await prisma.menuCycle.findMany({
     where: {
       orders: { some: { userId: user.id, status: { not: 'CART' as const } } },
@@ -69,7 +65,6 @@ export default async function OrdersPage({
   ]);
 
   const spent = allPaid.reduce((s, o) => s + o.netSen, 0);
-
   const showSubsidy = can(user.role, 'finance:view');
   const saved = allPaid.reduce((s, o) => s + o.subsidySen, 0);
   const currentMonth = todayInAppTz().toISOString().slice(0, 7);
@@ -98,7 +93,6 @@ export default async function OrdersPage({
         title={t('history')}
         action={
           <div className="flex flex-wrap items-center gap-3">
-            {/* ── Service week filter ── */}
             {availableWeeks.length > 0 && (
               <form method="get" className="flex items-center gap-2">
                 <label htmlFor="week-filter" className="text-xs text-slate-500 whitespace-nowrap">
@@ -125,8 +119,6 @@ export default async function OrdersPage({
                 </button>
               </form>
             )}
-
-            {/* ── Export ── */}
             <form method="get" action="/api/exports/my-orders" className="flex items-center gap-2">
               <label htmlFor="export-month" className="text-xs text-slate-500">
                 {t('exportMonthLabel')}
@@ -164,7 +156,7 @@ export default async function OrdersPage({
                 <tr>
                   <th>{t('reference')}</th>
                   <th>{t('serviceWeek')}</th>
-                  <th className="num">{t('meals')}</th>
+                  <th className="text-center">{t('meals')}</th>
                   {showSubsidy ? <th className="num">{t('foodTotal')}</th> : null}
                   {showSubsidy ? <th className="num">{t('subsidy')}</th> : null}
                   <th className="num">{t('youPaid')}</th>
@@ -178,7 +170,7 @@ export default async function OrdersPage({
                   <tr key={o.id}>
                     <td className="font-mono text-xs text-slate-700">{o.reference}</td>
                     <td className="text-slate-900">{formatWeekRange(o.cycle.serviceWeekStart, locale)}</td>
-                    <td className="num text-slate-600">{o._count.items}</td>
+                    <td className="text-center text-slate-600">{o._count.items}</td>
                     {showSubsidy ? (
                       <td className="num text-slate-600">{formatSen(o.grossSen)}</td>
                     ) : null}
@@ -203,7 +195,6 @@ export default async function OrdersPage({
                 ))}
               </tbody>
             </table>
-
             <Pagination basePath="/orders" page={page} pageSize={pageSize} total={total} />
           </div>
         )}
