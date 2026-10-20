@@ -31,7 +31,7 @@ export default async function OrderDetailPage({
       cycle: true,
       user: { select: { id: true, name: true, email: true, staffId: true, department: true } },
       items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] },
-      payments: { where: { status: { not: 'PENDING' } }, orderBy: { createdAt: 'desc' } },
+      payments: { orderBy: { createdAt: 'desc' } },
     },
   });
 
@@ -51,7 +51,12 @@ export default async function OrderDetailPage({
 
   // Employees see what they paid; only finance roles see the split.
   const showSubsidy = can(user.role, 'finance:view');
+  // Latest payment for the checkout URL — includes PENDING so the
+  // "Continue to payment" button always has a URL when AWAITING_PAYMENT.
   const latestPayment = order.payments[0];
+  // Payments to display in the Payments section — excludes PENDING since
+  // those are just checkout initiations, not actual payment confirmations.
+  const displayPayments = order.payments.filter((p) => p.status !== 'PENDING');
   const awaiting = order.status === 'AWAITING_PAYMENT';
 
   return (
@@ -163,10 +168,10 @@ export default async function OrderDetailPage({
             </dl>
           </Section>
 
-          {order.payments.length > 0 ? (
+          {displayPayments.length > 0 ? (
             <Section title={t('payments')}>
               <div className="divide-y divide-slate-100 text-sm">
-                {order.payments.map((p) => (
+                {displayPayments.map((p) => (
                   <div key={p.id} className="px-5 py-3">
                     <div className="flex items-center justify-between">
                       <StatusBadge status={p.status} />
