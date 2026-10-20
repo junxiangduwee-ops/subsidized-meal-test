@@ -10,9 +10,14 @@ import { MealReceiptButton } from '@/components/meal-receipt-button';
 
 export const dynamic = 'force-dynamic';
 
-export default async function MyMealsPage() {
+export default async function MyMealsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
   const user = await requireCapability('order:place');
   const locale = await getLocale();
+  const { week: selectedWeek } = await searchParams;
 
   // Run lazy auto-confirm before reading — no cron needed.
   await autoConfirmPastMeals(user.id);
@@ -20,8 +25,20 @@ export default async function MyMealsPage() {
   const today = todayInAppTz();
   const todayKey = toDateKey(today);
 
+  // Fetch all available service weeks for the filter dropdown
+  const availableWeeks = await prisma.menuCycle.findMany({
+    where: {
+      orders: { some: { userId: user.id, status: 'PAID' } },
+    },
+    select: { serviceWeekStart: true },
+    orderBy: { serviceWeekStart: 'desc' },
+  });
+
+  // Resolve the selected week filter — default to showing all weeks
+  const selectedWeekDate = selectedWeek ? new Date(selectedWeek + 'T00:00:00.000Z') : null;
+
   const [todayItems, settings, pastItems] = await Promise.all([
-    // Today's paid meals
+    // Today's paid meals — not affected by the week filter
     prisma.orderItem.findMany({
       where: {
         serviceDate: today,
@@ -39,11 +56,17 @@ export default async function MyMealsPage() {
       orderBy: { dishName: 'asc' },
     }),
     getSiteSettings(),
-    // Past paid meals (excluding today), newest first, last 30 days
+    // Past paid meals (excluding today), filtered by selected week if set
     prisma.orderItem.findMany({
       where: {
         serviceDate: { lt: today },
-        order: { userId: user.id, status: 'PAID' },
+        order: {
+          userId: user.id,
+          status: 'PAID',
+          ...(selectedWeekDate
+            ? { cycle: { serviceWeekStart: selectedWeekDate } }
+            : {}),
+        },
       },
       select: {
         id: true,
@@ -77,6 +100,36 @@ export default async function MyMealsPage() {
         title="My Meals"
         subtitle="Confirm you received your meal. Past meals are shown below."
       />
+
+      {/* ── Week filter ───────────────────────────────────────────────── */}
+      {availableWeeks.length > 0 && (
+        <div className="mb-6 flex items-center gap-3">
+          <label htmlFor="week-filter" className="text-sm text-slate-500 whitespace-nowrap">
+            Service Week
+          </label>
+          <form method="get" className="flex items-center gap-2">
+            <select
+              id="week-filter"
+              name="week"
+              defaultValue={selectedWeek ?? ''}
+              className="input !py-1 text-sm"
+            >
+              <option value="">All weeks</option>
+              {availableWeeks.map((c) => {
+                const key = toDateKey(c.serviceWeekStart);
+                return (
+                  <option key={key} value={key}>
+                    {formatWeekRange(c.serviceWeekStart, locale)}
+                  </option>
+                );
+              })}
+            </select>
+            <button type="submit" className="btn-secondary btn-sm">
+              Filter
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* ── Today's meals ─────────────────────────────────────────────── */}
       {todayItems.length === 0 ? (
@@ -136,7 +189,10 @@ export default async function MyMealsPage() {
 
       {/* ── Past meals ────────────────────────────────────────────────── */}
       {byWeek.size === 0 ? (
-        <EmptyState title="No past meals" hint="Your meal history will appear here." />
+        <EmptyState
+          title={selectedWeek ? 'No meals for this week' : 'No past meals'}
+          hint={selectedWeek ? 'Try selecting a different week or clear the filter.' : 'Your meal history will appear here.'}
+        />
       ) : (
         <div className="grid gap-6">
           {[...byWeek.entries()].map(([weekKey, items]) => {
