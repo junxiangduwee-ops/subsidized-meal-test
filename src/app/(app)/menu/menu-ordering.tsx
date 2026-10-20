@@ -81,6 +81,7 @@ export function MenuOrdering({
   selectedDeliverySiteId,
   defaultDeliverySiteId = null,
   needsReceiptEmail = false,
+  isEmbed = false,
 }: {
   cycleId: string;
   tabs: DayTab[];
@@ -198,6 +199,7 @@ export function MenuOrdering({
         selectedDeliverySiteId={selectedDeliverySiteId}
         defaultDeliverySiteId={defaultDeliverySiteId}
         needsReceiptEmail={needsReceiptEmail}
+        isEmbed={isEmbed}
       />
     </div>
   );
@@ -360,6 +362,7 @@ function OrderSummary({
   selectedDeliverySiteId,
   defaultDeliverySiteId = null,
   needsReceiptEmail = false,
+  isEmbed = false,
 }: {
   cartLines: CartLine[];
   /** Amount due now - the open cart's total, not the whole week's. */
@@ -373,6 +376,8 @@ function OrderSummary({
   defaultDeliverySiteId?: string | null;
   /** True when the signed-in employee has no email on file, so checkout must collect one just for the payment receipt. */
   needsReceiptEmail?: boolean;
+  /** True when running inside the Joget embedded iframe — opens HitPay in a popup instead of redirecting. */
+  isEmbed?: boolean;
 }) {
   const t = useTranslations('menu');
   const router = useRouter();
@@ -440,17 +445,33 @@ function OrderSummary({
     const data = new FormData();
     data.set('cycleId', cycleId);
     if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
+    // For embedded (Joget iframe) mode: open a blank popup window
+    // IMMEDIATELY here — this is still inside the synchronous click handler
+    // so browsers allow it. We then navigate it to the HitPay URL once the
+    // server action returns the checkout URL. If we open window.open() inside
+    // startTransition's async callback, the browser treats it as a
+    // script-initiated popup and blocks it.
+    const popup = isEmbed && totalSen > 0
+      ? window.open('', 'hitpay_checkout', 'width=480,height=760')
+      : null;
+
     startTransition(async () => {
       const result = await checkout({}, data);
       if (result?.error) {
         setError(result.error);
+        popup?.close();
         return;
       }
       if (result?.reference) {
-        // The order page opens HitPay's checkout in its own popup window and
-        // polls for completion - HitPay itself refuses to render inside any
-        // iframe, so it can't be loaded directly here.
-        router.push(`/orders/${encodeURIComponent(result.reference)}`);
+        if (popup && result.checkoutUrl) {
+          // Navigate the already-open popup to HitPay and go to the order
+          // page to poll for completion.
+          popup.location.href = result.checkoutUrl;
+          router.push(`/orders/${encodeURIComponent(result.reference)}`);
+        } else {
+          // Non-embed or fully subsidised — normal navigation.
+          router.push(`/orders/${encodeURIComponent(result.reference)}`);
+        }
       }
       // Fully-subsidised (zero-cost) orders skip HitPay entirely and are
       // redirected server-side straight to the confirmed order.

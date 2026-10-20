@@ -19,7 +19,7 @@ import type { ActionState } from '@/components/action-form';
  * HitPay's checkout in its own popup window and polls for payment
  * completion rather than trying to load HitPay inside the embedded iframe.
  */
-export type CheckoutResult = ActionState & { reference?: string };
+export type CheckoutResult = ActionState & { reference?: string; checkoutUrl?: string };
 
 export type MealResult = { ok: boolean; error?: string };
 
@@ -184,7 +184,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   // plain web session isn't in any iframe, so redirecting straight to
   // HitPay works exactly as it always did.
   if (user.embed) {
-    return { reference: fresh.reference };
+    return { reference: fresh.reference, checkoutUrl };
   }
   redirect(checkoutUrl);
 }

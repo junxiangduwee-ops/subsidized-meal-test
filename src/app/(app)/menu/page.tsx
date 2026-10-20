@@ -234,6 +234,7 @@ export default async function MenuPage({
         selectedDeliverySiteId={cart?.deliverySiteId ?? null}
         defaultDeliverySiteId={userProfile?.defaultDeliverySiteId ?? null}
         needsReceiptEmail={!user.email}
+        isEmbed={user.embed}
       />
     </>
   );
