@@ -31,7 +31,7 @@ export default async function OrderDetailPage({
       cycle: true,
       user: { select: { id: true, name: true, email: true, staffId: true, department: true } },
       items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] },
-      payments: { orderBy: { createdAt: 'desc' } },
+      payments: { where: { status: { not: 'PENDING' } }, orderBy: { createdAt: 'desc' } },
     },
   });
 
@@ -173,7 +173,7 @@ export default async function OrderDetailPage({
                       <span className="tabular-nums text-slate-900">{formatSen(p.amountSen)}</span>
                     </div>
                     <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-                      <div>{formatDateTime(p.createdAt, locale)}</div>
+                      <div>{formatDateTime(p.updatedAt, locale)}</div>
                       {p.paymentMethod ? <div>{t('via', { method: p.paymentMethod })}</div> : null}
                       {p.paymentId ? (
                         // Safe to show: it is the payer's own reference, and

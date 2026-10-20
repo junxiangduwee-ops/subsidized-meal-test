@@ -132,7 +132,7 @@ export async function POST(request: Request) {
     if (status === 'SUCCEEDED' && order.status === 'AWAITING_PAYMENT') {
       await tx.order.update({
         where: { id: order.id },
-        data: { status: 'PAID', paidAt: new Date() },
+        data: { status: 'PAID', paidAt: order.paidAt ?? new Date() },
       });
     }
 
