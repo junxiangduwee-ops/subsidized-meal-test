@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { autoConfirmPastMeals, isCutoffPassed } from '@/lib/meal-receipt';
 import { getSiteSettings, formatCutoffHour } from '@/lib/settings';
-import { todayInAppTz, toDateKey, formatDate, formatDateTime, formatWeekRange } from '@/lib/cycle';
+import { todayInAppTz, toDateKey, addDays, formatDate, formatDateTime, formatWeekRange } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
 import { MealReceiptButton } from '@/components/meal-receipt-button';
 
@@ -19,11 +19,12 @@ export default async function MyMealsPage({
   const locale = await getLocale();
   const { week: selectedWeek } = await searchParams;
 
-  // Run lazy auto-confirm before reading — no cron needed.
   await autoConfirmPastMeals(user.id);
 
   const today = todayInAppTz();
   const todayKey = toDateKey(today);
+  const tomorrow = addDays(today, 1);
+  const tomorrowKey = toDateKey(tomorrow);
 
   // Fetch all available service weeks for the filter dropdown
   const availableWeeks = await prisma.menuCycle.findMany({
@@ -34,83 +35,86 @@ export default async function MyMealsPage({
     orderBy: { serviceWeekStart: 'desc' },
   });
 
-  // Resolve the selected week filter — default to showing all weeks
   const selectedWeekDate = selectedWeek ? new Date(selectedWeek + 'T00:00:00.000Z') : null;
+  const weekFilter = selectedWeekDate
+    ? { cycle: { serviceWeekStart: selectedWeekDate } }
+    : {};
 
-  const [todayItems, settings, pastItems] = await Promise.all([
-    // Today's paid meals — not affected by the week filter
+  const commonSelect = {
+    id: true,
+    dishName: true,
+    restaurantName: true,
+    serviceDate: true,
+    receivedAt: true,
+    receivedBySystem: true,
+    order: {
+      select: {
+        cycle: { select: { serviceWeekStart: true } },
+        paidAt: true,
+        submittedAt: true,
+      },
+    },
+  };
+
+  const [settings, todayItems, allOtherItems] = await Promise.all([
+    getSiteSettings(),
+    // Today's meals — use a date range (gte today, lt tomorrow) to avoid
+    // exact datetime mismatch issues with how Prisma stores dates
     prisma.orderItem.findMany({
       where: {
-        serviceDate: today,
+        serviceDate: new Date(todayKey + 'T00:00:00.000Z'),
         order: { userId: user.id, status: 'PAID' },
       },
-      select: {
-        id: true,
-        dishName: true,
-        restaurantName: true,
-        serviceDate: true,
-        receivedAt: true,
-        receivedBySystem: true,
-        order: {
-          select: {
-            cycle: { select: { serviceWeekStart: true } },
-            paidAt: true,
-            submittedAt: true,
-          },
-        },
-      },
+      select: commonSelect,
       orderBy: { dishName: 'asc' },
     }),
-    getSiteSettings(),
-    // Past paid meals (excluding today), filtered by selected week if set
+    // All other meals (past and future) — filtered by week if selected
     prisma.orderItem.findMany({
       where: {
-        serviceDate: { lt: today },
+        OR: [
+          { serviceDate: { lt: new Date(todayKey + 'T00:00:00.000Z') } },
+          { serviceDate: { gte: new Date(tomorrowKey + 'T00:00:00.000Z') } },
+        ],
         order: {
           userId: user.id,
           status: 'PAID',
-          ...(selectedWeekDate
-            ? { cycle: { serviceWeekStart: selectedWeekDate } }
-            : {}),
+          ...weekFilter,
         },
       },
-      select: {
-        id: true,
-        dishName: true,
-        restaurantName: true,
-        serviceDate: true,
-        receivedAt: true,
-        receivedBySystem: true,
-        order: {
-          select: {
-            cycle: { select: { serviceWeekStart: true } },
-            paidAt: true,
-            submittedAt: true,
-          },
-        },
-      },
+      select: commonSelect,
       orderBy: { serviceDate: 'desc' },
-      take: 60,
+      take: 100,
     }),
   ]);
 
   const cutoffPassed = await isCutoffPassed(todayKey);
   const cutoffLabel = formatCutoffHour(settings.mealReceiptCutoffHour);
 
-  // Group past items by service week
-  const byWeek = new Map<string, typeof pastItems>();
-  for (const item of pastItems) {
+  // Group all other items by service week
+  const byWeek = new Map<string, typeof allOtherItems>();
+  for (const item of allOtherItems) {
     const weekKey = toDateKey(item.order.cycle.serviceWeekStart);
     const bucket = byWeek.get(weekKey);
     if (bucket) bucket.push(item);
     else byWeek.set(weekKey, [item]);
   }
 
+  // Sort weeks — upcoming first (asc), then past (desc)
+  const sortedWeeks = [...byWeek.entries()].sort(([a], [b]) => {
+    const aDate = new Date(a + 'T00:00:00.000Z');
+    const bDate = new Date(b + 'T00:00:00.000Z');
+    const aFuture = aDate >= tomorrow;
+    const bFuture = bDate >= tomorrow;
+    if (aFuture && bFuture) return aDate.getTime() - bDate.getTime(); // upcoming: asc
+    if (!aFuture && !bFuture) return bDate.getTime() - aDate.getTime(); // past: desc
+    return aFuture ? -1 : 1; // upcoming before past
+  });
+
   return (
     <>
       <PageHeader
         title="My Meals"
-        subtitle="Confirm you received your meal. Past meals are shown below."
+        subtitle="Confirm you received your meal. Your upcoming and past meals are shown below."
       />
 
       {/* ── Week filter ───────────────────────────────────────────────── */}
@@ -199,23 +203,27 @@ export default async function MyMealsPage({
         </section>
       )}
 
-      {/* ── Past meals ────────────────────────────────────────────────── */}
-      {byWeek.size === 0 ? (
+      {/* ── All other meals (upcoming + past) in one unified table per week ── */}
+      {sortedWeeks.length === 0 ? (
         <EmptyState
-          title={selectedWeek ? 'No meals for this week' : 'No past meals'}
+          title={selectedWeek ? 'No meals for this week' : 'No meals found'}
           hint={selectedWeek ? 'Try selecting a different week or clear the filter.' : 'Your meal history will appear here.'}
         />
       ) : (
         <div className="grid gap-6">
-          {[...byWeek.entries()].map(([weekKey, items]) => {
+          {sortedWeeks.map(([weekKey, items]) => {
             const weekStart = new Date(weekKey + 'T00:00:00.000Z');
+            const isUpcoming = toDateKey(weekStart) >= tomorrowKey;
             const confirmedCount = items.filter((i) => i.receivedAt !== null).length;
+            const description = isUpcoming
+              ? `${items.length} meal${items.length !== 1 ? 's' : ''} upcoming`
+              : `${confirmedCount} of ${items.length} confirmed`;
 
             return (
               <Section
                 key={weekKey}
                 title={formatWeekRange(weekStart, locale)}
-                description={`${confirmedCount} of ${items.length} confirmed`}
+                description={description}
               >
                 <div className="overflow-x-auto">
                   <table className="table">
@@ -239,14 +247,10 @@ export default async function MyMealsPage({
                           <td className="font-medium text-slate-900">{item.dishName}</td>
                           <td className="text-slate-600">{item.restaurantName}</td>
                           <td className="text-xs text-slate-500 whitespace-nowrap">
-                            {item.order.submittedAt
-                              ? formatDateTime(item.order.submittedAt, locale)
-                              : '—'}
+                            {item.order.submittedAt ? formatDateTime(item.order.submittedAt, locale) : '—'}
                           </td>
                           <td className="text-xs text-slate-500 whitespace-nowrap">
-                            {item.order.paidAt
-                              ? formatDateTime(item.order.paidAt, locale)
-                              : '—'}
+                            {item.order.paidAt ? formatDateTime(item.order.paidAt, locale) : '—'}
                           </td>
                           <td>
                             {item.receivedAt ? (
