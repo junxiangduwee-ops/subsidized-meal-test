@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
 import { mapPaymentStatus, parseAmountToSen, verifyWebhookSignature, fetchPaymentType } from '@/lib/hitpay';
+import { getEntityCredentials } from '@/lib/entity-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
