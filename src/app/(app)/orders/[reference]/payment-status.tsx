@@ -112,16 +112,18 @@ export function PaymentStatus({
     );
   }
 
-  // Timed out or interrupted — show retry button
+  // Timed out or interrupted — show retry button matching normal UI
   if (autoStart && timedOut) {
     return (
       <div className="mt-2 flex flex-col gap-2">
         <p className="text-xs text-amber-700">
           Payment confirmation is taking longer than expected. If you have completed payment, please wait a moment and refresh. Otherwise you can retry below.
         </p>
-        <a href={checkoutUrl} className="btn-primary btn-sm inline-block">
-          {t('continueToPayment')}
-        </a>
+        <p className="mt-2">
+          <a href={checkoutUrl} className="btn-primary btn-sm">
+            {t('continueToPayment')}
+          </a>
+        </p>
       </div>
     );
   }
