@@ -17,39 +17,17 @@ const POLL_MS = 3000;
  * especially when running inside an iframe (Joget embedded mode).
  * The user must click the button to open the popup.
  */
-export function PaymentStatus({
-  reference,
-  checkoutUrl,
-  autoStart = false,
-}: {
-  reference: string;
-  checkoutUrl: string;
-  /** Auto-start polling immediately — used when returning from HitPay redirect (web mode). */
-  autoStart?: boolean;
-}) {
+export function PaymentStatus({ reference, checkoutUrl }: { reference: string; checkoutUrl: string }) {
   const t = useTranslations('orderDetail');
   const router = useRouter();
   const popupRef = useRef<Window | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
-  const [polling, setPolling] = useState(autoStart);
-  const [timedOut, setTimedOut] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [polling, setPolling] = useState(false);
 
   function startPolling() {
     if (pollingRef.current) return; // already polling
     setPolling(true);
-    setTimedOut(false);
-
-    // Stop polling after 60 seconds and show retry button
-    timeoutRef.current = setTimeout(() => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-      setPolling(false);
-      setTimedOut(true);
-    }, 60_000);
 
     pollingRef.current = setInterval(async () => {
       try {
@@ -62,8 +40,6 @@ export function PaymentStatus({
           popupRef.current?.close();
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
           setPolling(false);
           router.refresh();
         }
@@ -88,47 +64,13 @@ export function PaymentStatus({
     startPolling();
   }
 
-  // Auto-start polling when returning from HitPay redirect (web mode)
+  // Clean up polling on unmount
   useEffect(() => {
-    if (autoStart) startPolling();
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Web (non-embed) mode — auto polling, no button needed
-  if (autoStart && !timedOut) {
-    return (
-      <div className="mt-2 flex flex-col gap-2">
-        {polling ? (
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
-            <span className="text-xs text-slate-500">{t('checkingPayment')}</span>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  // Timed out or interrupted — show retry button matching normal UI
-  if (autoStart && timedOut) {
-    return (
-      <div className="mt-2 flex flex-col gap-2">
-        <p className="text-xs text-amber-700">
-          Payment confirmation is taking longer than expected. If you have completed payment, please wait a moment and refresh. Otherwise you can retry below.
-        </p>
-        <p className="mt-2">
-          <a href={checkoutUrl} className="btn-primary btn-sm">
-            {t('continueToPayment')}
-          </a>
-        </p>
-      </div>
-    );
-  }
-
-  // Embed (Joget iframe) mode — user must click to open popup
   return (
     <div className="mt-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">

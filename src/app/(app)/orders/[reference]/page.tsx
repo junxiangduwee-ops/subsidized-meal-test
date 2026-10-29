@@ -9,6 +9,7 @@ import { formatSen } from '@/lib/money';
 import { formatDate, formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, Alert, StatusBadge } from '@/components/ui';
 import { PaymentStatus } from './payment-status';
+import { WebPaymentStatus } from './web-payment-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,10 +97,9 @@ export default async function OrderDetailPage({
                 // so the page polls and auto-updates without the user needing to refresh.
                 // When not coming from HitPay, show a normal link.
                 query.from === 'hitpay' ? (
-                  <PaymentStatus
+                  <WebPaymentStatus
                     reference={order.reference}
                     checkoutUrl={latestPayment.checkoutUrl}
-                    autoStart
                   />
                 ) : (
                   <p className="mt-2">
