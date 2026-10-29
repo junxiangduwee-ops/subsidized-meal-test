@@ -92,11 +92,22 @@ export default async function OrderDetailPage({
               user.embed ? (
                 <PaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
               ) : (
-                <p className="mt-2">
-                  <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
-                    {t('continueToPayment')}
-                  </a>
-                </p>
+                // Web mode: show PaymentStatus with autoStart when returning from HitPay
+                // so the page polls and auto-updates without the user needing to refresh.
+                // When not coming from HitPay, show a normal link.
+                query.from === 'hitpay' ? (
+                  <PaymentStatus
+                    reference={order.reference}
+                    checkoutUrl={latestPayment.checkoutUrl}
+                    autoStart
+                  />
+                ) : (
+                  <p className="mt-2">
+                    <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
+                      {t('continueToPayment')}
+                    </a>
+                  </p>
+                )
               )
             ) : null}
           </Alert>

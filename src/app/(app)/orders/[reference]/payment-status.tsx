@@ -17,13 +17,22 @@ const POLL_MS = 3000;
  * especially when running inside an iframe (Joget embedded mode).
  * The user must click the button to open the popup.
  */
-export function PaymentStatus({ reference, checkoutUrl }: { reference: string; checkoutUrl: string }) {
+export function PaymentStatus({
+  reference,
+  checkoutUrl,
+  autoStart = false,
+}: {
+  reference: string;
+  checkoutUrl: string;
+  /** Auto-start polling immediately — used when returning from HitPay redirect (web mode). */
+  autoStart?: boolean;
+}) {
   const t = useTranslations('orderDetail');
   const router = useRouter();
   const popupRef = useRef<Window | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
-  const [polling, setPolling] = useState(false);
+  const [polling, setPolling] = useState(autoStart);
 
   function startPolling() {
     if (pollingRef.current) return; // already polling
@@ -64,13 +73,26 @@ export function PaymentStatus({ reference, checkoutUrl }: { reference: string; c
     startPolling();
   }
 
-  // Clean up polling on unmount
+  // Auto-start polling when returning from HitPay redirect (web mode)
   useEffect(() => {
+    if (autoStart) startPolling();
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Web (non-embed) mode — auto polling, no button needed
+  if (autoStart) {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+        <span className="text-xs text-slate-500">{t('checkingPayment')}</span>
+      </div>
+    );
+  }
+
+  // Embed (Joget iframe) mode — user must click to open popup
   return (
     <div className="mt-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">
