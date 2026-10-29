@@ -80,6 +80,14 @@ export type CreatePaymentRequestInput = {
   purpose: string;
   email: string;
   name: string;
+  /** Entity credentials — determines which HitPay account to charge. */
+  credentials: {
+    apiKey: string;
+    salt: string;
+    currency: string;
+    paymentMethods: string[];
+    mode: string;
+  };
 };
 
 export type CreatePaymentRequestResult = {
@@ -91,13 +99,17 @@ export type CreatePaymentRequestResult = {
 export async function createPaymentRequest(
   input: CreatePaymentRequestInput,
 ): Promise<CreatePaymentRequestResult> {
-  if (!hitpayConfigured()) {
-    throw new Error('HitPay is not configured. Set HITPAY_API_KEY and HITPAY_SALT.');
+  const { apiKey, currency, paymentMethods: methods, mode } = input.credentials;
+
+  if (!apiKey) {
+    throw new Error('HitPay is not configured for this entity.');
   }
+
+  const entityBaseUrl = mode === 'live' ? LIVE_BASE : SANDBOX_BASE;
 
   const body = new URLSearchParams({
     amount: senToRinggit(input.amountSen).toFixed(2),
-    currency: (process.env.HITPAY_CURRENCY ?? 'MYR').toUpperCase(),
+    currency: currency.toUpperCase(),
     email: input.email,
     name: input.name,
     purpose: input.purpose,
@@ -109,16 +121,16 @@ export async function createPaymentRequest(
   });
 
   // Repeated `payment_methods[]` keys - HitPay rejects a comma-joined string.
-  for (const method of paymentMethods()) {
+  for (const method of methods) {
     body.append('payment_methods[]', method);
   }
 
-  const res = await fetch(`${baseUrl()}/payment-requests`, {
+  const res = await fetch(`${entityBaseUrl}/payment-requests`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
-      'X-BUSINESS-API-KEY': process.env.HITPAY_API_KEY!,
+      'X-BUSINESS-API-KEY': apiKey,
       'X-Requested-With': 'XMLHttpRequest',
     },
     body,
@@ -172,9 +184,12 @@ export type HitPayWebhookPayload = {
  * HitPay's scheme: drop `hmac`, sort the remaining keys alphabetically,
  * concatenate `key + value` for each, then HMAC-SHA256 with the API salt.
  */
-export function verifyWebhookSignature(fields: Record<string, string>): boolean {
-  const salt = process.env.HITPAY_SALT;
-  if (!salt) return false;
+export function verifyWebhookSignature(
+  fields: Record<string, string>,
+  salt?: string,
+): boolean {
+  const signingSecret = salt ?? process.env.HITPAY_SALT;
+  if (!signingSecret) return false;
 
   const provided = fields.hmac;
   if (!provided) return false;
@@ -185,7 +200,7 @@ export function verifyWebhookSignature(fields: Record<string, string>): boolean 
     .map((k) => `${k}${fields[k]}`)
     .join('');
 
-  const expected = createHmac('sha256', salt).update(message).digest('hex');
+  const expected = createHmac('sha256', signingSecret).update(message).digest('hex');
 
   const a = Buffer.from(expected, 'utf8');
   const b = Buffer.from(provided, 'utf8');

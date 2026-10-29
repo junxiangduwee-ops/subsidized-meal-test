@@ -24,7 +24,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Malformed body' }, { status: 400 });
   }
 
-  if (!verifyWebhookSignature(fields)) {
+  // Verify the webhook signature using the entity-specific salt.
+  // We look up the order first to get its entityId, then verify the HMAC.
+  // If we can't find the order yet, fall back to checking all entity salts.
+  const orderForEntity = fields.reference_number
+    ? await prisma.order.findFirst({
+        where: { reference: fields.reference_number },
+        select: { entityId: true },
+      })
+    : null;
+
+  const entityId = orderForEntity?.entityId ?? 'retail';
+  const { salt } = getEntityCredentials(entityId);
+
+  if (!verifyWebhookSignature(fields, salt)) {
     console.warn('[hitpay] Rejected webhook with an invalid signature.');
     // 400, not 401 - a bad signature is a bad request, and we do not want
     // HitPay retrying a payload we will never accept.

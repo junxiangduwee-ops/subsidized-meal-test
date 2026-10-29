@@ -317,6 +317,8 @@ model Order {
   deliverySiteId String?
   deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])
 
+  entityId       String?     // e.g. 'retail', 'ecommerce', 'properties', 'group'
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -330,6 +332,7 @@ model Order {
   @@index([cycleId, status])
   @@index([paidAt])
   @@index([deliverySiteId])
+  @@index([entityId])
 }
 
 model OrderItem {

@@ -9,6 +9,8 @@ import { formatSen } from '@/lib/money';
 import { DayTabs, type DayTab } from '@/components/day-tabs';
 
 import { checkout, chooseDeliverySite, chooseMeal, clearCart, removeMeal } from './actions';
+import { EntitySelectPopup } from './entity-select-popup';
+import type { EntityId } from '@/lib/entity-config';
 
 export type MenuDish = {
   menuItemId: string;
@@ -387,6 +389,7 @@ function OrderSummary({
   const [pending, startTransition] = useTransition();
   const [siteSaving, setSiteSaving] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState('');
+  const [showEntityPopup, setShowEntityPopup] = useState(false);
 
   // Capture the site selected when the page first loaded — this is the stable
   // reference for the confirmation prompt. We cannot use defaultDeliverySiteId
@@ -444,9 +447,23 @@ function OrderSummary({
         return;
       }
     }
+    // Show entity selection popup before proceeding to payment.
+    // For free orders (fully subsidised), skip entity selection.
+    if (totalSen > 0) {
+      setShowEntityPopup(true);
+      return;
+    }
+    proceedCheckout(null);
+  }
+
+  function proceedCheckout(entityId: EntityId | null) {
+    setShowEntityPopup(false);
+    const wantsReceiptEmail = needsReceiptEmail && totalSen > 0;
     const data = new FormData();
     data.set('cycleId', cycleId);
     if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
+    if (entityId) data.set('entityId', entityId);
+
     // For embedded (Joget iframe) mode: open a blank popup window
     // IMMEDIATELY here — this is still inside the synchronous click handler
     // so browsers allow it. We then navigate it to the HitPay URL once the
@@ -466,21 +483,17 @@ function OrderSummary({
       }
       if (result?.reference) {
         if (popup && result.checkoutUrl) {
-          // Navigate the already-open popup to HitPay and go to the order
-          // page to poll for completion.
           popup.location.href = result.checkoutUrl;
           router.push(`/orders/${encodeURIComponent(result.reference)}`);
         } else {
-          // Non-embed or fully subsidised — normal navigation.
           router.push(`/orders/${encodeURIComponent(result.reference)}`);
         }
       }
-      // Fully-subsidised (zero-cost) orders skip HitPay entirely and are
-      // redirected server-side straight to the confirmed order.
     });
   }
 
   return (
+    <>
     <aside className="xl:sticky xl:top-20 xl:self-start">
       <div className="card overflow-hidden">
         <header className="flex items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
@@ -612,5 +625,13 @@ function OrderSummary({
         </div>
       </div>
     </aside>
+
+    {showEntityPopup && (
+      <EntitySelectPopup
+        onConfirm={(entityId) => proceedCheckout(entityId)}
+        onCancel={() => setShowEntityPopup(false)}
+      />
+    )}
+    </>
   );
 }

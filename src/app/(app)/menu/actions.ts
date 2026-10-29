@@ -6,7 +6,8 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit, clearMeal, repriceOrder, selectMeal, setDeliverySite, validateForCheckout } from '@/lib/orders';
-import { createPaymentRequest, hitpayConfigured } from '@/lib/hitpay';
+import { createPaymentRequest } from '@/lib/hitpay';
+import { getEntityCredentials, isValidEntityId } from '@/lib/entity-config';
 import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
 
@@ -115,10 +116,20 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     redirect(`/orders/${fresh.reference}?status=confirmed`);
   }
 
-  if (!hitpayConfigured()) {
+  // Get entity from form data — determines which HitPay account to charge.
+  // Entity selection is required — no default fallback.
+  const rawEntityId = String(formData.get('entityId') ?? '').trim();
+  if (!rawEntityId || !isValidEntityId(rawEntityId)) {
+    return { error: 'Please select your entity before proceeding to payment.' };
+  }
+  const entityId = rawEntityId;
+
+  let credentials: ReturnType<typeof getEntityCredentials>;
+  try {
+    credentials = getEntityCredentials(entityId);
+  } catch {
     return {
-      error:
-        'Online payment is not configured yet. Ask an administrator to add the HitPay API key before checking out.',
+      error: `Payment account not configured for ${entityId}. Contact your administrator.`,
     };
   }
 
@@ -140,7 +151,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
 
   await prisma.order.update({
     where: { id: fresh.id },
-    data: { status: 'AWAITING_PAYMENT', submittedAt: new Date() },
+    data: { status: 'AWAITING_PAYMENT', submittedAt: new Date(), entityId },
   });
 
   let checkoutUrl: string;
@@ -151,6 +162,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
       purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
       email: paymentEmail,
       name: user.name,
+      credentials,
     });
 
     await prisma.payment.create({
@@ -159,9 +171,10 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
         requestId: request.id,
         status: 'PENDING',
         amountSen: fresh.netSen,
-        currency: (process.env.HITPAY_CURRENCY ?? 'MYR').toUpperCase(),
+        currency: credentials.currency.toUpperCase(),
         checkoutUrl: request.url,
         receiptEmail: paymentEmail,
+        provider: `hitpay_${entityId}`,
       },
     });
 
