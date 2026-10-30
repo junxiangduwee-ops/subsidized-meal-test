@@ -167,6 +167,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   try {
     let checkoutUrl: string;
     let betterpayInvoice: string | undefined;
+    let hitpayRequestId: string | undefined;
 
     if (gateway === 'betterpay') {
       const bpCreds = getBetterpayCredentials(entityId);
@@ -207,29 +208,27 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
         name: user.name,
         credentials: hitpayCreds,
       });
-      checkoutUrl = request.url;
+      // checkoutUrl already set above
+      hitpayRequestId = request.id;
     }
-
-    // Placeholder to keep variable in scope for block below
-    const request = { url: checkoutUrl };
 
     await prisma.payment.create({
       data: {
         orderId: fresh.id,
-        requestId: gateway === 'betterpay' ? betterpayInvoice : request.id,
+        requestId: gateway === 'betterpay' ? betterpayInvoice : hitpayRequestId,
         status: 'PENDING',
         amountSen: fresh.netSen,
         currency: (gateway === 'betterpay'
           ? getBetterpayCredentials(entityId).currency
           : getEntityCredentials(entityId).currency
         ).toUpperCase(),
-        checkoutUrl: request.url,
+        checkoutUrl: checkoutUrl,
         receiptEmail: paymentEmail,
         provider: `${gateway}_${entityId}`,
       },
     });
 
-    checkoutUrl = request.url;
+    // checkoutUrl already set above
   } catch (err) {
     // Put the cart back so the employee can retry without losing anything.
     await prisma.order.update({
