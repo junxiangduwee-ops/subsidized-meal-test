@@ -7,7 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit, clearMeal, repriceOrder, selectMeal, setDeliverySite, validateForCheckout } from '@/lib/orders';
 import { createPaymentRequest } from '@/lib/hitpay';
-import { getEntityCredentials, isValidEntityId } from '@/lib/entity-config';
+import { createBetterpayBill } from '@/lib/betterpay';
+import { getEntityCredentials, getBetterpayCredentials, getGatewayType, isValidEntityId } from '@/lib/entity-config';
 import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
 
@@ -124,13 +125,21 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   }
   const entityId = rawEntityId;
 
-  let credentials: ReturnType<typeof getEntityCredentials>;
-  try {
-    credentials = getEntityCredentials(entityId);
-  } catch {
-    return {
-      error: `Payment account not configured for ${entityId}. Contact your administrator.`,
-    };
+  const gateway = getGatewayType(entityId);
+
+  // Validate credentials early before creating order
+  if (gateway === 'betterpay') {
+    try {
+      getBetterpayCredentials(entityId);
+    } catch {
+      return { error: `Betterpay account not configured for ${entityId}. Contact your administrator.` };
+    }
+  } else {
+    try {
+      getEntityCredentials(entityId);
+    } catch {
+      return { error: `HitPay account not configured for ${entityId}. Contact your administrator.` };
+    }
   }
 
   // HitPay needs somewhere to send the payment link/receipt. Most staff
@@ -156,25 +165,67 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
 
   let checkoutUrl: string;
   try {
-    const request = await createPaymentRequest({
-      amountSen: fresh.netSen,
-      reference: fresh.reference,
-      purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-      email: paymentEmail,
-      name: user.name,
-      credentials,
-    });
+    let checkoutUrl: string;
+    let betterpayInvoice: string | undefined;
+
+    if (gateway === 'betterpay') {
+      const bpCreds = getBetterpayCredentials(entityId);
+      // Use APP_URL if set (works for both local ngrok and production).
+      // Falls back to Vercel production URL, then deployment URL.
+      // Note: localhost won't work with Betterpay sandbox — use Vercel URL.
+      const appBase = (
+        process.env.APP_URL ??
+        (process.env.VERCEL_PROJECT_PRODUCTION_URL
+          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+          : null) ??
+        (process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : null) ??
+        'http://localhost:3000'
+      ).replace(/\/$/, '');
+
+      const bill = await createBetterpayBill({
+        amountSen: fresh.netSen,
+        reference: fresh.reference,
+        purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
+        email: paymentEmail,
+        name: user.name ?? '',
+        credentials: bpCreds,
+        callbackUrlBe:      `${appBase}/api/webhooks/betterpay`,
+        callbackUrlFeSucc:  `${appBase}/orders/${encodeURIComponent(fresh.reference)}?from=betterpay`,
+        callbackUrlFeFail:  `${appBase}/orders/${encodeURIComponent(fresh.reference)}?from=betterpay&status=failed`,
+      });
+      checkoutUrl = bill.url;
+      betterpayInvoice = bill.invoice;
+    } else {
+      const hitpayCreds = getEntityCredentials(entityId);
+      const request = await createPaymentRequest({
+        amountSen: fresh.netSen,
+        reference: fresh.reference,
+        purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
+        email: paymentEmail,
+        name: user.name,
+        credentials: hitpayCreds,
+      });
+      checkoutUrl = request.url;
+    }
+
+    // Placeholder to keep variable in scope for block below
+    const request = { url: checkoutUrl };
 
     await prisma.payment.create({
       data: {
         orderId: fresh.id,
-        requestId: request.id,
+        requestId: gateway === 'betterpay' ? betterpayInvoice : request.id,
         status: 'PENDING',
         amountSen: fresh.netSen,
-        currency: credentials.currency.toUpperCase(),
+        currency: (gateway === 'betterpay'
+          ? getBetterpayCredentials(entityId).currency
+          : getEntityCredentials(entityId).currency
+        ).toUpperCase(),
         checkoutUrl: request.url,
         receiptEmail: paymentEmail,
-        provider: `hitpay_${entityId}`,
+        provider: `${gateway}_${entityId}`,
       },
     });
 
@@ -186,7 +237,9 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
       data: { status: 'CART', submittedAt: null },
     });
     console.error('[checkout] HitPay request failed:', err);
-    return { error: 'Could not reach the payment gateway. Please try again in a moment.' };
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[checkout] Payment gateway error:', errMsg);
+    return { error: `Could not reach the payment gateway: ${errMsg}` };
   }
 
   await audit(user.id, 'order.checkout', 'Order', fresh.id, { netSen: fresh.netSen });
