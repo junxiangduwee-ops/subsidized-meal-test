@@ -37,7 +37,15 @@ export function PaymentStatus({ reference, checkoutUrl }: { reference: string; c
         if (!res.ok) return;
         const data = (await res.json()) as { status?: string };
         if (data.status && data.status !== 'AWAITING_PAYMENT') {
-          popupRef.current?.close();
+          // Close via stored ref first, then fallback to named window
+          if (popupRef.current && !popupRef.current.closed) {
+            popupRef.current.close();
+          } else {
+            try {
+              const namedPopup = window.open('', 'hitpay_checkout');
+              if (namedPopup && !namedPopup.closed) namedPopup.close();
+            } catch { /* cross-origin — browser may block */ }
+          }
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setPolling(false);
