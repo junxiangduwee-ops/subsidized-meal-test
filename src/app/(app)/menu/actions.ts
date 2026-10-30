@@ -163,12 +163,10 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     data: { status: 'AWAITING_PAYMENT', submittedAt: new Date(), entityId },
   });
 
-  let checkoutUrl: string;
+  let checkoutUrl: string = '';
+  let betterpayInvoice: string | undefined;
+  let hitpayRequestId: string | undefined;
   try {
-    let checkoutUrl: string;
-    let betterpayInvoice: string | undefined;
-    let hitpayRequestId: string | undefined;
-
     if (gateway === 'betterpay') {
       const bpCreds = getBetterpayCredentials(entityId);
       // Use APP_URL if set (works for both local ngrok and production).
@@ -208,7 +206,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
         name: user.name,
         credentials: hitpayCreds,
       });
-      // checkoutUrl already set above
+      checkoutUrl = request.url;
       hitpayRequestId = request.id;
     }
 
