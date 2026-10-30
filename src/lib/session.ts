@@ -62,8 +62,11 @@ export async function createSession(
   // login path keeps the stricter Lax default.
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: embed ? true : process.env.NODE_ENV === 'production',
-    sameSite: embed ? 'none' : 'lax',
+    // SameSite=None; Secure allows the cookie to survive cross-domain
+    // redirects from external payment gateways (Betterpay, HitPay) back
+    // to this app. Also required for the Joget embedded iframe flow.
+    secure: true,
+    sameSite: 'none',
     // CHIPS: partitions the cookie per top-level site (Joget's origin) so
     // Chrome still stores/sends it for the iframe even when general
     // third-party cookies are blocked (this includes Incognito by default).
