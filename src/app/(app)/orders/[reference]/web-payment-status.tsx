@@ -7,12 +7,6 @@ import { useTranslations } from 'next-intl';
 const POLL_MS = 3000;
 const TIMEOUT_MS = 60_000;
 
-/**
- * Web (non-embed) payment status poller.
- * Auto-starts polling when user returns from HitPay redirect (?from=hitpay).
- * Shows a spinner while waiting, and a retry button if payment takes too long
- * or was interrupted.
- */
 export function WebPaymentStatus({
   reference,
   checkoutUrl,
@@ -27,7 +21,6 @@ export function WebPaymentStatus({
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    // Auto-start polling immediately on mount
     pollingRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/orders/${encodeURIComponent(reference)}/status`, {
@@ -45,7 +38,6 @@ export function WebPaymentStatus({
       }
     }, POLL_MS);
 
-    // Stop polling after 60 seconds and show retry button
     timeoutRef.current = setTimeout(() => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       setTimedOut(true);
