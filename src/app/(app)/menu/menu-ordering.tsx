@@ -447,8 +447,7 @@ function OrderSummary({
         return;
       }
     }
-    // Show entity selection popup before proceeding to payment.
-    // For free orders (fully subsidised), skip entity selection.
+    // Show entity selection popup before payment (skip for free orders)
     if (totalSen > 0) {
       setShowEntityPopup(true);
       return;
@@ -456,21 +455,34 @@ function OrderSummary({
     proceedCheckout(null);
   }
 
+  /** Submit a hidden form to the given URL in the current page */
+  function submitFormInPage(actionUrl: string, fields: Record<string, string>) {
+    const form = window.document.createElement('form');
+    form.method = 'POST';
+    form.action = actionUrl;
+    for (const [key, val] of Object.entries(fields)) {
+      const input = window.document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(val);
+      form.appendChild(input);
+    }
+    window.document.body.appendChild(form);
+    form.submit();
+  }
+
   function proceedCheckout(entityId: EntityId | null) {
     setShowEntityPopup(false);
     const wantsReceiptEmail = needsReceiptEmail && totalSen > 0;
     const data = new FormData();
     data.set('cycleId', cycleId);
-    if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
     if (entityId) data.set('entityId', entityId);
+    if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
 
-    // For embedded (Joget iframe) mode: open a blank popup window
-    // IMMEDIATELY here — this is still inside the synchronous click handler
-    // so browsers allow it. We then navigate it to the HitPay URL once the
-    // server action returns the checkout URL. If we open window.open() inside
-    // startTransition's async callback, the browser treats it as a
-    // script-initiated popup and blocks it.
-    const popup = isEmbed && totalSen > 0
+    // For ADAPTIS — no popup in web mode (form submits full page)
+    // For HitPay/Betterpay embed — open blank popup immediately (must be sync)
+    const isAdaptis = entityId === 'properties';
+    const popup = isEmbed && totalSen > 0 && !isAdaptis
       ? window.open('', 'hitpay_checkout', 'width=480,height=760')
       : null;
 
@@ -481,6 +493,36 @@ function OrderSummary({
         popup?.close();
         return;
       }
+
+      // ADAPTIS — form POST flow (different for embed vs web)
+      if (result?.adaptisFormData && result?.adaptisPaymentUrl && result?.reference) {
+        if (isEmbed) {
+          // Embed: inject form into popup and submit it
+          const adaptisPopup = window.open('', 'hitpay_checkout', 'width=480,height=760');
+          if (adaptisPopup) {
+            const doc = adaptisPopup.document;
+            doc.open();
+            doc.write('<html><body>');
+            doc.write(`<form id="f" method="POST" action="${result.adaptisPaymentUrl}">`);
+            for (const [key, val] of Object.entries(result.adaptisFormData)) {
+              const safe = String(val).replace(/"/g, '&quot;');
+              doc.write(`<input type="hidden" name="${key}" value="${safe}">`);
+            }
+            doc.write('</form>');
+            doc.write('<script>document.getElementById("f").submit();<\/script>');
+            doc.write('</body></html>');
+            doc.close();
+          } else {
+            submitFormInPage(result.adaptisPaymentUrl, result.adaptisFormData);
+          }
+          router.push(`/orders/${encodeURIComponent(result.reference)}`);
+        } else {
+          // Web: full page form submit
+          submitFormInPage(result.adaptisPaymentUrl, result.adaptisFormData);
+        }
+        return;
+      }
+
       if (result?.reference) {
         if (popup && result.checkoutUrl) {
           popup.location.href = result.checkoutUrl;

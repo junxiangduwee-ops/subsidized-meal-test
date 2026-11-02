@@ -15,7 +15,6 @@ export function EntitySelectPopup({ onConfirm, onCancel }: Props) {
         <p className="mt-1 text-sm text-slate-500">
           Please select which MR DIY entity you belong to. Your payment will go to the correct account.
         </p>
-
         <div className="mt-4 grid gap-2">
           {ENTITIES.map((entity) => (
             <button
@@ -31,7 +30,6 @@ export function EntitySelectPopup({ onConfirm, onCancel }: Props) {
             </button>
           ))}
         </div>
-
         <button
           type="button"
           onClick={onCancel}
