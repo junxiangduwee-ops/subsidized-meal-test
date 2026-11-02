@@ -3,25 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Betterpay frontend return handler.
- *
- * Betterpay redirects the browser here after payment.
- * This endpoint does NOT require authentication — it just looks up
- * the order by invoice number and redirects to the order detail page.
- *
- * The session cookie is preserved because this is a same-domain redirect
- * (Next.js → Next.js), not a cross-domain redirect (Betterpay → Next.js).
- *
- * Success: GET /api/payment/betterpay/return?invoice=MRD26103025188&status=success
- * Fail:    GET /api/payment/betterpay/return?invoice=MRD26103025188&status=failed
- */
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const invoice = searchParams.get('invoice') ?? '';
-  const status = searchParams.get('status') ?? '';
-
-  // Look up the order reference from the payment record
+async function handleReturn(invoice: string, status: string, req: NextRequest) {
   let orderReference: string | null = null;
   if (invoice) {
     const payment = await prisma.payment.findFirst({
@@ -38,6 +20,30 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Fallback — go to orders list
   return NextResponse.redirect(new URL('/orders', req.url));
+}
+
+/** GET — Betterpay redirects with query params */
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  return handleReturn(
+    searchParams.get('invoice') ?? '',
+    searchParams.get('status') ?? '',
+    req
+  );
+}
+
+/** POST — Betterpay posts form data to return URL */
+export async function POST(req: NextRequest) {
+  let invoice = '';
+  let status = '';
+  try {
+    const text = await req.text();
+    const fields = Object.fromEntries(new URLSearchParams(text));
+    // Betterpay posts: invoice_no, txn_status among others
+    invoice = fields.invoice ?? fields.invoice_no ?? '';
+    status  = fields.txn_status === '00' ? 'success' : 'failed';
+  } catch { /* ignore parse errors */ }
+
+  return handleReturn(invoice, status, req);
 }
