@@ -25,7 +25,10 @@ export async function retryPayment(reference: string): Promise<RetryPaymentResul
 
   const order = await prisma.order.findFirst({
     where: { reference, userId: user.id, status: 'AWAITING_PAYMENT' },
-    include: { cycle: true },
+    include: {
+      cycle: true,
+      payments: { orderBy: { createdAt: 'desc' }, take: 1 },
+    },
   });
 
   if (!order) {
