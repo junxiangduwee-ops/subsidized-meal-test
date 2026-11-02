@@ -93,18 +93,7 @@ export default async function OrderDetailPage({
               user.embed ? (
                 <PaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
               ) : (
-                (query.from === 'hitpay' || query.from === 'betterpay') ? (
-                  <WebPaymentStatus
-                    reference={order.reference}
-                    checkoutUrl={latestPayment.checkoutUrl ?? ''}
-                  />
-                ) : (
-                  <p className="mt-2">
-                    <a href={latestPayment.checkoutUrl ?? '#'} className="btn-primary btn-sm">
-                      {t('continueToPayment')}
-                    </a>
-                  </p>
-                )
+                <WebPaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
               )
             ) : null}
           </Alert>

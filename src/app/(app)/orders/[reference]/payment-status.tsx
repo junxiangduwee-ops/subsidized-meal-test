@@ -7,28 +7,16 @@ import { retryPayment } from './retry-payment-action';
 
 const POLL_MS = 3000;
 
-/**
- * Embed (Joget iframe) payment status component.
- *
- * Polls for payment completion and auto-starts on mount since the popup
- * was already opened in menu-ordering.tsx before navigating here.
- *
- * When the user clicks "Continue to Payment" after a timeout, a FRESH
- * payment request is created via retryPayment() so the expired URL is
- * never reused.
- */
 export function PaymentStatus({
   reference,
-  checkoutUrl: initialCheckoutUrl,
 }: {
   reference: string;
-  checkoutUrl: string;
+  checkoutUrl: string; // kept for API compatibility but not used for retry
 }) {
   const t = useTranslations('orderDetail');
   const router = useRouter();
   const popupRef = useRef<Window | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [popupBlocked, setPopupBlocked] = useState(false);
   const [polling, setPolling] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,20 +41,18 @@ export function PaymentStatus({
             try {
               const p = window.open('', 'hitpay_checkout');
               if (p && !p.closed) p.close();
-            } catch { /* cross-origin — ignore */ }
+            } catch { /* cross-origin */ }
           }
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setPolling(false);
           router.refresh();
         }
-      } catch {
-        // Transient network hiccup — retry next tick
-      }
+      } catch { /* network hiccup */ }
     }, POLL_MS);
   }
 
-  // Auto-start polling on mount — popup already open from menu-ordering.tsx
+  // Auto-start polling on mount — popup already opened in menu-ordering.tsx
   useEffect(() => {
     startPolling();
     return () => {
@@ -75,56 +61,65 @@ export function PaymentStatus({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function openCheckout() {
+  function handleRetry() {
     setError(null);
     setRetrying(true);
 
-    // Always create a FRESH payment request — never reuse an expired URL
-    const result = await retryPayment(reference);
+    // Open blank popup SYNCHRONOUSLY here (direct click handler — browser allows it)
+    // We then navigate it once the server action returns the new URL
+    const popup = window.open('', 'hitpay_checkout', 'width=480,height=760');
+    popupRef.current = popup ?? null;
 
-    setRetrying(false);
-
-    if (result.error) {
-      setError(result.error);
-      return;
+    // Show a loading message in the popup while we create the payment
+    if (popup) {
+      popup.document.write('<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p style="color:#666">Preparing payment...</p></body></html>');
     }
 
-    // ADAPTIS — inject form into popup
-    if (result.adaptisFormData && result.adaptisPaymentUrl) {
-      const popup = window.open('', 'hitpay_checkout', 'width=480,height=760');
-      popupRef.current = popup ?? null;
-      if (popup) {
-        const doc = popup.document;
-        doc.open();
-        doc.write('<html><body>');
-        doc.write(`<form id="f" method="POST" action="${result.adaptisPaymentUrl}">`);
-        for (const [key, val] of Object.entries(result.adaptisFormData)) {
-          const safe = String(val).replace(/"/g, '&quot;');
-          doc.write(`<input type="hidden" name="${key}" value="${safe}">`);
-        }
-        doc.write('</form>');
-        doc.write('<script>document.getElementById("f").submit();<\/script>');
-        doc.write('</body></html>');
-        doc.close();
-        setPopupBlocked(false);
-        startPolling();
-      } else {
-        setPopupBlocked(true);
-      }
-      return;
-    }
+    retryPayment(reference).then((result) => {
+      setRetrying(false);
 
-    // HitPay / Betterpay — open new URL in popup
-    if (result.checkoutUrl) {
-      const popup = window.open(result.checkoutUrl, 'hitpay_checkout', 'width=480,height=760');
-      popupRef.current = popup ?? null;
-      if (!popup) {
-        setPopupBlocked(true);
+      if (result.error) {
+        setError(result.error);
+        popup?.close();
         return;
       }
-      setPopupBlocked(false);
-      startPolling();
-    }
+
+      // ADAPTIS — inject form into the already-open popup
+      if (result.adaptisFormData && result.adaptisPaymentUrl) {
+        if (popup && !popup.closed) {
+          const doc = popup.document;
+          doc.open();
+          doc.write('<html><body>');
+          doc.write(`<form id="f" method="POST" action="${result.adaptisPaymentUrl}">`);
+          for (const [key, val] of Object.entries(result.adaptisFormData)) {
+            const safe = String(val).replace(/"/g, '&quot;');
+            doc.write(`<input type="hidden" name="${key}" value="${safe}">`);
+          }
+          doc.write('</form>');
+          doc.write('<script>document.getElementById("f").submit();<\/script>');
+          doc.write('</body></html>');
+          doc.close();
+          startPolling();
+        }
+        return;
+      }
+
+      // HitPay / Betterpay — navigate popup to new URL
+      if (result.checkoutUrl) {
+        if (popup && !popup.closed) {
+          popup.location.href = result.checkoutUrl;
+          startPolling();
+        } else {
+          // Popup was blocked — open directly
+          window.open(result.checkoutUrl, '_blank');
+        }
+      }
+    }).catch((err) => {
+      setRetrying(false);
+      setError('Could not create payment. Please try again.');
+      popup?.close();
+      console.error('[retry]', err);
+    });
   }
 
   return (
@@ -132,12 +127,12 @@ export function PaymentStatus({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={openCheckout}
+          onClick={handleRetry}
           disabled={retrying || polling}
           className="btn-primary btn-sm"
         >
           {retrying
-            ? 'Preparing payment…'
+            ? 'Preparing…'
             : polling
             ? t('waitingForPayment')
             : t('continueToPayment')}
@@ -145,18 +140,13 @@ export function PaymentStatus({
         {(polling || retrying) && (
           <span className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
-            {retrying ? 'Creating new payment…' : t('checkingPayment')}
+            {retrying ? 'Creating payment…' : t('checkingPayment')}
           </span>
         )}
       </div>
       {error && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
-        </p>
-      )}
-      {popupBlocked && !error && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {t('popupBlocked')}
         </p>
       )}
     </div>
