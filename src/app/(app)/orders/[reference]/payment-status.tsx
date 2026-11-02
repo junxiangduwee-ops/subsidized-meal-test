@@ -7,24 +7,27 @@ import { retryPayment } from './retry-payment-action';
 
 const POLL_MS = 3000;
 
+/**
+ * Embed (Joget iframe) payment status.
+ * Shows "Continue to Payment" button immediately.
+ * Polls silently in background — auto-closes popup and refreshes when PAID.
+ * Retry always creates a fresh payment request.
+ */
 export function PaymentStatus({
   reference,
 }: {
   reference: string;
-  checkoutUrl: string; // kept for API compatibility but not used for retry
+  checkoutUrl: string;
 }) {
   const t = useTranslations('orderDetail');
   const router = useRouter();
   const popupRef = useRef<Window | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [polling, setPolling] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function startPolling() {
-    if (pollingRef.current) return;
-    setPolling(true);
-
+  // Always poll silently in background
+  useEffect(() => {
     pollingRef.current = setInterval(async () => {
       try {
         const res = await fetch(
@@ -44,17 +47,11 @@ export function PaymentStatus({
             } catch { /* cross-origin */ }
           }
           if (pollingRef.current) clearInterval(pollingRef.current);
-          pollingRef.current = null;
-          setPolling(false);
           router.refresh();
         }
       } catch { /* network hiccup */ }
     }, POLL_MS);
-  }
 
-  // Auto-start polling on mount — popup already opened in menu-ordering.tsx
-  useEffect(() => {
-    startPolling();
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
@@ -65,14 +62,13 @@ export function PaymentStatus({
     setError(null);
     setRetrying(true);
 
-    // Open blank popup SYNCHRONOUSLY here (direct click handler — browser allows it)
-    // We then navigate it once the server action returns the new URL
+    // Open blank popup synchronously — must be in click handler
     const popup = window.open('', 'hitpay_checkout', 'width=480,height=760');
     popupRef.current = popup ?? null;
-
-    // Show a loading message in the popup while we create the payment
     if (popup) {
-      popup.document.write('<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p style="color:#666">Preparing payment...</p></body></html>');
+      popup.document.write(
+        '<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><p style="color:#666">Preparing payment\u2026</p></body></html>'
+      );
     }
 
     retryPayment(reference).then((result) => {
@@ -84,7 +80,7 @@ export function PaymentStatus({
         return;
       }
 
-      // ADAPTIS — inject form into the already-open popup
+      // ADAPTIS — inject form into popup
       if (result.adaptisFormData && result.adaptisPaymentUrl) {
         if (popup && !popup.closed) {
           const doc = popup.document;
@@ -99,26 +95,22 @@ export function PaymentStatus({
           doc.write('<script>document.getElementById("f").submit();<\/script>');
           doc.write('</body></html>');
           doc.close();
-          startPolling();
         }
         return;
       }
 
-      // HitPay / Betterpay — navigate popup to new URL
+      // HitPay / Betterpay — navigate popup to fresh URL
       if (result.checkoutUrl) {
         if (popup && !popup.closed) {
           popup.location.href = result.checkoutUrl;
-          startPolling();
         } else {
-          // Popup was blocked — open directly
           window.open(result.checkoutUrl, '_blank');
         }
       }
-    }).catch((err) => {
+    }).catch(() => {
       setRetrying(false);
       setError('Could not create payment. Please try again.');
       popup?.close();
-      console.error('[retry]', err);
     });
   }
 
@@ -128,21 +120,11 @@ export function PaymentStatus({
         <button
           type="button"
           onClick={handleRetry}
-          disabled={retrying || polling}
+          disabled={retrying}
           className="btn-primary btn-sm"
         >
-          {retrying
-            ? 'Preparing…'
-            : polling
-            ? t('waitingForPayment')
-            : t('continueToPayment')}
+          {retrying ? 'Preparing\u2026' : t('continueToPayment')}
         </button>
-        {(polling || retrying) && (
-          <span className="flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
-            {retrying ? 'Creating payment…' : t('checkingPayment')}
-          </span>
-        )}
       </div>
       {error && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

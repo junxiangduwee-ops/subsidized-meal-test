@@ -93,7 +93,10 @@ export default async function OrderDetailPage({
               user.embed ? (
                 <PaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
               ) : (
-                <WebPaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
+                <WebPaymentStatus
+                  reference={order.reference}
+                  checkoutUrl={latestPayment.checkoutUrl}
+                />
               )
             ) : null}
           </Alert>
