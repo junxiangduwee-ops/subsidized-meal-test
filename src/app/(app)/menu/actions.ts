@@ -8,7 +8,8 @@ import { assertCapability } from '@/lib/session';
 import { audit, clearMeal, repriceOrder, selectMeal, setDeliverySite, validateForCheckout } from '@/lib/orders';
 import { createPaymentRequest } from '@/lib/hitpay';
 import { createBetterpayBill } from '@/lib/betterpay';
-import { getEntityCredentials, getBetterpayCredentials, getGatewayType, isValidEntityId } from '@/lib/entity-config';
+import { createAdaptisPayment } from '@/lib/adaptis';
+import { getEntityCredentials, getBetterpayCredentials, getAdaptisCredentials, getGatewayType, isValidEntityId } from '@/lib/entity-config';
 import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
 
@@ -21,7 +22,13 @@ import type { ActionState } from '@/components/action-form';
  * HitPay's checkout in its own popup window and polls for payment
  * completion rather than trying to load HitPay inside the embedded iframe.
  */
-export type CheckoutResult = ActionState & { reference?: string; checkoutUrl?: string };
+export type CheckoutResult = ActionState & {
+  reference?: string;
+  checkoutUrl?: string;
+  /** ADAPTIS only — form data to POST to eGHL payment page */
+  adaptisFormData?: Record<string, string>;
+  adaptisPaymentUrl?: string;
+};
 
 export type MealResult = { ok: boolean; error?: string };
 
@@ -117,30 +124,13 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     redirect(`/orders/${fresh.reference}?status=confirmed`);
   }
 
-  // Get entity from form data — determines which HitPay account to charge.
-  // Entity selection is required — no default fallback.
+  // Entity selection — determines which gateway to use
   const rawEntityId = String(formData.get('entityId') ?? '').trim();
   if (!rawEntityId || !isValidEntityId(rawEntityId)) {
     return { error: 'Please select your entity before proceeding to payment.' };
   }
   const entityId = rawEntityId;
-
   const gateway = getGatewayType(entityId);
-
-  // Validate credentials early before creating order
-  if (gateway === 'betterpay') {
-    try {
-      getBetterpayCredentials(entityId);
-    } catch {
-      return { error: `Betterpay account not configured for ${entityId}. Contact your administrator.` };
-    }
-  } else {
-    try {
-      getEntityCredentials(entityId);
-    } catch {
-      return { error: `HitPay account not configured for ${entityId}. Contact your administrator.` };
-    }
-  }
 
   // HitPay needs somewhere to send the payment link/receipt. Most staff
   // have their own email; for the (real, expected) case of an employee
@@ -160,73 +150,32 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
 
   await prisma.order.update({
     where: { id: fresh.id },
-    data: { status: 'AWAITING_PAYMENT', submittedAt: new Date(), entityId },
+    data: { status: 'AWAITING_PAYMENT', submittedAt: new Date() },
   });
 
-  let checkoutUrl: string = '';
-  let betterpayInvoice: string | undefined;
-  let hitpayRequestId: string | undefined;
+  let checkoutUrl: string;
   try {
-    if (gateway === 'betterpay') {
-      const bpCreds = getBetterpayCredentials(entityId);
-      // Use APP_URL if set (works for both local ngrok and production).
-      // Falls back to Vercel production URL, then deployment URL.
-      // Note: localhost won't work with Betterpay sandbox — use Vercel URL.
-      const appBase = (
-        process.env.APP_URL ??
-        (process.env.VERCEL_PROJECT_PRODUCTION_URL
-          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-          : null) ??
-        (process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
-          : null) ??
-        'http://localhost:3000'
-      ).replace(/\/$/, '');
-
-      const bill = await createBetterpayBill({
-        amountSen: fresh.netSen,
-        reference: fresh.reference,
-        purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-        email: paymentEmail,
-        name: user.name ?? '',
-        credentials: bpCreds,
-        callbackUrlBe:      `${appBase}/api/webhooks/betterpay`,
-        callbackUrlFeSucc:  `${appBase}/orders/${encodeURIComponent(fresh.reference)}?from=betterpay`,
-        callbackUrlFeFail:  `${appBase}/orders/${encodeURIComponent(fresh.reference)}?from=betterpay&status=failed`,
-      });
-      checkoutUrl = bill.url;
-      betterpayInvoice = bill.invoice;
-    } else {
-      const hitpayCreds = getEntityCredentials(entityId);
-      const request = await createPaymentRequest({
-        amountSen: fresh.netSen,
-        reference: fresh.reference,
-        purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-        email: paymentEmail,
-        name: user.name,
-        credentials: hitpayCreds,
-      });
-      checkoutUrl = request.url;
-      hitpayRequestId = request.id;
-    }
+    const request = await createPaymentRequest({
+      amountSen: fresh.netSen,
+      reference: fresh.reference,
+      purpose: `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
+      email: paymentEmail,
+      name: user.name,
+    });
 
     await prisma.payment.create({
       data: {
         orderId: fresh.id,
-        requestId: gateway === 'betterpay' ? betterpayInvoice : hitpayRequestId,
+        requestId: request.id,
         status: 'PENDING',
         amountSen: fresh.netSen,
-        currency: (gateway === 'betterpay'
-          ? getBetterpayCredentials(entityId).currency
-          : getEntityCredentials(entityId).currency
-        ).toUpperCase(),
-        checkoutUrl: checkoutUrl,
+        currency: (process.env.HITPAY_CURRENCY ?? 'MYR').toUpperCase(),
+        checkoutUrl: request.url,
         receiptEmail: paymentEmail,
-        provider: `${gateway}_${entityId}`,
       },
     });
 
-    // checkoutUrl already set above
+    checkoutUrl = request.url;
   } catch (err) {
     // Put the cart back so the employee can retry without losing anything.
     await prisma.order.update({
@@ -234,9 +183,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
       data: { status: 'CART', submittedAt: null },
     });
     console.error('[checkout] HitPay request failed:', err);
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error('[checkout] Payment gateway error:', errMsg);
-    return { error: `Could not reach the payment gateway: ${errMsg}` };
+    return { error: 'Could not reach the payment gateway. Please try again in a moment.' };
   }
 
   await audit(user.id, 'order.checkout', 'Order', fresh.id, { netSen: fresh.netSen });
@@ -246,6 +193,15 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   // Only embedded (Joget iframe) sessions need the popup+poll dance - a
   // plain web session isn't in any iframe, so redirecting straight to
   // HitPay works exactly as it always did.
+  // ADAPTIS uses form POST — return form data to client regardless of embed mode
+  if (gateway === 'adaptis') {
+    return {
+      reference:        fresh.reference,
+      adaptisFormData,
+      adaptisPaymentUrl,
+    };
+  }
+
   if (user.embed) {
     return { reference: fresh.reference, checkoutUrl };
   }

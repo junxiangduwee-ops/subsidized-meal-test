@@ -389,7 +389,6 @@ function OrderSummary({
   const [pending, startTransition] = useTransition();
   const [siteSaving, setSiteSaving] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState('');
-  const [showEntityPopup, setShowEntityPopup] = useState(false);
 
   // Capture the site selected when the page first loaded — this is the stable
   // reference for the confirmation prompt. We cannot use defaultDeliverySiteId
@@ -447,8 +446,6 @@ function OrderSummary({
         return;
       }
     }
-    // Show entity selection popup before proceeding to payment.
-    // For free orders (fully subsidised), skip entity selection.
     if (totalSen > 0) {
       setShowEntityPopup(true);
       return;
@@ -456,20 +453,37 @@ function OrderSummary({
     proceedCheckout(null);
   }
 
+  /** Submit a hidden HTML form to the given URL in the current page */
+  function submitFormInPage(actionUrl: string, fields: Record<string, string>) {
+    const form = window.document.createElement('form');
+    form.method = 'POST';
+    form.action = actionUrl;
+    for (const [key, val] of Object.entries(fields)) {
+      const input = window.document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(val);
+      form.appendChild(input);
+    }
+    window.document.body.appendChild(form);
+    form.submit();
+  }
+
   function proceedCheckout(entityId: EntityId | null) {
     setShowEntityPopup(false);
     const wantsReceiptEmail = needsReceiptEmail && totalSen > 0;
     const data = new FormData();
     data.set('cycleId', cycleId);
-    if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
     if (entityId) data.set('entityId', entityId);
-
+    if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
     // For embedded (Joget iframe) mode: open a blank popup window
     // IMMEDIATELY here — this is still inside the synchronous click handler
     // so browsers allow it. We then navigate it to the HitPay URL once the
     // server action returns the checkout URL. If we open window.open() inside
     // startTransition's async callback, the browser treats it as a
     // script-initiated popup and blocks it.
+    // Open blank popup for all gateways in embed mode
+    // For ADAPTIS we inject and submit the form inside the popup
     const popup = isEmbed && totalSen > 0
       ? window.open('', 'hitpay_checkout', 'width=480,height=760')
       : null;
@@ -481,6 +495,38 @@ function OrderSummary({
         popup?.close();
         return;
       }
+      // ADAPTIS — different flow for embed vs web
+      if (result?.adaptisFormData && result?.adaptisPaymentUrl && result?.reference) {
+        if (isEmbed) {
+          // Embed (Joget iframe) — inject form into popup, same as HitPay
+          if (popup && !popup.closed) {
+            const doc = popup.document;
+            doc.open();
+            doc.write('<html><body>');
+            doc.write(`<form id="f" method="POST" action="${result.adaptisPaymentUrl}">`);
+            for (const [key, val] of Object.entries(result.adaptisFormData)) {
+              const safe = String(val).replace(/"/g, '&quot;');
+              doc.write(`<input type="hidden" name="${key}" value="${safe}">`);
+            }
+            doc.write('</form>');
+            doc.write('<script>document.getElementById("f").submit();<\/script>');
+            doc.write('</body></html>');
+            doc.close();
+            // Navigate iframe to order page to start polling
+            router.push(`/orders/${encodeURIComponent(result.reference)}`);
+          } else {
+            // Popup blocked — fallback to full page submit
+            submitFormInPage(result.adaptisPaymentUrl, result.adaptisFormData);
+          }
+        } else {
+          // Web (non-embed) — full page form submit, no popup
+          // eGHL will redirect back to MerchantApprovalURL after payment
+          popup?.close();
+          submitFormInPage(result.adaptisPaymentUrl, result.adaptisFormData);
+        }
+        return;
+      }
+
       if (result?.reference) {
         if (popup && result.checkoutUrl) {
           popup.location.href = result.checkoutUrl;
@@ -489,6 +535,8 @@ function OrderSummary({
           router.push(`/orders/${encodeURIComponent(result.reference)}`);
         }
       }
+      // Fully-subsidised (zero-cost) orders skip HitPay entirely and are
+      // redirected server-side straight to the confirmed order.
     });
   }
 
@@ -632,6 +680,7 @@ function OrderSummary({
         onCancel={() => setShowEntityPopup(false)}
       />
     )}
+
     </>
   );
 }
