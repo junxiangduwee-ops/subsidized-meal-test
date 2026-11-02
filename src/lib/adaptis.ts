@@ -170,8 +170,13 @@ export async function createAdaptisPayment(
   }
 
   const amount      = senToRinggit(input.amountSen);
-  const paymentId   = input.reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
-  const orderNumber = paymentId;
+  // PaymentID must be unique per attempt — add timestamp suffix so retries
+  // after a failed/expired payment don't hit the unique constraint.
+  // Max 20 chars: base (up to 16) + 4-char base36 timestamp suffix.
+  const base        = input.reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+  const suffix      = Date.now().toString(36).slice(-4).toUpperCase();
+  const paymentId   = (base + suffix).slice(0, 20);
+  const orderNumber = input.reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
   const paymentUrl  = getAdaptisPaymentUrl(mode);
 
   // Get client IP from headers
