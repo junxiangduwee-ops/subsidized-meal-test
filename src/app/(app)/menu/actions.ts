@@ -123,6 +123,20 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     redirect(`/orders/${fresh.reference}?status=confirmed`);
   }
 
+  // Resolve payment email — employees provisioned by staff ID only type one
+  // in just for this receipt; it's never saved as their login email.
+  let paymentEmail = user.email;
+  if (!paymentEmail) {
+    const entered = String(formData.get('receiptEmail') ?? '').trim();
+    if (!entered) {
+      return { error: 'Enter an email address to receive the payment receipt.' };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entered)) {
+      return { error: 'Enter a valid email address for the receipt.' };
+    }
+    paymentEmail = entered.toLowerCase();
+  }
+
   // Entity selection
   const rawEntityId = String(formData.get('entityId') ?? '').trim();
   if (!rawEntityId || !isValidEntityId(rawEntityId)) {
