@@ -309,7 +309,7 @@ async function main() {
   // --- Delivery sites ----------------------------------------------------
   // Edit this list to match your actual sites - it's the only part of this
   // block you should need to touch.
-  const DELIVERY_SITES: string[] = ['Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P', 'Warehouse Q', 'Warehouse X', 'Warehouse Y', 'Mines 2 Office'];
+  const DELIVERY_SITES: string[] = ['Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P', 'Warehouse Q', 'Warehouse X3', 'Warehouse Y1', 'Warehouse Y2', 'Mines 2 Office (International)', 'Training Academy (X4)'];
 
   await prisma.deliverySite.deleteMany({});
   await prisma.deliverySite.createMany({

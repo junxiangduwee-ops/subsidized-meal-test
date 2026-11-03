@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 
@@ -139,6 +140,31 @@ export default async function KitchenPage({
             <a href={`/api/exports/kitchen-employees?cycle=${selected.id}`} className="btn-secondary btn-sm">
               Per-employee CSV
             </a>
+            <a
+              href={`/api/exports/admin-orders?cycle=${selected.id}`}
+              className="btn-secondary btn-sm"
+            >
+              Admin Weekly Excel
+            </a>
+            <div className="relative ml-2 border-l pl-2 group">
+              <button className="btn-secondary btn-sm flex items-center gap-1">
+                Vendor Excel
+                <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[220px]">
+                {[...byRestaurant.keys()].sort().map((restaurantName) => (
+                  <a
+                    key={restaurantName}
+                    href={`/api/exports/vendor-orders?cycle=${selected.id}&vendor=${encodeURIComponent(restaurantName)}`}
+                    className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  >
+                    {restaurantName}
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         }
       />
@@ -194,13 +220,13 @@ export default async function KitchenPage({
                           const href = expandUrl(restaurant, dateKey, r.dishName, r.deliverySiteName);
 
                           return (
-                            <>
+                            <Fragment key={rowKey}>
                               {/*
                                 Each <td> contains a block-level <Link> that fills
                                 the full cell — no text is underlined, no row is
                                 highlighted, but every part of the row is clickable.
                               */}
-                              <tr key={rowKey} className="cursor-pointer">
+                              <tr className="cursor-pointer">
                                 <td className="p-0">
                                   <Link href={href} className={`${cellLink} px-4 py-3 ${i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}`}>
                                     {i === 0
@@ -263,7 +289,7 @@ export default async function KitchenPage({
                                   </td>
                                 </tr>
                               ) : null}
-                            </>
+                            </Fragment>
                           );
                         }),
                       )}

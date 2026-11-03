@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import * as XLSX from 'xlsx';
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -39,6 +40,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   if (needsFinance && !can(user.role, 'finance:export')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  if (type === 'vendor-orders' && !can(user.role, 'kitchen:view')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (type === 'admin-orders' && !can(user.role, 'kitchen:view')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   if (type === 'kitchen' && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -65,6 +72,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportPayments(user.id, cycleId);
     case 'subsidy':
       return exportSubsidy(user.id, url.searchParams.get('weeks'));
+    case 'vendor-orders':
+      return exportVendorOrders(user.id, cycleId, url.searchParams.get('vendor'));
+    case 'admin-orders':
+      return exportAdminOrders(user.id, cycleId);
     case 'kitchen':
       return exportKitchen(user.id, cycleId);
     case 'kitchen-employees':
@@ -659,4 +670,544 @@ async function exportAudit(actorId: string, params: URLSearchParams) {
 
   await audit(actorId, 'export.audit', 'AuditLog', null, { rows: rows.length, from: fromDate.toISOString(), to: toDate.toISOString() } as Prisma.JsonObject);
   return csvResponse(`audit-log-${toDateKey(fromDate)}-to-${toDateKey(toDate)}.csv`, csv);
+}
+
+// ── Shared constants ──────────────────────────────────────────────────────────
+
+const WH_ORDER = [
+  'Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P',
+  'Warehouse Q', 'Warehouse X3', 'Warehouse Y1', 'Warehouse Y2',
+  'Mines 2 Office (International)', 'Training Academy (X4)',
+];
+const CO_ORDER = [
+  'MR D.I.Y TRADING SDN BHD',
+  'MR D.I.Y INTERNATIONAL SDN BHD',
+  'MR D.I.Y ECOMMERCE SDN BHD',
+  'MR D.I.Y MANAGEMENT SDN BHD',
+];
+
+function companyFromProvider(provider: string): string {
+  const entityId = provider.split('_').slice(1).join('_').toLowerCase();
+  if (entityId === 'retail')     return 'MR D.I.Y TRADING SDN BHD';
+  if (entityId === 'international') return 'MR D.I.Y INTERNATIONAL SDN BHD';
+  if (entityId === 'ecommerce')  return 'MR D.I.Y ECOMMERCE SDN BHD';
+  if (entityId === 'properties') return 'MR D.I.Y PROPERTIES SDN BHD';
+  if (entityId === 'group')      return 'MR D.I.Y MANAGEMENT SDN BHD';
+  return provider;
+}
+
+// ── VENDOR EXPORT (fixed) ────────────────────────────────────────────────────
+// Exact format of PAKLOONG_19102026-23102026_1.xlsx
+async function exportVendorOrders(
+  actorId: string,
+  cycleId: string | null,
+  vendor: string | null,
+) {
+  if (!cycleId) return NextResponse.json({ error: 'Missing cycle' }, { status: 400 });
+  if (!vendor)  return NextResponse.json({ error: 'Missing vendor' }, { status: 400 });
+
+  const cycle = await prisma.menuCycle.findUnique({
+    where: { id: cycleId },
+    select: { serviceWeekStart: true },
+  });
+  if (!cycle) return NextResponse.json({ error: 'Cycle not found' }, { status: 404 });
+
+  const items = await prisma.orderItem.findMany({
+    where: {
+      order: { cycleId, status: 'PAID' },
+      restaurantName: { equals: vendor, mode: 'insensitive' },
+    },
+    orderBy: [
+      { serviceDate: 'asc' },
+      { order: { deliverySite: { name: 'asc' } } },
+      { order: { user: { name: 'asc' } } },
+    ],
+    select: {
+      serviceDate: true,
+      dishName: true,
+      quantity: true,
+      order: {
+        select: {
+          user: { select: { name: true, department: true } },
+          deliverySite: { select: { name: true } },
+          payments: {
+            where: { status: 'SUCCEEDED' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { provider: true },
+          },
+        },
+      },
+    },
+  });
+
+  type ERow = {
+    serviceDate: Date; dishName: string; company: string;
+    name: string; department: string; warehouse: string;
+  };
+
+  const WH_ORDER = [
+    'Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P',
+    'Warehouse Q', 'Warehouse X3', 'Warehouse Y1', 'Warehouse Y2',
+    'Mines 2 Office (International)', 'Training Academy (X4)',
+  ];
+  const CO_ORDER = [
+    'MR D.I.Y TRADING SDN BHD',
+    'MR D.I.Y INTERNATIONAL SDN BHD',
+    'MR D.I.Y ECOMMERCE SDN BHD',
+    'MR D.I.Y MANAGEMENT SDN BHD',
+  ];
+
+  function companyFromProvider(p: string): string {
+    const e = p.split('_').slice(1).join('_').toLowerCase();
+    if (e === 'retail')        return 'MR D.I.Y TRADING SDN BHD';
+    if (e === 'international') return 'MR D.I.Y INTERNATIONAL SDN BHD';
+    if (e === 'ecommerce')     return 'MR D.I.Y ECOMMERCE SDN BHD';
+    if (e === 'properties')    return 'MR D.I.Y PROPERTIES SDN BHD';
+    if (e === 'group')         return 'MR D.I.Y MANAGEMENT SDN BHD';
+    return p;
+  }
+
+  // Expand by quantity
+  const expanded: ERow[] = [];
+  for (const item of items) {
+    const base: ERow = {
+      serviceDate: item.serviceDate,
+      dishName:    item.dishName,
+      company:     companyFromProvider(item.order.payments[0]?.provider ?? 'hitpay_retail'),
+      name:        item.order.user.name,
+      department:  item.order.user.department ?? '',
+      warehouse:   item.order.deliverySite?.name ?? 'Unassigned',
+    };
+    for (let q = 0; q < item.quantity; q++) expanded.push(base);
+  }
+
+  // Sort: warehouse order then name
+  expanded.sort((a, b) => {
+    const wa = WH_ORDER.indexOf(a.warehouse); const wb_ = WH_ORDER.indexOf(b.warehouse);
+    const ia = wa === -1 ? 99 : wa;          const ib = wb_ === -1 ? 99 : wb_;
+    return ia !== ib ? ia - ib : a.name.localeCompare(b.name);
+  });
+
+  // Group by service date
+  const byDay = new Map<string, ERow[]>();
+  for (const row of expanded) {
+    const key = toDateKey(row.serviceDate);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(row);
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  for (const [dateKey, dayRows] of [...byDay.entries()].sort()) {
+    const nData  = dayRows.length;
+    const nWH    = WH_ORDER.length;   // 10 warehouses → TOTAL at row nWH+2 (row 12 when header=1)
+    const nCO    = CO_ORDER.length;   // 4 companies  → TOTAL at row nCO+2  (row 6  when header=1)
+    const maxRows = Math.max(nData, nWH + 1, nCO + 1); // +1 for TOTAL row
+
+    const ws: XLSX.WorkSheet = {};
+
+    // ── Helper to set a cell ──────────────────────────────────────────────────
+    function sc(addr: string, value: string | number | null, isFormula = false) {
+      if (value === null) return;
+      if (isFormula && typeof value === 'string') {
+        ws[addr] = { t: 'n', f: value.replace(/^=/, ''), v: 0 };
+      } else if (typeof value === 'number') {
+        ws[addr] = { t: 'n', v: value };
+      } else {
+        ws[addr] = { t: 's', v: value };
+      }
+    }
+
+    // ── Row 1: Headers ────────────────────────────────────────────────────────
+    sc('A1', 'No');
+    sc('B1', '👤 Employee Company/Group :');
+    sc('C1', '👤 Employee Full Name :');
+    sc('D1', '🏢 Department :');
+    sc('E1', 'Menu Listing');
+    sc('F1', 'Warehouse to Pickup');
+    sc('G1', 'Vendor');
+    // H1: empty separator
+    sc('I1', 'Warehouse');
+    sc('J1', 'Qty');
+    // K1: empty separator
+    sc('L1', '👤 Employee Company/Group :');
+    sc('M1', 'Qty');
+
+    // Make summary headers bold
+    for (const addr of ['I1', 'J1', 'L1', 'M1']) {
+      if (ws[addr]) ws[addr].s = { font: { bold: true } };
+    }
+
+    // ── Data + Summary rows ───────────────────────────────────────────────────
+    for (let i = 0; i < maxRows; i++) {
+      const r = i + 2; // Excel row (1-indexed, +1 for header)
+      const dr = dayRows[i]; // employee row (may be undefined)
+
+      // Employee columns A–G
+      if (dr) {
+        sc(`A${r}`, i + 1);
+        sc(`B${r}`, dr.company);
+        sc(`C${r}`, dr.name);
+        sc(`D${r}`, dr.department);
+        sc(`E${r}`, dr.dishName);
+        sc(`F${r}`, dr.warehouse);
+        sc(`G${r}`, vendor);
+      }
+
+      // ── Warehouse summary (col I, J) ──
+      // Rows 2–11: one per warehouse (10 warehouses)
+      // Row 12: TOTAL with SUM(J2:J11)
+      if (i < nWH) {
+        sc(`I${r}`, WH_ORDER[i]);
+        sc(`J${r}`, `COUNTIFS(F:F,I${r})`, true); // no leading = for f property
+      } else if (i === nWH) {
+        sc(`I${r}`, 'TOTAL');
+        sc(`J${r}`, `SUM(J2:J${nWH + 1})`, true);
+      }
+
+      // ── Company summary (col L, M) ──
+      // Rows 2–5: one per company (4 companies)
+      // Row 6: TOTAL with SUM(M2:M5)
+      if (i < nCO) {
+        sc(`L${r}`, CO_ORDER[i]);
+        sc(`M${r}`, `COUNTIFS(B$1:B$64417,L${r})`, true);
+      } else if (i === nCO) {
+        sc(`L${r}`, 'TOTAL');
+        sc(`M${r}`, `SUM(M2:M${nCO + 1})`, true);
+      }
+
+      // Yellow fill on Qty formula cells
+      const jAddr = `J${r}`;
+      const mAddr = `M${r}`;
+      if (ws[jAddr]) ws[jAddr].s = { fill: { fgColor: { rgb: 'FFFF00' }, patternType: 'solid' } };
+      if (ws[mAddr]) ws[mAddr].s = { fill: { fgColor: { rgb: 'FFFF00' }, patternType: 'solid' } };
+    }
+
+    // Set sheet ref
+    const lastRow = maxRows + 1;
+    ws['!ref'] = `A1:M${lastRow}`;
+
+    // Column widths (exact match to template)
+    ws['!cols'] = [
+      { wch: 7.7 },   // A: No
+      { wch: 32.1 },  // B: Company
+      { wch: 27.9 },  // C: Name
+      { wch: 43.6 },  // D: Dept
+      { wch: 111.4 }, // E: Menu Listing
+      { wch: 27.7 },  // F: Warehouse to Pickup
+      { wch: 11.0 },  // G: Vendor
+      { wch: 0 },     // H: hidden separator
+      { wch: 27.7 },  // I: Warehouse summary
+      { wch: 8.7 },   // J: Qty
+      { wch: 0 },     // K: hidden separator
+      { wch: 34.9 },  // L: Company summary
+      { wch: 8.7 },   // M: Qty
+    ];
+
+    const sheetName = dateKey.replace(/-/g, '');
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true });
+  const vendorSlug = vendor.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const weekKey    = toDateKey(cycle.serviceWeekStart).replace(/-/g, '');
+
+  await audit(actorId, 'export.vendor_orders', 'MenuCycle', cycleId, { vendor, rows: items.length });
+
+  return new NextResponse(buf, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${vendorSlug}-${weekKey}.xlsx"`,
+    },
+  });
+}
+
+// ── ADMIN EXPORT ────────────────────────────────────────────────────────────
+// Exact format of 19102026-23102026_V2_1.xlsx:
+//
+// Sheet 1 "New Lunch Subsidy V3" — one row per order (form submission):
+//   Col 1:  Date (payment submission date)
+//   Col 2-11: Mon/Tue/Wed/Thu/Fri menu + vendor pick (blank if no order that day)
+//   Col 12: Total weekly subsidy (RM)
+//   Col 13: Payment method | Col 14: Payment account | Col 15: Payment date
+//   Col 16: Transaction ref | Col 17: Receipt URL
+//   Col 18: Name | Col 19: Staff ID | Col 20: Email | Col 21: Dept | Col 22: Warehouse
+//   Col 23-35: Quiz Score, Ref ID, IP, Country, Amt, Currency, Completed, Coupons,
+//              Browser, Referrer, Form Host, Entry ID, Status
+//
+// Sheets 2-6 "Mon"/"Tues"/"Wed"/"Thurs"/"Fri" — one row per order that ordered that day:
+//   Col 1: Date | Col 2: That day's menu | Col 3: That day's vendor
+//   Col 4: Daily amount (RM4) | Col 5: Total weekly subsidy
+//   Col 6-10: Payment method/account/date/ref/receipt
+//   Col 11-15: Name/StaffID/Email/Dept/Warehouse
+//   Col 16-29: Quiz Score, Ref ID, IP, Country, Amt, Currency, Completed,
+//               Coupons, Browser, Referrer, Form Host, Entry ID, Status, Chargeback
+async function exportAdminOrders(actorId: string, cycleId: string | null) {
+  if (!cycleId) return NextResponse.json({ error: 'Missing cycle' }, { status: 400 });
+
+  const cycle = await prisma.menuCycle.findUnique({
+    where: { id: cycleId },
+    select: { serviceWeekStart: true },
+  });
+  if (!cycle) return NextResponse.json({ error: 'Cycle not found' }, { status: 404 });
+
+  // Fetch all PAID orders with items and payment
+  const orders = await prisma.order.findMany({
+    where: { cycleId, status: 'PAID' },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { name: true, staffId: true, email: true, department: true } },
+      deliverySite: { select: { name: true } },
+      items: {
+        orderBy: { serviceDate: 'asc' },
+        select: { serviceDate: true, restaurantName: true, dishName: true, quantity: true },
+      },
+      payments: {
+        where: { status: 'SUCCEEDED' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { provider: true, paymentMethod: true, paymentId: true, requestId: true, createdAt: true },
+      },
+    },
+  });
+
+  // 5 service dates (Mon–Fri) from cycle start
+  const serviceDates: Date[] = Array.from({ length: 5 }, (_, d) => {
+    const date = new Date(cycle.serviceWeekStart);
+    date.setUTCDate(date.getUTCDate() + d);
+    return date;
+  });
+  const dayKeys  = serviceDates.map(d => toDateKey(d));
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const tabNames = ['Mon', 'Tues', 'Wed', 'Thurs', 'Fri'];
+
+  function fmtDate(d: Date | null | undefined): string {
+    if (!d) return '';
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}/${d.getUTCFullYear()}`;
+  }
+
+  function paymentAccount(provider: string): string {
+    const e = provider.split('_').slice(1).join('_').toLowerCase();
+    if (e === 'retail')        return 'MR D.I.Y TRADING SDN BHD - CIMB - 8600272453';
+    if (e === 'international') return 'MR D.I.Y INTERNATIONAL SDN BHD - CIMB - 8605978214';
+    if (e === 'ecommerce')     return 'MR D.I.Y ECOMMERCE SDN BHD - CIMB - 8603150030';
+    if (e === 'group')         return 'MR D.I.Y MANAGEMENT SDN BHD - CIMB - 8001461410';
+    return provider;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: "New Lunch Subsidy V3" ─────────────────────────────────────────
+  const s1Headers = [
+    'Date',
+    `${dayNames[0]} (${fmtDate(serviceDates[0])}) Menu :`, `${dayNames[0]}'s Pick`,
+    `${dayNames[1]} (${fmtDate(serviceDates[1])}) Menu :`, `${dayNames[1]}'s Pick`,
+    `${dayNames[2]} (${fmtDate(serviceDates[2])}) Menu :`, `${dayNames[2]}'s Pick`,
+    `${dayNames[3]} (${fmtDate(serviceDates[3])}) Menu :`, `${dayNames[3]}'s Pick`,
+    `${dayNames[4]} (${fmtDate(serviceDates[4])}) Menu :`, `${dayNames[4]}'s Pick`,
+    'Total Weekly Subsidy Lunch : - RM',
+    '📲 1. Make Your Payment & Submit Transaction Details :',
+    '💳2. Select Your Payment Account',
+    '📅 3. Payment Date :',
+    '🔢 4. Transaction Reference Number :',
+    '📎 5. Attach a screenshot or saved copy of your successful transaction receipt.',
+    '👤 Employee Full Name :',
+    '🆔 Employee ID :',
+    '📧 Email Address :',
+    '🏢 Department :',
+    '🏬 Select Your Warehouse for Pickup :',
+    'Quiz Score', 'Reference ID', 'IP', 'Country',
+    'Payment Amount', 'Payment Currency', 'Payment Completed',
+    'Coupon codes', 'Browser', 'Referrer', 'Form Host', 'Entry ID', 'Status',
+  ];
+
+  const s1Rows: (string | number | null)[][] = [s1Headers];
+
+  for (const order of orders) {
+    const pmt = order.payments[0];
+    const subsidyRm = order.subsidySen / 100;
+
+    // Build day menu/pick columns (blank if no order that day)
+    const dayMenuPick: (string | null)[] = [];
+    for (const dk of dayKeys) {
+      const dayItems = order.items.filter(i => toDateKey(i.serviceDate) === dk);
+      if (dayItems.length === 0) {
+        dayMenuPick.push(null, null);
+      } else {
+        dayMenuPick.push(
+          dayItems.map(i => i.dishName).join('; '),
+          [...new Set(dayItems.map(i => i.restaurantName))].join(', '),
+        );
+      }
+    }
+
+    s1Rows.push([
+      fmtDate(pmt?.createdAt ?? cycle.serviceWeekStart), // submission date
+      ...dayMenuPick,                                      // cols 2–11 (10 values)
+      subsidyRm,                                          // col 12
+      pmt?.paymentMethod ?? null,                         // col 13
+      pmt ? paymentAccount(pmt.provider) : null,          // col 14
+      pmt?.createdAt ? fmtDate(pmt.createdAt) : null,     // col 15
+      pmt?.requestId ?? pmt?.paymentId ?? null,           // col 16
+      null,  // col 17 receipt URL (not stored)
+      order.user.name,                                    // col 18
+      order.user.staffId ?? null,                         // col 19
+      order.user.email ?? null,                           // col 20
+      order.user.department ?? null,                      // col 21
+      order.deliverySite?.name ?? null,                   // col 22
+      null, null, null, null,  // cols 23-26 Quiz/RefID/IP/Country
+      null, null,              // cols 27-28 Payment Amount/Currency
+      'no',                    // col 29 Payment Completed
+      null,                    // col 30 Coupon codes
+      null, null, null,        // cols 31-33 Browser/Referrer/FormHost
+      null,                    // col 34 Entry ID
+      'Finished',              // col 35 Status
+    ]);
+  }
+
+  const ws1 = XLSX.utils.aoa_to_sheet(s1Rows);
+  ws1['!cols'] = [
+    { wch: 18.1 }, // Date
+    { wch: 38.4 }, // Mon menu
+    { wch: 15.4 }, // Mon pick
+    { wch: 17.9 }, // Tue menu
+    { wch: 16.0 }, // Tue pick
+    { wch: 14.0 }, // Wed menu
+    { wch: 9.1 },  // Wed pick
+    { wch: 28.3 }, // Thu menu
+    { wch: 9.1 },  // Thu pick
+    { wch: 98.3 }, // Fri menu
+    { wch: 9.1 },  // Fri pick
+    { wch: 9.1 },  // Total weekly
+    { wch: 9.1 },  // Payment method
+    { wch: 51.7 }, // Payment account
+    { wch: 9.1 },  // Payment date
+    { wch: 50.1 }, // Transaction ref
+    { wch: 9.1 },  // Receipt
+    { wch: 54.7 }, // Name
+    { wch: 18.3 }, // Staff ID
+    { wch: 9.1 },  // Email
+    { wch: 9.1 },  // Dept
+    { wch: 9.1 },  // Warehouse
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, 'New Lunch Subsidy V3');
+
+  // ── Sheets 2–6: Daily tabs ──────────────────────────────────────────────────
+  for (let di = 0; di < 5; di++) {
+    const dayKey   = dayKeys[di];
+    const dayName  = dayNames[di];
+    const tabName  = tabNames[di];
+    const svcDate  = serviceDates[di];
+
+    const dailyHeaders = [
+      'Date',
+      `${dayName} (${fmtDate(svcDate)}) Menu :`,
+      `${dayName}'s Vendor`,
+      'Daily Amount: ',
+      'Total Weekly Subsidy Lunch : - RM',
+      '📲 1. Make Your Payment & Submit Transaction Details :',
+      '💳2. Select Your Payment Account',
+      '📅 3. Payment Date :',
+      '🔢 4. Transaction Reference Number :',
+      '📎 5. Attach a screenshot or saved copy of your successful transaction receipt.',
+      '👤 Employee Full Name :',
+      '🆔 Employee ID :',
+      '📧 Email Address :',
+      '🏢 Department :',
+      '🏬 Select Your Warehouse for Pickup :',
+      'Quiz Score', 'Reference ID', 'IP', 'Country',
+      'Payment Amount', 'Payment Currency', 'Payment Completed',
+      'Coupon codes', 'Browser', 'Referrer', 'Form Host', 'Entry ID', 'Status', 'Chargeback',
+    ];
+
+    const dailyRows: (string | number | null)[][] = [dailyHeaders];
+
+    for (const order of orders) {
+      // Only include this order if it has items for this day
+      const dayItems = order.items.filter(i => toDateKey(i.serviceDate) === dayKey);
+      if (dayItems.length === 0) continue;
+
+      const pmt = order.payments[0];
+      const subsidyRm = order.subsidySen / 100;
+      const menuText   = dayItems.map(i => i.dishName).join('; ');
+      const vendorText = [...new Set(dayItems.map(i => i.restaurantName))].join(', ');
+      const dailyQty   = dayItems.reduce((s, i) => s + i.quantity, 0);
+      const dailyAmt   = dailyQty * 4; // RM4 per meal
+
+      dailyRows.push([
+        fmtDate(pmt?.createdAt ?? cycle.serviceWeekStart), // col 1: submission date
+        menuText,                                           // col 2: that day's menu
+        vendorText,                                         // col 3: that day's vendor
+        dailyAmt,                                           // col 4: daily amount (RM4 × qty)
+        subsidyRm,                                          // col 5: total weekly subsidy
+        pmt?.paymentMethod ?? null,                         // col 6
+        pmt ? paymentAccount(pmt.provider) : null,          // col 7
+        pmt?.createdAt ? fmtDate(pmt.createdAt) : null,     // col 8
+        pmt?.requestId ?? pmt?.paymentId ?? null,           // col 9
+        null,                                               // col 10: receipt URL
+        order.user.name,                                    // col 11
+        order.user.staffId ?? null,                         // col 12
+        order.user.email ?? null,                           // col 13
+        order.user.department ?? null,                      // col 14
+        order.deliverySite?.name ?? null,                   // col 15
+        null, null, null, null,  // cols 16-19 Quiz/RefID/IP/Country
+        null, null,              // cols 20-21 Amt/Currency
+        'no',                    // col 22 Payment Completed
+        null,                    // col 23 Coupons
+        null, null, null,        // cols 24-26 Browser/Referrer/FormHost
+        null,                    // col 27 Entry ID
+        'Finished',              // col 28 Status
+        null,                    // col 29 Chargeback
+      ]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(dailyRows);
+    ws['!cols'] = [
+      { wch: 18.1 },  // Date
+      { wch: 124.4 }, // Day menu
+      { wch: 15.4 },  // Vendor
+      { wch: 16.0 },  // Daily amount
+      { wch: 9.1 },   // Total weekly
+      { wch: 9.1 },   // Payment method
+      { wch: 51.7 },  // Payment account
+      { wch: 9.1 },   // Payment date
+      { wch: 50.1 },  // Ref number
+      { wch: 9.1 },   // Receipt
+      { wch: 54.7 },  // Name
+      { wch: 18.3 },  // Staff ID
+      { wch: 9.1 },   // Email
+      { wch: 9.1 },   // Dept
+      { wch: 9.1 },   // Warehouse
+      { wch: 9.1 },   // Quiz score
+      { wch: 15.4 },  // Ref ID
+      { wch: 9.1 },   // IP
+      { wch: 9.1 },   // Country
+      { wch: 9.1 },   // Amt
+      { wch: 9.1 },   // Currency
+      { wch: 9.1 },   // Completed
+      { wch: 9.1 },   // Coupons
+      { wch: 9.1 },   // Browser
+      { wch: 9.1 },   // Referrer
+      { wch: 9.1 },   // Form host
+      { wch: 9.1 },   // Entry ID
+      { wch: 9.1 },   // Status
+      { wch: 35.4 },  // Chargeback
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, tabName);
+  }
+
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellStyles: true });
+  const weekKey = toDateKey(cycle.serviceWeekStart).replace(/-/g, '');
+
+  await audit(actorId, 'export.admin_orders', 'MenuCycle', cycleId, { rows: orders.length });
+
+  return new NextResponse(buf, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="admin-orders-${weekKey}.xlsx"`,
+    },
+  });
 }
