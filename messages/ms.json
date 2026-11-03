@@ -359,7 +359,9 @@
     "resetPasswordFor": "Set semula kata laluan untuk {name}",
     "newTemporaryPassword": "Kata laluan sementara baharu",
     "reset": "Set semula",
-    "resetPasswordHint": "Berikan terus kepada mereka. Jangan sekali-kali hantar kelayakan melalui e-mel atau sembang."
+    "resetPasswordHint": "Berikan terus kepada mereka. Jangan sekali-kali hantar kelayakan melalui e-mel atau sembang.",
+    "phone": "Telefon",
+    "profilePending": "Profil belum dilengkapkan"
   },
   "cyclesAdmin": {
     "title": "Menu mingguan",
@@ -641,5 +643,24 @@
     "upload": "Muat naik",
     "resetToDefault": "Set semula ke lalai",
     "usingDefault": "Menggunakan imej lalai."
+  },
+  "completeProfile": {
+    "title": "Satu langkah lagi",
+    "subtitle": "Sila berikan sekurang-kurangnya satu cara untuk kami menghubungi anda.",
+    "atLeastOneHint": "Masukkan nombor telefon, e-mel, atau kedua-duanya — sekurang-kurangnya satu diperlukan.",
+    "phone": "Nombor telefon mudah alih",
+    "phonePlaceholder": "0123456789",
+    "phoneHint": "Format Malaysia (cth. 0123456789) atau antarabangsa (cth. +60123456789).",
+    "email": "E-mel kerja",
+    "emailReadOnly": "E-mel anda telah disimpan dan tidak boleh diubah di sini.",
+    "emailHint": "Masukkan alamat e-mel kerja MR DIY anda.",
+    "save": "Simpan dan teruskan",
+    "saving": "Menyimpan…",
+    "privacy": "Maklumat anda disimpan dengan selamat dan digunakan hanya untuk komunikasi berkaitan hidangan.",
+    "notSignedIn": "Anda tidak log masuk.",
+    "invalidPhone": "Masukkan nombor telefon yang sah (cth. 0123456789 atau +60123456789).",
+    "invalidEmail": "Masukkan alamat e-mel yang sah.",
+    "emailTaken": "Alamat e-mel itu telah didaftarkan untuk akaun lain.",
+    "atLeastOneRequired": "Masukkan nombor telefon atau alamat e-mel — sekurang-kurangnya satu diperlukan."
   }
 }

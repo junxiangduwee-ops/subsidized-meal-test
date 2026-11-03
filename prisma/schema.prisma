@@ -95,7 +95,9 @@ model User {
   authProvider AuthProvider @default(LOCAL)
   externalId   String?
   active       Boolean      @default(true)
-  lastLoginAt  DateTime?
+  lastLoginAt      DateTime?
+  phone            String?    // personal mobile — collected on first login
+  profileCompleted Boolean    @default(false) // true once the user submits contact details
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

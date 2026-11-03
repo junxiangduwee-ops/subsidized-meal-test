@@ -362,7 +362,9 @@
     "resetPasswordFor": "Reset password for {name}",
     "newTemporaryPassword": "New temporary password",
     "reset": "Reset",
-    "resetPasswordHint": "Give it to them directly. Never send credentials over email or chat."
+    "resetPasswordHint": "Give it to them directly. Never send credentials over email or chat.",
+    "phone": "Phone",
+    "profilePending": "Profile not yet completed"
   },
   "cyclesAdmin": {
     "title": "Weekly menus",
@@ -644,5 +646,24 @@
     "upload": "Upload",
     "resetToDefault": "Reset to default",
     "usingDefault": "Using the default image."
+  },
+  "completeProfile": {
+    "title": "One more step",
+    "subtitle": "Please provide at least one way we can reach you.",
+    "atLeastOneHint": "Enter your phone number, your email, or both — at least one is required.",
+    "phone": "Mobile phone number",
+    "phonePlaceholder": "0123456789",
+    "phoneHint": "Malaysian format (e.g. 0123456789) or international (e.g. +60123456789).",
+    "email": "Work email",
+    "emailReadOnly": "Your email is on file and cannot be changed here.",
+    "emailHint": "Enter your MR DIY work email address.",
+    "save": "Save and continue",
+    "saving": "Saving…",
+    "privacy": "Your details are stored securely and used only for meal-related communication.",
+    "notSignedIn": "You are not signed in.",
+    "invalidPhone": "Enter a valid phone number (e.g. 0123456789 or +60123456789).",
+    "invalidEmail": "Enter a valid email address.",
+    "emailTaken": "That email address is already registered to another account.",
+    "atLeastOneRequired": "Enter a phone number or an email address — at least one is required."
   }
 }

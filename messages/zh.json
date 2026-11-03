@@ -359,7 +359,9 @@
     "resetPasswordFor": "为 {name} 重置密码",
     "newTemporaryPassword": "新的临时密码",
     "reset": "重置",
-    "resetPasswordHint": "请直接交给本人。切勿通过邮件或聊天工具发送账户凭证。"
+    "resetPasswordHint": "请直接交给本人。切勿通过邮件或聊天工具发送账户凭证。",
+    "phone": "电话",
+    "profilePending": "档案尚未填写"
   },
   "cyclesAdmin": {
     "title": "每周菜单",
@@ -641,5 +643,24 @@
     "upload": "上传",
     "resetToDefault": "恢复默认",
     "usingDefault": "正在使用默认图片。"
+  },
+  "completeProfile": {
+    "title": "还有一步",
+    "subtitle": "请提供至少一种联系方式。",
+    "atLeastOneHint": "请输入手机号码、电子邮件或两者都填 — 至少需要填写一项。",
+    "phone": "手机号码",
+    "phonePlaceholder": "0123456789",
+    "phoneHint": "马来西亚格式（如 0123456789）或国际格式（如 +60123456789）。",
+    "email": "工作电子邮件",
+    "emailReadOnly": "您的电子邮件已在档案中，无法在此处更改。",
+    "emailHint": "请输入您的 MR DIY 工作电子邮件地址。",
+    "save": "保存并继续",
+    "saving": "保存中…",
+    "privacy": "您的信息已安全存储，仅用于餐饮相关通知。",
+    "notSignedIn": "您尚未登录。",
+    "invalidPhone": "请输入有效的电话号码（如 0123456789 或 +60123456789）。",
+    "invalidEmail": "请输入有效的电子邮件地址。",
+    "emailTaken": "该电子邮件地址已注册到另一个账户。",
+    "atLeastOneRequired": "请输入手机号码或电子邮件地址 — 至少需要填写一项。"
   }
 }

@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 
@@ -9,11 +10,26 @@ import { UserMenu } from '@/components/user-menu';
 import { Alert } from '@/components/ui';
 import { logoutAction } from '@/app/login/actions';
 import { SidebarLanguageSwitcher } from '@/components/language-switcher';
+import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+
+  // ── First-login profile gate ─────────────────────────────────────────────
+  // Always read from the DB (not the session JWT) so it takes effect the
+  // moment the server action marks profileCompleted = true, even inside the
+  // Joget iframe where the embedded session cookie is reused across requests.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { profileCompleted: true },
+  });
+  if (!dbUser?.profileCompleted) {
+    redirect('/complete-profile');
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const t = await getTranslations('nav');
   const settings = await getSiteSettings();
 
@@ -41,7 +57,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/admin/subsidies', label: t('subsidies') },
         { href: '/admin/users', label: t('usersRoles') },
         { href: '/admin/invoices', label: 'Vendor Invoices' },
-      ...(can(user.role, 'settings:manage') ? [{ href: '/admin/settings', label: t('settings') }, { href: '/admin/audit', label: 'Audit Log' }] : []),
+        ...(can(user.role, 'settings:manage')
+          ? [
+              { href: '/admin/settings', label: t('settings') },
+              { href: '/admin/audit', label: 'Audit Log' },
+            ]
+          : []),
       ],
     });
   }
@@ -51,7 +72,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
   if (can(user.role, 'kitchen:view'))
     insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
-  // Receipt confirmation tab — visible to anyone who can view analytics
   if (can(user.role, 'analytics:view'))
     insights.items.push({ href: '/receipt', label: 'Receipt Confirmation' });
   if (insights.items.length) groups.push(insights);

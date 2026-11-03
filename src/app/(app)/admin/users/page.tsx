@@ -23,6 +23,15 @@ const ROLE_STYLE: Record<string, string> = {
   USER: 'bg-slate-100 text-slate-700',
 };
 
+/**
+ * Human-readable label for the authProvider column.
+ * JOGET users sign in through the Joget iframe — showing "JOGET" raw is
+ * confusing for admins who aren't familiar with the internals.
+ */
+const PROVIDER_LABEL: Record<string, string> = {
+  JOGET: 'EMBEDDED',
+};
+
 const DEFAULT_PAGE_SIZE = 25;
 
 export default async function UsersPage({
@@ -44,6 +53,7 @@ export default async function UsersPage({
           { name: containsInsensitive(params.q) },
           { email: containsInsensitive(params.q) },
           { staffId: containsInsensitive(params.q) },
+          { phone: containsInsensitive(params.q) },
         ]
       : undefined,
   };
@@ -55,7 +65,11 @@ export default async function UsersPage({
       orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { defaultDeliverySite: { select: { name: true } }, receptionSite: { select: { name: true } } },
+      include: {
+        defaultDeliverySite: { select: { name: true } },
+        receptionSite: { select: { name: true } },
+      },
+      // Include phone + profileCompleted so we can show status in the table
     }),
   ]);
 
@@ -75,130 +89,140 @@ export default async function UsersPage({
 
       <Section
         title={t('accounts')}
-          description={t('shownCount', { count: total })}
-          action={
-            <form method="get" className="flex gap-2">
-              <select name="role" defaultValue={params.role ?? 'all'} className="input !w-32 !py-1 text-xs">
-                <option value="all">{t('allRoles')}</option>
-                <option value="ADMIN">{t('roleAdmin')}</option>
-                <option value="ANALYTICS">{t('roleAnalytics')}</option>
-                <option value="FINANCE">{t('roleFinance')}</option>
-                <option value="RECEPTION">{t('roleReception')}</option>
-                <option value="USER">{t('roleEmployee')}</option>
-              </select>
-              <input
-                name="q"
-                defaultValue={params.q ?? ''}
-                placeholder={t('searchPlaceholder')}
-                className="input !w-44 !py-1 text-xs"
-              />
-              <button type="submit" className="btn-secondary btn-sm">
-                {t('filter')}
-              </button>
-            </form>
-          }
-        >
-          {users.length === 0 ? (
-            <EmptyState title={t('noAccountsMatch')} hint={t('noAccountsMatchHint')} />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>{t('name')}</th>
-                    <th>{t('staffId')}</th>
-                    <th>{t('department')}</th>
-                    <th>{t('defaultDeliverySite')}</th>
-                    <th>{t('role')}</th>
-                    <th>{t('signIn')}</th>
-                    <th>{t('lastSeen')}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className={u.active ? undefined : 'opacity-60'}>
-                      <td>
-                        <div className="font-medium text-slate-900">
-                          {u.name}
-                          {u.id === me.id ? <span className="ml-1 text-xs text-slate-400">{t('you')}</span> : null}
+        description={t('shownCount', { count: total })}
+        action={
+          <form method="get" className="flex gap-2">
+            <select name="role" defaultValue={params.role ?? 'all'} className="input !w-32 !py-1 text-xs">
+              <option value="all">{t('allRoles')}</option>
+              <option value="ADMIN">{t('roleAdmin')}</option>
+              <option value="ANALYTICS">{t('roleAnalytics')}</option>
+              <option value="FINANCE">{t('roleFinance')}</option>
+              <option value="RECEPTION">{t('roleReception')}</option>
+              <option value="USER">{t('roleEmployee')}</option>
+            </select>
+            <input
+              name="q"
+              defaultValue={params.q ?? ''}
+              placeholder={t('searchPlaceholder')}
+              className="input !w-44 !py-1 text-xs"
+            />
+            <button type="submit" className="btn-secondary btn-sm">
+              {t('filter')}
+            </button>
+          </form>
+        }
+      >
+        {users.length === 0 ? (
+          <EmptyState title={t('noAccountsMatch')} hint={t('noAccountsMatchHint')} />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{t('name')}</th>
+                  <th>{t('staffId')}</th>
+                  <th>{t('department')}</th>
+                  <th>{t('phone')}</th>
+                  <th>{t('defaultDeliverySite')}</th>
+                  <th>{t('role')}</th>
+                  <th>{t('signIn')}</th>
+                  <th>{t('lastSeen')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className={u.active ? undefined : 'opacity-60'}>
+                    <td>
+                      <div className="font-medium text-slate-900">
+                        {u.name}
+                        {u.id === me.id ? <span className="ml-1 text-xs text-slate-400">{t('you')}</span> : null}
+                      </div>
+                      <div className="text-xs text-slate-500">{u.email}</div>
+                      {/* Warn admin if this user hasn't filled in contact details yet */}
+                      {!(u as any).profileCompleted ? (
+                        <div className="mt-0.5 text-xs text-amber-600">{t('profilePending')}</div>
+                      ) : null}
+                    </td>
+                    <td className="text-slate-600">{u.staffId ?? '—'}</td>
+                    <td className="text-slate-600">{u.department ?? '—'}</td>
+                    <td className="text-slate-600 text-xs">
+                      {(u as any).phone ?? <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="text-slate-600">
+                      {u.defaultDeliverySite ? (
+                        <>
+                          {u.defaultDeliverySite.name}{' '}
+                          <span className="text-xs text-slate-400">
+                            {u.defaultDeliverySiteLocked
+                              ? `(${t('defaultDeliverySitePinnedBadge')})`
+                              : `(${t('defaultDeliverySiteAutoBadge')})`}
+                          </span>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${ROLE_STYLE[u.role]}`}>{ROLE_LABEL[u.role]}</span>
+                      {u.role === 'RECEPTION' ? (
+                        <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                          {u.receptionSite ? u.receptionSite.name : t('receptionSiteBadgeAll')}
                         </div>
-                        <div className="text-xs text-slate-500">{u.email}</div>
-                      </td>
-                      <td className="text-slate-600">{u.staffId ?? '—'}</td>
-                      <td className="text-slate-600">{u.department ?? '—'}</td>
-                      <td className="text-slate-600">
-                        {u.defaultDeliverySite ? (
-                          <>
-                            {u.defaultDeliverySite.name}{' '}
-                            <span className="text-xs text-slate-400">
-                              {u.defaultDeliverySiteLocked
-                                ? `(${t('defaultDeliverySitePinnedBadge')})`
-                                : `(${t('defaultDeliverySiteAutoBadge')})`}
-                            </span>
-                          </>
-                        ) : (
-                          '—'
+                      ) : null}
+                    </td>
+                    {/* Use human-readable label instead of raw enum value */}
+                    <td className="text-xs text-slate-500">
+                      {PROVIDER_LABEL[u.authProvider] ?? u.authProvider}
+                    </td>
+                    <td className="text-xs text-slate-500">
+                      {u.lastLoginAt ? formatDateTime(u.lastLoginAt, locale) : t('never')}
+                    </td>
+                    <td>
+                      <div className="flex justify-end gap-1.5">
+                        <EditUserDialog
+                          user={{
+                            id: u.id,
+                            name: u.name,
+                            email: u.email,
+                            staffId: u.staffId,
+                            department: u.department,
+                            role: u.role,
+                            authProvider: u.authProvider,
+                            defaultDeliverySiteId: u.defaultDeliverySiteId,
+                            defaultDeliverySiteLocked: u.defaultDeliverySiteLocked,
+                            receptionSiteId: u.receptionSiteId,
+                          }}
+                          departments={departments}
+                          deliverySites={deliverySites}
+                        />
+                        <ResetPasswordDialog user={{ id: u.id, name: u.name }} />
+                        {u.id === me.id ? null : (
+                          <form action={toggleUserActive}>
+                            <input type="hidden" name="id" value={u.id} />
+                            <InlineSubmit
+                              label={u.active ? t('deactivate') : t('activate')}
+                              variant={u.active ? 'danger' : 'secondary'}
+                            />
+                          </form>
                         )}
-                      </td>
-                      <td>
-                        <span className={`badge ${ROLE_STYLE[u.role]}`}>{ROLE_LABEL[u.role]}</span>
-                        {u.role === 'RECEPTION' ? (
-                          <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
-                            {u.receptionSite ? u.receptionSite.name : t('receptionSiteBadgeAll')}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="text-xs text-slate-500">{u.authProvider}</td>
-                      <td className="text-xs text-slate-500">
-                        {u.lastLoginAt ? formatDateTime(u.lastLoginAt, locale) : t('never')}
-                      </td>
-                      <td>
-                        <div className="flex justify-end gap-1.5">
-                          <EditUserDialog
-                            user={{
-                              id: u.id,
-                              name: u.name,
-                              email: u.email,
-                              staffId: u.staffId,
-                              department: u.department,
-                              role: u.role,
-                              authProvider: u.authProvider,
-                              defaultDeliverySiteId: u.defaultDeliverySiteId,
-                              defaultDeliverySiteLocked: u.defaultDeliverySiteLocked,
-                              receptionSiteId: u.receptionSiteId,
-                            }}
-                            departments={departments}
-                            deliverySites={deliverySites}
-                          />
-                          <ResetPasswordDialog user={{ id: u.id, name: u.name }} />
-                          {u.id === me.id ? null : (
-                            <form action={toggleUserActive}>
-                              <input type="hidden" name="id" value={u.id} />
-                              <InlineSubmit
-                                label={u.active ? t('deactivate') : t('activate')}
-                                variant={u.active ? 'danger' : 'secondary'}
-                              />
-                            </form>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-              <Pagination
-                basePath="/admin/users"
-                page={page}
-                pageSize={pageSize}
-                total={total}
-                searchParams={{ q: params.q, role: params.role }}
-              />
-            </div>
-          )}
-        </Section>
-
+            <Pagination
+              basePath="/admin/users"
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              searchParams={{ q: params.q, role: params.role }}
+            />
+          </div>
+        )}
+      </Section>
     </>
   );
 }
