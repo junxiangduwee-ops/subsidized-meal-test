@@ -1,73 +1,44 @@
 /**
- * Lazy auto-confirm — no cron job, no scheduler.
+ * Meal receipt helpers.
  *
- * Called at the top of any server component that reads meal receipt data.
- * Marks PAID OrderItems as received when the configurable cutoff hour
- * (set by admin in /admin/settings) has passed on their service date.
+ * Auto-confirmation is now driven by the Vercel cron job at /api/cron
+ * (runs daily at 18:00 MYT). The lazy-trigger functions below are kept
+ * as thin no-ops so the existing call sites in page components compile
+ * without changes — they simply return immediately instead of running a
+ * DB update on every page load.
+ *
+ * The only function still actively used at runtime is `isCutoffPassed`,
+ * which the UI calls to decide whether to show the undo button and hint text.
  */
 
-import { prisma } from './prisma';
-import { todayInAppTz, toDateKey, zonedToUtc, APP_TIMEZONE } from './cycle';
+import { zonedToUtc, APP_TIMEZONE } from './cycle';
 import { getSiteSettings } from './settings';
 
 function getCutoffUtc(year: number, month: number, day: number, cutoffHour: number): Date {
   return zonedToUtc(year, month, day, cutoffHour, 0, APP_TIMEZONE);
 }
 
-function buildServiceDateFilter(now: Date, cutoffHour: number) {
-  const today = todayInAppTz(now);
-  const todayKey = toDateKey(today);
-  const [y, m, d] = todayKey.split('-').map(Number);
-  const cutoffUtc = getCutoffUtc(y, m, d, cutoffHour);
-
-  // Dates strictly before today are unconditionally past cutoff.
-  // Today itself only qualifies if the clock has passed the cutoff hour.
-  return now >= cutoffUtc
-    ? { lte: today }   // today and all earlier dates
-    : { lt: today };   // only strictly past dates
-}
-
 /**
- * Auto-confirm unconfirmed PAID meal items for one employee.
- * Call before reading that employee's order items for display.
+ * No-op — auto-confirmation is now handled by the cron job.
+ * Kept so call sites in page components do not need to change.
  */
-export async function autoConfirmPastMeals(userId: string): Promise<void> {
-  const now = new Date();
-  const { mealReceiptCutoffHour } = await getSiteSettings();
-  const serviceDateFilter = buildServiceDateFilter(now, mealReceiptCutoffHour);
-
-  await prisma.orderItem.updateMany({
-    where: {
-      receivedAt: null,
-      serviceDate: serviceDateFilter,
-      order: { userId, status: 'PAID' },
-    },
-    data: { receivedAt: now, receivedBySystem: true },
-  });
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function autoConfirmPastMeals(_userId: string): Promise<void> {
+  // Intentionally empty — cron owns this now.
 }
 
 /**
- * Auto-confirm across ALL employees — for admin/kitchen/receipt pages.
+ * No-op — auto-confirmation is now handled by the cron job.
+ * Kept so call sites in page components do not need to change.
  */
 export async function autoConfirmAllPastMeals(): Promise<void> {
-  const now = new Date();
-  const { mealReceiptCutoffHour } = await getSiteSettings();
-  const serviceDateFilter = buildServiceDateFilter(now, mealReceiptCutoffHour);
-
-  await prisma.orderItem.updateMany({
-    where: {
-      receivedAt: null,
-      serviceDate: serviceDateFilter,
-      order: { status: 'PAID' },
-    },
-    data: { receivedAt: now, receivedBySystem: true },
-  });
+  // Intentionally empty — cron owns this now.
 }
 
 /**
- * Returns whether the cutoff has already passed for a given service date
- * (today). Used by the panel and receipt button to decide whether to offer
- * the undo option and what hint text to show.
+ * Returns whether the cutoff has already passed for a given service date.
+ * Used by the panel and receipt button to decide whether to offer the undo
+ * option and what hint text to show.
  */
 export async function isCutoffPassed(serviceDateKey: string): Promise<boolean> {
   const { mealReceiptCutoffHour } = await getSiteSettings();
