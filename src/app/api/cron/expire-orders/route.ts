@@ -1,7 +1,7 @@
 /**
  * Cron job: Expire stale AWAITING_PAYMENT orders.
- * Schedule: every hour — catches abandoned payment sessions promptly
- * without waiting for the daily window.
+ * Schedule: daily at 02:00 UTC (10:00 MYT)
+ * supports once-per-day crons
  *
  * Cancels any Order stuck in AWAITING_PAYMENT for more than 24 hours.
  * This handles users who opened the payment gateway and never returned
