@@ -81,9 +81,9 @@ async function jobClosePastCycles(): Promise<{ closed: number }> {
 }
 
 // ── Job 3: Expire stale PENDING orders ──────────────────────────────────────
-// Orders stay PENDING while the user is on the payment gateway page.
+// Orders sit in AWAITING_PAYMENT while the user is on the payment gateway.
 // If they never come back (closed tab, gateway timeout, etc.) the order
-// sits in PENDING forever. Cancel it after 24 h.
+// sits there forever. Cancel it after 24 h.
 const PENDING_ORDER_TTL_HOURS = 24;
 
 async function jobExpirePendingOrders(): Promise<{ expired: number }> {
@@ -92,7 +92,7 @@ async function jobExpirePendingOrders(): Promise<{ expired: number }> {
   // Find the stale orders first so we can audit each one.
   const stale = await prisma.order.findMany({
     where: {
-      status: 'PENDING',
+      status: 'AWAITING_PAYMENT',
       createdAt: { lte: cutoff },
     },
     select: { id: true, userId: true, reference: true },
