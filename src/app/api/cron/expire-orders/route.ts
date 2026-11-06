@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
   await Promise.allSettled(
     stale.map((o) =>
-      audit('SYSTEM', 'order.expired', 'Order', o.id, {
+      audit(null, 'order.expired', 'Order', o.id, {
         reference: o.reference,
         reason: `AWAITING_PAYMENT for more than ${TTL_HOURS}h`,
       }),

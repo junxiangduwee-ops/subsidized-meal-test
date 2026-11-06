@@ -276,6 +276,57 @@ export async function fetchPaymentType(
 }
 
 
+export type RefundPaymentInput = {
+  paymentRequestId: string;
+  paymentId: string;
+  amountSen: number;
+  apiKey: string;
+  mode: string;
+};
+
+export type RefundPaymentResult = {
+  id: string;
+  status: string;
+};
+
+/**
+ * Issue a full refund for a completed HitPay payment.
+ *
+ * Requires the payment to be in `completed` status on HitPay's side.
+ * In sandbox this means the payment must have been confirmed in the
+ * sandbox portal first; in production it fires as soon as the payment
+ * is settled.
+ */
+export async function refundPayment(input: RefundPaymentInput): Promise<RefundPaymentResult> {
+  const base = input.mode === 'live' ? LIVE_BASE : SANDBOX_BASE;
+
+  const body = new URLSearchParams({
+    payment_id: input.paymentId,
+    amount: senToRinggit(input.amountSen).toFixed(2),
+  });
+
+  const res = await fetch(`${base}/refunds`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+      'X-BUSINESS-API-KEY': input.apiKey,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body,
+    cache: 'no-store',
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`HitPay refund failed (${res.status}): ${text.slice(0, 500)}`);
+  }
+
+  const json = JSON.parse(text) as { id: string; status: string };
+  if (!json.id) throw new Error('HitPay refund response was missing id.');
+  return { id: json.id, status: json.status ?? 'pending' };
+}
+
 /** Get the full payment request status from HitPay — used for manual admin verification. */
 export async function getHitPayPaymentStatus(
   paymentRequestId: string,

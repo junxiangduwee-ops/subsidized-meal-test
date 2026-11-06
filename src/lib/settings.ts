@@ -12,6 +12,8 @@ export type SiteSettings = {
   mealReceiptCutoffHour: number;
   /// Maximum subsidised meals per employee per service day.
   maxMealsPerDay: number;
+  /// Whether employees can self-cancel a PAID order and queue a HitPay refund.
+  selfCancelEnabled: boolean;
 };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   maintenanceMessage: null,
   mealReceiptCutoffHour: 18,
   maxMealsPerDay: 1,
+  selfCancelEnabled: false,
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -35,6 +38,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     maintenanceMessage: row?.maintenanceMessage ?? null,
     mealReceiptCutoffHour: row?.mealReceiptCutoffHour ?? DEFAULT_SETTINGS.mealReceiptCutoffHour,
     maxMealsPerDay: row?.maxMealsPerDay ?? DEFAULT_SETTINGS.maxMealsPerDay,
+    selfCancelEnabled: row?.selfCancelEnabled ?? DEFAULT_SETTINGS.selfCancelEnabled,
   };
 }
 

@@ -30,6 +30,7 @@ const settingsSchema = z.object({
   maintenanceMessage: z.string().trim().max(500, 'Keep the banner under 500 characters.').optional(),
   mealReceiptCutoffHour: z.coerce.number().int().min(0).max(23),
   maxMealsPerDay: z.coerce.number().int().min(1, 'Must be at least 1.').max(10, 'Maximum is 10.'),
+  selfCancelEnabled: z.coerce.boolean().optional(),
 });
 
 export async function updateSiteSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -44,6 +45,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
     maintenanceMessage: parsed.data.maintenanceMessage?.trim() || null,
     mealReceiptCutoffHour: parsed.data.mealReceiptCutoffHour,
     maxMealsPerDay: parsed.data.maxMealsPerDay,
+    selfCancelEnabled: parsed.data.selfCancelEnabled ?? false,
     updatedById: actor.id,
   };
 
@@ -57,6 +59,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
     siteName: data.siteName,
     mealReceiptCutoffHour: data.mealReceiptCutoffHour,
     maxMealsPerDay: data.maxMealsPerDay,
+    selfCancelEnabled: data.selfCancelEnabled,
   });
 
   revalidatePath('/', 'layout');

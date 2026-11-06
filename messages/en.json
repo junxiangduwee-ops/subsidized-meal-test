@@ -106,7 +106,58 @@
     "subsidyInline": "subsidy",
     "waitingForPayment": "Waiting for payment…",
     "checkingPayment": "Checking payment status…",
-    "openManually": "Open payment page manually"
+    "openManually": "Open payment page manually",
+    "refundPending": "Your cancellation has been recorded. Your refund is being processed and will appear within a few business days.",
+    "refunded": "This order has been cancelled and a refund has been issued.",
+    "refundedReason": "Reason: {reason}"
+  },
+  "bulkRefund": {
+    "title": "Bulk Refund",
+    "subtitle": "Select paid orders to refund immediately via HitPay.",
+    "backToFinance": "Finance",
+    "backToAdmin": "Weekly menus",
+    "filters": "Filters",
+    "cycle": "Service week",
+    "day": "Day",
+    "allDays": "All days",
+    "restaurant": "Restaurant",
+    "allRestaurants": "All restaurants",
+    "dish": "Dish",
+    "allDishes": "All dishes",
+    "applyFilter": "Apply",
+    "clearFilters": "Clear filters",
+    "ordersTitle": "PAID orders",
+    "ordersSubtitle": "{count, plural, one {# order} other {# orders}} matching filters",
+    "noOrders": "No paid orders match the selected filters.",
+    "noCycles": "No service weeks available.",
+    "employee": "Employee",
+    "meals": "Meals",
+    "amount": "Amount",
+    "reference": "Reference",
+    "statusCol": "Status",
+    "detail": "Detail",
+    "refundSelected": "Refund {count, plural, one {# order} other {# orders}}",
+    "selectedCount": "{count, plural, one {# order} other {# orders}} selected",
+    "noneSelected": "Select at least one order",
+    "processing": "Processing…",
+    "resultSummary": "{succeeded} of {total} refund(s) succeeded. {failed} failed.",
+    "refunded": "Refunded",
+    "failed": "Failed",
+    "back": "Back"
+  },
+  "cancelOrder": {
+    "button": "Cancel Order & Refund",
+    "timeLeft": "You have {time} left to cancel.",
+    "confirmTitle": "Cancel this order and refund {amount}?",
+    "confirmHint": "Your cancellation will be recorded and your refund will be processed nightly. Refunds may take 3–5 business days to appear in your account.",
+    "confirmYes": "Yes, cancel & refund",
+    "confirmNo": "Keep my order",
+    "processing": "Processing cancellation and refund…",
+    "success": "Your cancellation has been recorded. Your refund is being processed and will appear within a few business days.",
+    "tryAgain": "Try again",
+    "days": "{count, plural, one {# day} other {# days}}",
+    "hours": "{count, plural, one {# hour} other {# hours}}",
+    "minutes": "{count, plural, one {# minute} other {# minutes}}"
   },
   "common": {
     "close": "Close",
@@ -135,6 +186,7 @@
     "kitchenCounts": "Kitchen counts",
     "reception": "Reception",
     "receptionDeliveries": "Deliveries",
+    "bulkRefund": "Bulk Refund",
     "settings": "Settings"
   },
   "login": {
@@ -624,6 +676,7 @@
     "CART": "Cart",
     "CANCELLED": "Cancelled",
     "FAILED": "Failed",
+    "REFUND_PENDING": "Refund Pending",
     "REFUNDED": "Refunded"
   },
   "settingsAdmin": {
@@ -645,7 +698,13 @@
     "faviconHint": "Shown as the browser tab icon. PNG or ICO, square, under 2 MB.",
     "upload": "Upload",
     "resetToDefault": "Reset to default",
-    "usingDefault": "Using the default image."
+    "usingDefault": "Using the default image.",
+    "cancellationRefunds": "Cancellation & Refunds",
+    "cancellationRefundsHint": "Control whether employees can cancel their own paid orders and issue HitPay refunds.",
+    "selfCancelLabel": "Allow employees to self-cancel their own paid order",
+    "selfCancelHint": "When enabled, employees can cancel their PAID order before the cycle ordering cutoff. The refund is queued and processed nightly at 8pm via HitPay. Currently {status}.",
+    "enabled": "enabled",
+    "disabled": "disabled"
   },
   "completeProfile": {
     "title": "One more step",

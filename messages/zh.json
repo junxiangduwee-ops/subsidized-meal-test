@@ -103,7 +103,58 @@
     "name": "姓名",
     "staffId": "员工编号",
     "department": "部门",
-    "subsidyInline": "补贴"
+    "subsidyInline": "补贴",
+    "refundPending": "您的取消请求已记录。退款正在处理中，将在几个工作日内到账。",
+    "refundedReason": "原因：{reason}",
+    "refunded": "此订单已取消并已发起退款。"
+  },
+  "bulkRefund": {
+    "title": "批量退款",
+    "subtitle": "选择已付款订单，立即通过 HitPay 退款。",
+    "backToFinance": "财务",
+    "backToAdmin": "每周菜单",
+    "filters": "筛选",
+    "cycle": "服务周",
+    "day": "日期",
+    "allDays": "所有日期",
+    "restaurant": "餐厅",
+    "allRestaurants": "所有餐厅",
+    "dish": "菜品",
+    "allDishes": "所有菜品",
+    "applyFilter": "应用",
+    "clearFilters": "清除筛选",
+    "ordersTitle": "已付款订单",
+    "ordersSubtitle": "符合筛选条件的 {count} 个订单",
+    "noOrders": "没有符合所选筛选条件的已付款订单。",
+    "noCycles": "暂无可用服务周。",
+    "employee": "员工",
+    "meals": "餐点",
+    "amount": "金额",
+    "reference": "订单号",
+    "statusCol": "状态",
+    "detail": "详情",
+    "refundSelected": "退款所选 {count} 个订单",
+    "selectedCount": "已选 {count} 个订单",
+    "noneSelected": "请至少选择一个订单",
+    "processing": "处理中…",
+    "resultSummary": "{total} 笔退款中 {succeeded} 笔成功，{failed} 笔失败。",
+    "refunded": "已退款",
+    "failed": "失败",
+    "back": "返回"
+  },
+  "cancelOrder": {
+    "button": "取消订单并退款",
+    "timeLeft": "您还有 {time} 可以取消。",
+    "confirmTitle": "取消此订单并退款 {amount}？",
+    "confirmHint": "您的取消请求将被记录，退款将在每晚处理。退款可能需要 3–5 个工作日才能到账。",
+    "confirmYes": "是，取消并退款",
+    "confirmNo": "保留我的订单",
+    "processing": "正在处理取消和退款…",
+    "success": "您的取消请求已记录。退款正在处理中，将在几个工作日内到账。",
+    "tryAgain": "重试",
+    "days": "{count, plural, one {# 天} other {# 天}}",
+    "hours": "{count, plural, one {# 小时} other {# 小时}}",
+    "minutes": "{count, plural, one {# 分钟} other {# 分钟}}"
   },
   "common": {
     "close": "关闭",
@@ -132,6 +183,7 @@
     "kitchenCounts": "厨房统计",
     "reception": "前台",
     "receptionDeliveries": "配送",
+    "bulkRefund": "批量退款",
     "settings": "设置"
   },
   "login": {
@@ -621,6 +673,7 @@
     "CART": "购物车",
     "CANCELLED": "已取消",
     "FAILED": "失败",
+    "REFUND_PENDING": "退款处理中",
     "REFUNDED": "已退款"
   },
   "settingsAdmin": {
@@ -642,7 +695,13 @@
     "faviconHint": "显示为浏览器标签图标。PNG 或 ICO 格式，正方形，小于 2 MB。",
     "upload": "上传",
     "resetToDefault": "恢复默认",
-    "usingDefault": "正在使用默认图片。"
+    "usingDefault": "正在使用默认图片。",
+    "cancellationRefunds": "取消与退款",
+    "cancellationRefundsHint": "控制员工是否可以取消已付款订单并发起 HitPay 退款。",
+    "selfCancelLabel": "允许员工自行取消已付款订单",
+    "selfCancelHint": "启用后，员工可以在周期截止时间前取消已付款订单。退款将每晚通过 HitPay 处理。当前{status}。",
+    "enabled": "已启用",
+    "disabled": "已禁用"
   },
   "completeProfile": {
     "title": "还有一步",

@@ -59,6 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/admin/invoices', label: 'Vendor Invoices' },
         ...(can(user.role, 'settings:manage')
           ? [
+              { href: '/admin/bulk-refund', label: t('bulkRefund') },
               { href: '/admin/settings', label: t('settings') },
               { href: '/admin/audit', label: 'Audit Log' },
             ]

@@ -103,7 +103,58 @@
     "name": "Nama",
     "staffId": "ID Kakitangan",
     "department": "Jabatan",
-    "subsidyInline": "subsidi"
+    "subsidyInline": "subsidi",
+    "refundPending": "Pembatalan anda telah direkodkan. Bayaran balik anda sedang diproses dan akan muncul dalam beberapa hari bekerja.",
+    "refundedReason": "Sebab: {reason}",
+    "refunded": "Pesanan ini telah dibatalkan dan bayaran balik telah dikeluarkan."
+  },
+  "bulkRefund": {
+    "title": "Bayaran Balik Pukal",
+    "subtitle": "Pilih pesanan yang telah dibayar untuk dibayar balik segera melalui HitPay.",
+    "backToFinance": "Kewangan",
+    "backToAdmin": "Menu mingguan",
+    "filters": "Penapis",
+    "cycle": "Minggu perkhidmatan",
+    "day": "Hari",
+    "allDays": "Semua hari",
+    "restaurant": "Restoran",
+    "allRestaurants": "Semua restoran",
+    "dish": "Hidangan",
+    "allDishes": "Semua hidangan",
+    "applyFilter": "Guna",
+    "clearFilters": "Kosongkan penapis",
+    "ordersTitle": "Pesanan DIBAYAR",
+    "ordersSubtitle": "{count, plural, one {# pesanan} other {# pesanan}} sepadan dengan penapis",
+    "noOrders": "Tiada pesanan yang dibayar sepadan dengan penapis yang dipilih.",
+    "noCycles": "Tiada minggu perkhidmatan tersedia.",
+    "employee": "Kakitangan",
+    "meals": "Hidangan",
+    "amount": "Jumlah",
+    "reference": "Rujukan",
+    "statusCol": "Status",
+    "detail": "Butiran",
+    "refundSelected": "Bayar balik {count, plural, one {# pesanan} other {# pesanan}}",
+    "selectedCount": "{count, plural, one {# pesanan} other {# pesanan}} dipilih",
+    "noneSelected": "Pilih sekurang-kurangnya satu pesanan",
+    "processing": "Memproses…",
+    "resultSummary": "{succeeded} daripada {total} bayaran balik berjaya. {failed} gagal.",
+    "refunded": "Dibayar balik",
+    "failed": "Gagal",
+    "back": "Kembali"
+  },
+  "cancelOrder": {
+    "button": "Batalkan Pesanan & Bayar Balik",
+    "timeLeft": "Anda mempunyai {time} lagi untuk membatalkan.",
+    "confirmTitle": "Batalkan pesanan ini dan bayar balik {amount}?",
+    "confirmHint": "Pembatalan anda akan direkodkan dan bayaran balik akan diproses pada waktu malam. Bayaran balik mungkin mengambil masa 3–5 hari bekerja untuk muncul dalam akaun anda.",
+    "confirmYes": "Ya, batalkan & bayar balik",
+    "confirmNo": "Simpan pesanan saya",
+    "processing": "Memproses pembatalan dan bayaran balik…",
+    "success": "Pembatalan anda telah direkodkan. Bayaran balik anda sedang diproses dan akan muncul dalam beberapa hari bekerja.",
+    "tryAgain": "Cuba semula",
+    "days": "{count, plural, one {# hari} other {# hari}}",
+    "hours": "{count, plural, one {# jam} other {# jam}}",
+    "minutes": "{count, plural, one {# minit} other {# minit}}"
   },
   "common": {
     "close": "Tutup",
@@ -132,6 +183,7 @@
     "kitchenCounts": "Kiraan dapur",
     "reception": "Penerimaan",
     "receptionDeliveries": "Penghantaran",
+    "bulkRefund": "Bayaran Balik Pukal",
     "settings": "Tetapan"
   },
   "login": {
@@ -621,6 +673,7 @@
     "CART": "Troli",
     "CANCELLED": "Dibatalkan",
     "FAILED": "Gagal",
+    "REFUND_PENDING": "Bayaran balik dalam proses",
     "REFUNDED": "Dikembalikan"
   },
   "settingsAdmin": {
@@ -642,7 +695,13 @@
     "faviconHint": "Dipaparkan sebagai ikon tab pelayar. PNG atau ICO, segi empat sama, bawah 2 MB.",
     "upload": "Muat naik",
     "resetToDefault": "Set semula ke lalai",
-    "usingDefault": "Menggunakan imej lalai."
+    "usingDefault": "Menggunakan imej lalai.",
+    "cancellationRefunds": "Pembatalan & Bayaran Balik",
+    "cancellationRefundsHint": "Kawal sama ada pekerja boleh membatalkan pesanan yang dibayar dan mengeluarkan bayaran balik HitPay.",
+    "selfCancelLabel": "Benarkan pekerja membatalkan pesanan mereka sendiri yang telah dibayar",
+    "selfCancelHint": "Apabila diaktifkan, pekerja boleh membatalkan pesanan DIBAYAR mereka sebelum tarikh akhir kitaran. Bayaran balik akan diproses setiap malam pada pukul 8 malam melalui HitPay. Kini {status}.",
+    "enabled": "diaktifkan",
+    "disabled": "dinyahaktifkan"
   },
   "completeProfile": {
     "title": "Satu langkah lagi",

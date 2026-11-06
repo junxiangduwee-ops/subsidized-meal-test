@@ -52,6 +52,7 @@ enum OrderStatus {
   AWAITING_PAYMENT
   PAID
   CANCELLED
+  REFUND_PENDING
   REFUNDED
 }
 
@@ -470,6 +471,9 @@ model AppSettings {
   /// Maximum number of subsidised meals an employee may order per service day.
   /// Default 1. Editable by ADMIN in /admin/settings without a code change.
   maxMealsPerDay        Int @default(1)
+
+  /// Whether employees can self-cancel a PAID order and queue a HitPay refund.
+  selfCancelEnabled     Boolean @default(false)
 
   updatedAt          DateTime @updatedAt
   updatedById        String?

@@ -16,6 +16,9 @@
  * 3. expire pending orders — cancel Order rows that have been in PENDING
  *                           status for more than 24 h with no successful
  *                           payment, freeing any reserved capacity.
+ * 4. process refunds       — attempt HitPay refund for every REFUND_PENDING
+ *                           order; failed orders stay pending and retry next
+ *                           night until they succeed.
  */
 
 import { NextResponse } from 'next/server';
@@ -24,6 +27,7 @@ import { prisma } from '@/lib/prisma';
 import { todayInAppTz, toDateKey, zonedToUtc, APP_TIMEZONE } from '@/lib/cycle';
 import { getSiteSettings } from '@/lib/settings';
 import { audit } from '@/lib/orders';
+import { processRefund } from '@/lib/refund';
 
 // ── Security ────────────────────────────────────────────────────────────────
 // Vercel signs cron requests with CRON_SECRET in the Authorization header.
@@ -108,7 +112,7 @@ async function jobExpirePendingOrders(): Promise<{ expired: number }> {
   // Audit each cancellation (fire-and-forget; don't let audit errors break the job).
   await Promise.allSettled(
     stale.map((o) =>
-      audit('SYSTEM', 'order.expired', 'Order', o.id, {
+      audit(null, 'order.expired', 'Order', o.id, {
         reference: o.reference,
         reason: `Pending for more than ${PENDING_ORDER_TTL_HOURS}h`,
       }),
@@ -116,6 +120,29 @@ async function jobExpirePendingOrders(): Promise<{ expired: number }> {
   );
 
   return { expired: stale.length };
+}
+
+// ── Job 4: Process queued refunds ────────────────────────────────────────────
+async function jobProcessRefunds(): Promise<{ processed: number; succeeded: number; failed: number }> {
+  const pending = await prisma.order.findMany({
+    where: { status: 'REFUND_PENDING' },
+    select: { id: true },
+  });
+
+  if (pending.length === 0) return { processed: 0, succeeded: 0, failed: 0 };
+
+  const results = await Promise.allSettled(
+    pending.map((o) => processRefund(o.id, null, 'Nightly refund batch')),
+  );
+
+  let succeeded = 0;
+  let failed = 0;
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.ok) succeeded++;
+    else failed++;
+  }
+
+  return { processed: pending.length, succeeded, failed };
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -140,6 +167,10 @@ export async function GET(req: Request) {
     jobExpirePendingOrders()
       .then((r) => { results.expirePendingOrders = r; })
       .catch((e) => { errors.expirePendingOrders = String(e); }),
+
+    jobProcessRefunds()
+      .then((r) => { results.processRefunds = r; })
+      .catch((e) => { errors.processRefunds = String(e); }),
   ]);
 
   const hasErrors = Object.keys(errors).length > 0;

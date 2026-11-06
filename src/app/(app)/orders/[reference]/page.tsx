@@ -7,9 +7,12 @@ import { requireUser } from '@/lib/session';
 import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
 import { formatDate, formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
+import { getSiteSettings } from '@/lib/settings';
+import { canUserCancelOrder } from '@/lib/refund';
 import { PageHeader, Section, Alert, StatusBadge } from '@/components/ui';
 import { PaymentStatus } from './payment-status';
 import { WebPaymentStatus } from './web-payment-status';
+import { CancelOrderButton } from './cancel-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +63,12 @@ export default async function OrderDetailPage({
   const displayPayments = order.payments.filter((p) => p.status !== 'PENDING');
   const awaiting = order.status === 'AWAITING_PAYMENT';
 
+  // Self-cancel eligibility — only shown to the order owner, not to finance/admin viewers.
+  const settings = await getSiteSettings();
+  const cancelCheck = isOwner
+    ? canUserCancelOrder({ status: order.status }, settings, order.cycle)
+    : { allowed: false as const };
+
   return (
     <>
       <div className="mb-4">
@@ -106,9 +115,35 @@ export default async function OrderDetailPage({
       {order.status === 'CANCELLED' ? (
         <div className="mb-6">
           <Alert tone="error">
-            {t('cancelled')}
-            {order.cancelReason ? `: ${order.cancelReason}` : '.'}
+            {t('cancelled')}{order.cancelReason ? `: ${order.cancelReason}` : '.'}
           </Alert>
+        </div>
+      ) : null}
+
+      {order.status === 'REFUND_PENDING' ? (
+        <div className="mb-6">
+          <Alert tone="warning">
+            {t('refundPending')}
+          </Alert>
+        </div>
+      ) : null}
+
+      {order.status === 'REFUNDED' ? (
+        <div className="mb-6">
+          <Alert tone="success">
+            {t('refunded')}
+            {order.cancelReason ? ` ${t('refundedReason', { reason: order.cancelReason })}` : ''}
+          </Alert>
+        </div>
+      ) : null}
+
+      {cancelCheck.allowed && cancelCheck.minutesLeft != null ? (
+        <div className="mb-6">
+          <CancelOrderButton
+            orderId={order.id}
+            minutesLeft={cancelCheck.minutesLeft}
+            amountLabel={formatSen(order.netSen)}
+          />
         </div>
       ) : null}
 

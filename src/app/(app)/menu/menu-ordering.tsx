@@ -31,7 +31,7 @@ export type MenuDish = {
    * Only used to give the "chosen" tick a slightly different look while a
    * chosen-and-locked day is still awaiting payment, versus already paid.
    */
-  orderStatus?: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUNDED' | null;
+  orderStatus?: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | null;
 };
 
 /** One chosen day, for the summary panel. Spans the whole week. */
@@ -46,7 +46,7 @@ export type CartLine = {
    * next to it (in cart / awaiting payment / paid), so the summary never
    * claims a line is paid when it is only pending payment.
    */
-  status: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUNDED';
+  status: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED';
   /** True once this line belongs to an already-submitted order (no longer editable here). */
   locked: boolean;
 };

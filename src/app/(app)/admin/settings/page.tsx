@@ -81,6 +81,7 @@ export default async function SettingsPage({
   // All 24 hours available — no restriction, admin knows what they're doing.
   const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i);
   const maxMealsPerDay = settings.maxMealsPerDay;
+  const { selfCancelEnabled } = settings;
 
   return (
     <>
@@ -182,7 +183,8 @@ export default async function SettingsPage({
             <input type="hidden" name="siteName" value={settings.siteName} />
             <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
             <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
-            <input type="hidden" name="mealReceiptCutoffHour" value={String(cutoffHour)} />
+            {/* carry cancel/refund settings through so they are not lost */}
+            <input type="hidden" name="selfCancelEnabled" value={selfCancelEnabled ? 'true' : 'false'} />
 
             <div className="max-w-xs">
               <label className="label" htmlFor="mealReceiptCutoffHour">
@@ -230,6 +232,49 @@ export default async function SettingsPage({
             </div>
 
             <div className="mt-4">
+              <button type="submit" className="btn-primary">
+                {t('save')}
+              </button>
+            </div>
+          </form>
+        </Section>
+      </div>
+
+      {/* ── Cancellation & Refunds ──────────────────────────────────────────── */}
+      <div className="mt-6">
+        <Section
+          title={t('cancellationRefunds')}
+          description={t('cancellationRefundsHint')}
+        >
+          <form action={updateSiteSettingsPlain} className="p-5 space-y-6">
+            {/* carry unrelated settings through */}
+            <input type="hidden" name="siteName" value={settings.siteName} />
+            <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
+            <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
+            <input type="hidden" name="mealReceiptCutoffHour" value={String(cutoffHour)} />
+            <input type="hidden" name="maxMealsPerDay" value={String(maxMealsPerDay)} />
+
+            {/* Self-cancel toggle */}
+            <div>
+              <div className="flex items-center gap-3">
+                <input
+                  id="selfCancelEnabled"
+                  name="selfCancelEnabled"
+                  type="checkbox"
+                  defaultChecked={selfCancelEnabled}
+                  value="true"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <label htmlFor="selfCancelEnabled" className="label mb-0 cursor-pointer">
+                  {t('selfCancelLabel')}
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-slate-500 ml-7">
+                {t('selfCancelHint', { status: selfCancelEnabled ? t('enabled') : t('disabled') })}
+              </p>
+            </div>
+
+            <div>
               <button type="submit" className="btn-primary">
                 {t('save')}
               </button>

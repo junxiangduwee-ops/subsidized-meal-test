@@ -15,7 +15,8 @@
     "db:migrate": "node scripts/prisma.mjs migrate dev",
     "db:seed": "node scripts/seed.mjs",
     "db:studio": "node scripts/prisma.mjs studio",
-    "db:reset": "node scripts/reset.mjs"
+    "db:reset": "node scripts/reset.mjs",
+    "cron": "node scripts/cron-local.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
@@ -37,6 +38,7 @@
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
+    "node-cron": "^4.6.0",
     "postcss": "^8.5.1",
     "prisma": "^6.2.1",
     "tailwindcss": "^3.4.17",
