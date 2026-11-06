@@ -53,6 +53,7 @@ enum OrderStatus {
   PAID
   CANCELLED
   REFUND_PENDING
+  REFUND_FAILED
   REFUNDED
 }
 
@@ -314,8 +315,10 @@ model Order {
 
   submittedAt    DateTime?
   paidAt         DateTime?
-  cancelledAt    DateTime?
-  cancelReason   String?
+  cancelledAt         DateTime?
+  cancelReason        String?
+  refundAttempts      Int       @default(0)
+  lastRefundAttemptAt DateTime?
 
   deliverySiteId String?
   deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])

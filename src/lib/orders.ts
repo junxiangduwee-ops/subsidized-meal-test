@@ -159,7 +159,7 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
   const lockedSameDay = await prisma.orderItem.findFirst({
     where: {
       serviceDate: menuItem.menuDay.serviceDate,
-      order: { userId, cycleId: cycle.id, status: { not: 'CART' } },
+      order: { userId, cycleId: cycle.id, status: { in: ['PAID', 'AWAITING_PAYMENT'] } },
     },
   });
 

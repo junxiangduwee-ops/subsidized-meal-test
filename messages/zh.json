@@ -53,6 +53,8 @@
     "awaitingPayment": "等待付款",
     "inCart": "购物车中",
     "cancelled": "已取消",
+    "refundPending": "退款处理中",
+    "refundFailed": "退款失败",
     "refunded": "已退款",
     "pending": "待付款",
     "yourChoicePending": "您的选择 · 待付款"
@@ -105,6 +107,7 @@
     "department": "部门",
     "subsidyInline": "补贴",
     "refundPending": "您的取消请求已记录。退款正在处理中，将在几个工作日内到账。",
+    "refundFailed": "退款经过 7 次尝试后仍未成功。请联系管理员团队手动处理您的退款。",
     "refundedReason": "原因：{reason}",
     "refunded": "此订单已取消并已发起退款。"
   },
@@ -674,6 +677,7 @@
     "CANCELLED": "已取消",
     "FAILED": "失败",
     "REFUND_PENDING": "退款处理中",
+    "REFUND_FAILED": "退款失败",
     "REFUNDED": "已退款"
   },
   "settingsAdmin": {

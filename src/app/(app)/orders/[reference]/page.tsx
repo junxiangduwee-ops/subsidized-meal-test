@@ -128,6 +128,14 @@ export default async function OrderDetailPage({
         </div>
       ) : null}
 
+      {order.status === 'REFUND_FAILED' ? (
+        <div className="mb-6">
+          <Alert tone="error">
+            {t('refundFailed')}
+          </Alert>
+        </div>
+      ) : null}
+
       {order.status === 'REFUNDED' ? (
         <div className="mb-6">
           <Alert tone="success">

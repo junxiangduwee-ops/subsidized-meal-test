@@ -53,6 +53,8 @@
     "awaitingPayment": "Awaiting payment",
     "inCart": "In cart",
     "cancelled": "Cancelled",
+    "refundPending": "Refund pending",
+    "refundFailed": "Refund failed",
     "refunded": "Refunded",
     "pending": "Pending",
     "yourChoicePending": "Your choice · pending payment"
@@ -108,6 +110,7 @@
     "checkingPayment": "Checking payment status…",
     "openManually": "Open payment page manually",
     "refundPending": "Your cancellation has been recorded. Your refund is being processed and will appear within a few business days.",
+    "refundFailed": "Your refund could not be processed after 7 attempts. Please contact the admin team to arrange your refund manually.",
     "refunded": "This order has been cancelled and a refund has been issued.",
     "refundedReason": "Reason: {reason}"
   },
@@ -677,6 +680,7 @@
     "CANCELLED": "Cancelled",
     "FAILED": "Failed",
     "REFUND_PENDING": "Refund Pending",
+    "REFUND_FAILED": "Refund Failed",
     "REFUNDED": "Refunded"
   },
   "settingsAdmin": {

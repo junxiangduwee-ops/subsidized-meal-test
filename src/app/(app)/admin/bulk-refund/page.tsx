@@ -32,7 +32,7 @@ export default async function BulkRefundPage({
 
   const serviceDayRows = selectedCycle
     ? await prisma.orderItem.findMany({
-        where: { order: { cycleId: selectedCycle.id, status: { in: ['PAID', 'REFUND_PENDING'] } } },
+        where: { order: { cycleId: selectedCycle.id, status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED'] } } },
         select: { serviceDate: true },
         distinct: ['serviceDate'],
         orderBy: { serviceDate: 'asc' },
@@ -47,7 +47,7 @@ export default async function BulkRefundPage({
   const restaurantRows = selectedCycle
     ? await prisma.orderItem.findMany({
         where: {
-          order: { cycleId: selectedCycle.id, status: { in: ['PAID', 'REFUND_PENDING'] } },
+          order: { cycleId: selectedCycle.id, status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED'] } },
           ...(selectedDay ? { serviceDate: selectedDay } : {}),
         },
         select: { restaurantName: true },
@@ -64,7 +64,7 @@ export default async function BulkRefundPage({
   const dishRows = selectedCycle
     ? await prisma.orderItem.findMany({
         where: {
-          order: { cycleId: selectedCycle.id, status: { in: ['PAID', 'REFUND_PENDING'] } },
+          order: { cycleId: selectedCycle.id, status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED'] } },
           ...(selectedDay ? { serviceDate: selectedDay } : {}),
           ...(selectedRestaurant ? { restaurantName: selectedRestaurant } : {}),
         },
@@ -89,7 +89,7 @@ export default async function BulkRefundPage({
     ? await prisma.order.findMany({
         where: {
           cycleId: selectedCycle.id,
-          status: { in: ['PAID', 'REFUND_PENDING'] },
+          status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED'] },
           ...(hasItemFilter ? { items: { some: itemFilter } } : {}),
         },
         include: {

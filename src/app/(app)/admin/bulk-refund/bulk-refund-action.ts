@@ -24,7 +24,7 @@ export async function bulkRefundOrders(orderIds: string[]): Promise<BulkRefundRe
   }
 
   const orders = await prisma.order.findMany({
-    where: { id: { in: orderIds }, status: { in: ['PAID', 'REFUND_PENDING'] } },
+    where: { id: { in: orderIds }, status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED'] } },
     select: { id: true, reference: true },
   });
 

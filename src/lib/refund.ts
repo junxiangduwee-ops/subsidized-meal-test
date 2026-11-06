@@ -59,10 +59,12 @@ export type ProcessRefundResult =
   | { ok: true; refundId: string }
   | { ok: false; error: string };
 
+const MAX_REFUND_ATTEMPTS = 7;
+
 /**
- * Attempt an immediate HitPay refund for a PAID or REFUND_PENDING order.
- * On success the order moves to REFUNDED. On failure the order stays as-is
- * so the caller (admin or cron) can decide what to do.
+ * Attempt an immediate HitPay refund for a PAID, REFUND_PENDING, or REFUND_FAILED order.
+ * Tracks attempt count. After MAX_REFUND_ATTEMPTS failures the order is marked
+ * REFUND_FAILED so the nightly cron stops retrying. Admins can still retry manually.
  */
 export async function processRefund(
   orderId: string,
@@ -81,9 +83,15 @@ export async function processRefund(
   });
 
   if (!order) return { ok: false, error: 'Order not found.' };
-  if (order.status !== 'PAID' && order.status !== 'REFUND_PENDING') {
-    return { ok: false, error: `Order is ${order.status} — only PAID or REFUND_PENDING orders can be refunded.` };
+  if (order.status !== 'PAID' && order.status !== 'REFUND_PENDING' && order.status !== 'REFUND_FAILED') {
+    return { ok: false, error: `Order is ${order.status} — only PAID, REFUND_PENDING, or REFUND_FAILED orders can be refunded.` };
   }
+
+  const newAttempts = (order.refundAttempts ?? 0) + 1;
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { refundAttempts: newAttempts, lastRefundAttemptAt: new Date() },
+  });
 
   const payment = order.payments[0];
   if (!payment) return { ok: false, error: 'No successful payment found for this order.' };
@@ -145,11 +153,22 @@ export async function processRefund(
 
     return { ok: true, refundId: refund.id };
   } catch (err) {
-    console.error('[refund] processRefund failed for', order.reference, err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Refund failed.',
-    };
+    const errMsg = err instanceof Error ? err.message : 'Refund failed.';
+    console.error('[refund] processRefund failed for', order.reference, `(attempt ${newAttempts})`, err);
+
+    if (newAttempts >= MAX_REFUND_ATTEMPTS) {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'REFUND_FAILED' },
+      });
+      await audit(actorId, 'order.refund_failed', 'Order', order.id, {
+        reference: order.reference,
+        attempts: newAttempts,
+        lastError: errMsg,
+      });
+    }
+
+    return { ok: false, error: errMsg };
   }
 }
 

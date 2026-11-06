@@ -78,6 +78,7 @@ const STATUS_STYLES: Record<string, string> = {
   CANCELLED: 'bg-red-100 text-red-800',
   FAILED: 'bg-red-100 text-red-800',
   REFUND_PENDING: 'bg-orange-100 text-orange-800',
+  REFUND_FAILED:  'bg-red-100 text-red-800',
   REFUNDED: 'bg-purple-100 text-purple-800',
 };
 

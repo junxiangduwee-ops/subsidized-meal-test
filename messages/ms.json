@@ -53,6 +53,8 @@
     "awaitingPayment": "Menunggu pembayaran",
     "inCart": "Dalam troli",
     "cancelled": "Dibatalkan",
+    "refundPending": "Bayaran balik dalam proses",
+    "refundFailed": "Bayaran balik gagal",
     "refunded": "Dikembalikan",
     "pending": "Belum bayar",
     "yourChoicePending": "Pilihan anda · menunggu pembayaran"
@@ -105,6 +107,7 @@
     "department": "Jabatan",
     "subsidyInline": "subsidi",
     "refundPending": "Pembatalan anda telah direkodkan. Bayaran balik anda sedang diproses dan akan muncul dalam beberapa hari bekerja.",
+    "refundFailed": "Bayaran balik anda tidak dapat diproses selepas 7 percubaan. Sila hubungi pasukan admin untuk mengatur bayaran balik secara manual.",
     "refundedReason": "Sebab: {reason}",
     "refunded": "Pesanan ini telah dibatalkan dan bayaran balik telah dikeluarkan."
   },
@@ -674,6 +677,7 @@
     "CANCELLED": "Dibatalkan",
     "FAILED": "Gagal",
     "REFUND_PENDING": "Bayaran balik dalam proses",
+    "REFUND_FAILED": "Bayaran balik gagal",
     "REFUNDED": "Dikembalikan"
   },
   "settingsAdmin": {

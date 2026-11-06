@@ -90,11 +90,12 @@ export default async function MenuPage({
   ]);
 
   const cart = orders.find((o) => o.status === 'CART');
-  const settledOrders = orders.filter((o) => o.status !== 'CART');
+  const settledOrders = orders.filter((o) => o.status === 'PAID' || o.status === 'AWAITING_PAYMENT');
 
-  const orderItems = orders.flatMap((o) =>
-    o.items.map((item) => ({ ...item, orderStatus: o.status, orderReference: o.reference })),
-  );
+  const activeStatuses = new Set(['CART', 'PAID', 'AWAITING_PAYMENT']);
+  const orderItems = orders
+    .filter((o) => activeStatuses.has(o.status))
+    .flatMap((o) => o.items.map((item) => ({ ...item, orderStatus: o.status, orderReference: o.reference })));
 
   if (days.length === 0) {
     return (

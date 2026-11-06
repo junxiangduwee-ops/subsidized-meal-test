@@ -31,7 +31,7 @@ export type MenuDish = {
    * Only used to give the "chosen" tick a slightly different look while a
    * chosen-and-locked day is still awaiting payment, versus already paid.
    */
-  orderStatus?: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED' | null;
+  orderStatus?: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUND_FAILED' | 'REFUNDED' | null;
 };
 
 /** One chosen day, for the summary panel. Spans the whole week. */
@@ -46,7 +46,7 @@ export type CartLine = {
    * next to it (in cart / awaiting payment / paid), so the summary never
    * claims a line is paid when it is only pending payment.
    */
-  status: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED';
+  status: 'CART' | 'AWAITING_PAYMENT' | 'PAID' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUND_FAILED' | 'REFUNDED';
   /** True once this line belongs to an already-submitted order (no longer editable here). */
   locked: boolean;
 };
@@ -331,6 +331,8 @@ const LINE_STATUS_STYLES: Record<string, string> = {
   AWAITING_PAYMENT: 'bg-amber-100 text-amber-800',
   PAID: 'bg-emerald-100 text-emerald-800',
   CANCELLED: 'bg-red-100 text-red-800',
+  REFUND_PENDING: 'bg-orange-100 text-orange-800',
+  REFUND_FAILED: 'bg-red-100 text-red-800',
   REFUNDED: 'bg-purple-100 text-purple-800',
 };
 
@@ -344,6 +346,8 @@ function LineStatusPill({ status }: { status: CartLine['status'] }) {
     AWAITING_PAYMENT: t('pending'),
     PAID: t('paid'),
     CANCELLED: t('cancelled'),
+    REFUND_PENDING: t('refundPending'),
+    REFUND_FAILED: t('refundFailed'),
     REFUNDED: t('refunded'),
   };
 
