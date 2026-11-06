@@ -66,7 +66,7 @@ export type ProcessRefundResult =
  */
 export async function processRefund(
   orderId: string,
-  actorId: string,
+  actorId: string | null,
   reason?: string,
 ): Promise<ProcessRefundResult> {
   const order = await prisma.order.findUnique({
