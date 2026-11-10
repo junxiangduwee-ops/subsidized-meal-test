@@ -2,7 +2,7 @@ import 'server-only';
 
 import { prisma } from './prisma';
 import { refundPayment } from './hitpay';
-import { getEntityCredentials, getGatewayType } from './entity-config';
+import { getEntityCredentials } from './entity-config';
 import { audit } from './orders';
 import type { SiteSettings } from './settings';
 
@@ -100,14 +100,6 @@ export async function processRefund(
   }
 
   const entityId = order.entityId ?? 'retail';
-  const gateway = getGatewayType(entityId);
-
-  if (gateway !== 'hitpay') {
-    return {
-      ok: false,
-      error: `Refunds via ${gateway} are not yet supported. Please process this refund manually.`,
-    };
-  }
 
   let apiKey: string;
   let mode: string;

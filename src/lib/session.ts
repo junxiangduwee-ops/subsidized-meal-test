@@ -31,13 +31,14 @@ export type SessionUser = {
   role: Role;
   department: string | null;
   staffId: string | null;
+  superAdmin: boolean;
   /** True when this session was created via the Joget-embedded iframe flow -
    * drives whether the app chrome (top menu) is shown. See layout.tsx. */
   embed: boolean;
 };
 
 export async function createSession(
-  user: Omit<SessionUser, 'embed'>,
+  user: Omit<SessionUser, 'embed' | 'superAdmin'>,
   options?: { crossSiteEmbed?: boolean },
 ): Promise<void> {
   const expires = new Date(Date.now() + ttlHours() * 3600_000);
@@ -112,6 +113,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       role: true,
       department: true,
       staffId: true,
+      superAdmin: true,
       active: true,
     },
   });

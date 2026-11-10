@@ -83,6 +83,48 @@ enum SubsidyScope {
 }
 
 // ---------------------------------------------------------------------------
+// Company
+// ---------------------------------------------------------------------------
+
+model Entity {
+  id                  String   @id @default(cuid())
+  code                String   @unique  // e.g. "retail" → env HITPAY_API_KEY_RETAIL
+  name                String
+  hitpayKeyEncrypted  String?  // AES-256-GCM encrypted HitPay API key
+  hitpaySaltEncrypted String?  // AES-256-GCM encrypted HitPay webhook salt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  companies CompanyInfo[]
+}
+
+model CompanyInfo {
+  id                String   @id @default(cuid())
+  code              String   @unique  // e.g. "MRD-RET"
+  name              String            // e.g. "MR DIY Retail Sdn Bhd"
+  entityId          String            // FK to Entity.code (multiple companies can share one entity)
+  bankName          String?
+  bankAccountName   String?
+  bankAccountNumber String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  users       User[]
+  entity      Entity              @relation(fields: [entityId], references: [code])
+  entitlement CompanyEntitlement?
+}
+
+model CompanyEntitlement {
+  id        String      @id @default(cuid())
+  companyId String      @unique
+  enabled   Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  company   CompanyInfo @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
 
@@ -100,8 +142,12 @@ model User {
   lastLoginAt      DateTime?
   phone            String?    // personal mobile — collected on first login
   profileCompleted Boolean    @default(false) // true once the user submits contact details
+  superAdmin       Boolean    @default(false)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+
+  companyId    String?
+  company      CompanyInfo? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   defaultDeliverySiteId     String?
   defaultDeliverySite       DeliverySite? @relation("UserDefaultDeliverySite", fields: [defaultDeliverySiteId], references: [id])

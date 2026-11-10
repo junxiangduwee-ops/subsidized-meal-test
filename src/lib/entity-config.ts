@@ -1,55 +1,50 @@
 /**
- * Entity → Payment Gateway account mapping.
+ * Entity credentials — tries admin-managed DB credentials first (AES-256-GCM
+ * encrypted), falls back to env vars for backward compatibility.
  *
- * Current routing:
- *   retail     → HitPay
- *   ecommerce  → Betterpay
- *   properties → ADAPTIS (eGHL)
- *   group      → HitPay
+ * DB credentials are set via Admin → Companies → Entities.
+ * Env vars still work as a fallback:
+ *   HITPAY_API_KEY_RETAIL, HITPAY_SALT_RETAIL, ...
  */
 
-export const ENTITIES = [
-  { id: 'retail',     label: 'MR DIY Retail' },
-  { id: 'ecommerce',  label: 'MR DIY Ecommerce' },
-  { id: 'properties', label: 'MR DIY Properties' },
-  { id: 'group',      label: 'MR DIY Group' },
-] as const;
+import { prisma } from './prisma';
+import { decrypt } from './encrypt';
 
-export type EntityId = (typeof ENTITIES)[number]['id'];
-
-export function isValidEntityId(id: string): id is EntityId {
-  return ENTITIES.some((e) => e.id === id);
-}
-
-export type GatewayType = 'hitpay' | 'betterpay' | 'adaptis';
-
-export function getGatewayType(entityId: string): GatewayType {
-  if (entityId === 'ecommerce') return 'betterpay';
-  if (entityId === 'properties') return 'adaptis';
-  return 'hitpay';
-}
-
-/** HitPay credentials */
-export function getEntityCredentials(entityId: string): {
+/** Returns HitPay credentials for the given entity code. Async — tries DB first. */
+export async function getEntityCredentials(entityCode: string): Promise<{
   apiKey: string;
   salt: string;
   currency: string;
   paymentMethods: string[];
   mode: string;
-} {
-  const suffix = entityId.toUpperCase();
-  const apiKey = process.env[`HITPAY_API_KEY_${suffix}`] ?? '';
-  const salt   = process.env[`HITPAY_SALT_${suffix}`] ?? '';
+}> {
+  const suffix = entityCode.toUpperCase();
 
-  if (!apiKey || !salt) {
-    throw new Error(
-      `HitPay credentials not configured for entity "${entityId}". ` +
-      `Set HITPAY_API_KEY_${suffix} and HITPAY_SALT_${suffix}.`
-    );
+  let apiKey: string;
+  let salt: string;
+
+  const entity = await prisma.entity.findUnique({
+    where: { code: entityCode },
+    select: { hitpayKeyEncrypted: true, hitpaySaltEncrypted: true },
+  });
+
+  if (entity?.hitpayKeyEncrypted && entity?.hitpaySaltEncrypted) {
+    apiKey = decrypt(entity.hitpayKeyEncrypted);
+    salt   = decrypt(entity.hitpaySaltEncrypted);
+  } else {
+    apiKey = process.env[`HITPAY_API_KEY_${suffix}`] ?? '';
+    salt   = process.env[`HITPAY_SALT_${suffix}`]   ?? '';
+    if (!apiKey || !salt) {
+      throw new Error(
+        `HitPay credentials not configured for entity "${entityCode}". ` +
+        `Enter them in Admin → Companies → Entities, ` +
+        `or set HITPAY_API_KEY_${suffix} and HITPAY_SALT_${suffix} as env vars.`,
+      );
+    }
   }
 
-  const currency = process.env[`HITPAY_CURRENCY_${suffix}`] ?? process.env.HITPAY_CURRENCY ?? 'MYR';
-  const rawMethods = process.env[`HITPAY_PAYMENT_METHODS_${suffix}`] ?? process.env.HITPAY_PAYMENT_METHODS ?? '';
+  const currency       = process.env[`HITPAY_CURRENCY_${suffix}`]        ?? process.env.HITPAY_CURRENCY        ?? 'MYR';
+  const rawMethods     = process.env[`HITPAY_PAYMENT_METHODS_${suffix}`] ?? process.env.HITPAY_PAYMENT_METHODS ?? '';
   const paymentMethods = rawMethods.trim()
     ? rawMethods.split(',').map((m) => m.trim()).filter(Boolean)
     : ['touch_n_go', 'duitnow'];
@@ -58,57 +53,9 @@ export function getEntityCredentials(entityId: string): {
   return { apiKey, salt, currency, paymentMethods, mode };
 }
 
-/** ADAPTIS (eGHL) credentials */
-export function getAdaptisCredentials(entityId: string): {
-  serviceId: string;
-  password: string;
-  currency: string;
-  pymtMethod: string;
-  mode: string;
-} {
-  const suffix = entityId.toUpperCase();
-  const serviceId = process.env[`ADAPTIS_SERVICE_ID_${suffix}`] ?? '';
-  const password  = process.env[`ADAPTIS_PASSWORD_${suffix}`] ?? '';
-
-  if (!serviceId || !password) {
-    throw new Error(
-      `ADAPTIS credentials not configured for entity "${entityId}". ` +
-      `Set ADAPTIS_SERVICE_ID_${suffix} and ADAPTIS_PASSWORD_${suffix}.`
-    );
-  }
-
-  const currency   = process.env[`ADAPTIS_CURRENCY_${suffix}`] ?? 'MYR';
-  const pymtMethod = process.env[`ADAPTIS_PYMT_METHOD_${suffix}`] ?? 'ANY';
-  const mode       = process.env[`ADAPTIS_MODE_${suffix}`] ?? 'staging';
-
-  return { serviceId, password, currency, pymtMethod, mode };
-}
-
-/** Betterpay credentials */
-export function getBetterpayCredentials(entityId: string): {
-  apiKey: string;
-  merchantId: string;
-  currency: string;
-  paymentMethods: string[];
-  mode: string;
-} {
-  const suffix = entityId.toUpperCase();
-  const apiKey     = process.env[`BETTERPAY_API_KEY_${suffix}`] ?? '';
-  const merchantId = process.env[`BETTERPAY_MERCHANT_ID_${suffix}`] ?? '';
-
-  if (!apiKey || !merchantId) {
-    throw new Error(
-      `Betterpay credentials not configured for entity "${entityId}". ` +
-      `Set BETTERPAY_API_KEY_${suffix} and BETTERPAY_MERCHANT_ID_${suffix}.`
-    );
-  }
-
-  const currency = process.env[`BETTERPAY_CURRENCY_${suffix}`] ?? 'MYR';
-  const rawMethods = process.env[`BETTERPAY_PAYMENT_METHODS_${suffix}`] ?? '';
-  const paymentMethods = rawMethods.trim()
-    ? rawMethods.split(',').map((m) => m.trim()).filter(Boolean)
-    : ['ewallet'];
-  const mode = process.env[`BETTERPAY_MODE_${suffix}`] ?? 'sandbox';
-
-  return { apiKey, merchantId, currency, paymentMethods, mode };
+/** True when this entity has credentials — either in DB or as env vars. */
+export function isEntityConfigured(entityCode: string, hasDbCreds: boolean): boolean {
+  if (hasDbCreds) return true;
+  const suffix = entityCode.toUpperCase();
+  return !!(process.env[`HITPAY_API_KEY_${suffix}`] && process.env[`HITPAY_SALT_${suffix}`]);
 }

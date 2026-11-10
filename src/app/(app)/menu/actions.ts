@@ -7,17 +7,13 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit, clearMeal, repriceOrder, selectMeal, setDeliverySite, validateForCheckout } from '@/lib/orders';
 import { createPaymentRequest } from '@/lib/hitpay';
-import { createBetterpayBill } from '@/lib/betterpay';
-import { createAdaptisPayment } from '@/lib/adaptis';
-import { getEntityCredentials, getBetterpayCredentials, getAdaptisCredentials, getGatewayType, isValidEntityId } from '@/lib/entity-config';
+import { getEntityCredentials } from '@/lib/entity-config';
 import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
 
 export type CheckoutResult = ActionState & {
   reference?: string;
   checkoutUrl?: string;
-  adaptisFormData?: Record<string, string>;
-  adaptisPaymentUrl?: string;
 };
 
 export type MealResult = { ok: boolean; error?: string };
@@ -101,13 +97,20 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     paymentEmail = entered.toLowerCase();
   }
 
-  // Entity selection — determines which gateway to use
-  const rawEntityId = String(formData.get('entityId') ?? '').trim();
-  if (!rawEntityId || !isValidEntityId(rawEntityId)) {
-    return { error: 'Please select your entity before proceeding to payment.' };
+  // Resolve entity from the user's assigned company
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { company: { include: { entitlement: true } } },
+  });
+
+  if (!dbUser?.company) {
+    return { error: 'Your company has not been set up. Please contact the admin team.' };
   }
-  const entityId = rawEntityId;
-  const gateway = getGatewayType(entityId);
+  if (!(dbUser.company.entitlement?.enabled ?? true)) {
+    return { error: 'Your company is not currently entitled to use this service. Please contact the admin team.' };
+  }
+
+  const entityId = dbUser.company.entityId;
 
   // App base URL for webhook/return callbacks
   const appBase = (
@@ -121,7 +124,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
     'http://localhost:3000'
   ).replace(/\/$/, '');
 
-  // Move order to AWAITING_PAYMENT and record which entity/gateway was used
+  // Move order to AWAITING_PAYMENT and record which entity was used
   await prisma.order.update({
     where: { id: fresh.id },
     data: { status: 'AWAITING_PAYMENT', submittedAt: new Date(), entityId },
@@ -129,59 +132,19 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
 
   let checkoutUrl!: string;
   let requestId: string | undefined;
-  let adaptisFormData: Record<string, string> | undefined;
-  let adaptisPaymentUrl: string | undefined;
 
   try {
-    if (gateway === 'betterpay') {
-      const creds = getBetterpayCredentials(entityId);
-      const bill = await createBetterpayBill({
-        amountSen: fresh.netSen,
-        reference: fresh.reference,
-        purpose:   `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-        email:     paymentEmail,
-        name:      user.name ?? '',
-        credentials: creds,
-        callbackUrlBe:     `${appBase}/api/webhooks/betterpay`,
-        callbackUrlFeSucc: `${appBase}/api/payment/betterpay/return`,
-        callbackUrlFeFail: `${appBase}/api/payment/betterpay/return`,
-      });
-      checkoutUrl = bill.url;
-      requestId   = bill.invoice;
-
-    } else if (gateway === 'adaptis') {
-      const creds = getAdaptisCredentials(entityId);
-      const adData = await createAdaptisPayment({
-        amountSen: fresh.netSen,
-        reference: fresh.reference,
-        purpose:   `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-        email:     paymentEmail,
-        name:      user.name ?? '',
-        credentials: creds,
-        approvalUrl:   `${appBase}/api/payment/adaptis/return`,
-        unApprovalUrl: `${appBase}/api/payment/adaptis/return`,
-        callbackUrl:   `${appBase}/api/webhooks/adaptis`,
-      });
-      const { paymentUrl: pUrl, ...formFields } = adData;
-      adaptisFormData   = formFields as Record<string, string>;
-      adaptisPaymentUrl = pUrl;
-      checkoutUrl       = pUrl;
-      requestId         = formFields.PaymentID;
-
-    } else {
-      // HitPay — retail and group entities
-      const creds = getEntityCredentials(entityId);
-      const request = await createPaymentRequest({
-        amountSen: fresh.netSen,
-        reference: fresh.reference,
-        purpose:   `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
-        email:     paymentEmail,
-        name:      user.name,
-        credentials: creds,
-      });
-      checkoutUrl = request.url;
-      requestId   = request.id;
-    }
+    const creds = await getEntityCredentials(entityId);
+    const request = await createPaymentRequest({
+      amountSen: fresh.netSen,
+      reference: fresh.reference,
+      purpose:   `Staff meals ${formatWeekRange(order.cycle.serviceWeekStart)}`,
+      email:     paymentEmail,
+      name:      user.name,
+      credentials: creds,
+    });
+    checkoutUrl = request.url;
+    requestId   = request.id;
 
     await prisma.payment.create({
       data: {
@@ -190,9 +153,9 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
         status:       'PENDING',
         amountSen:    fresh.netSen,
         currency:     'MYR',
-        checkoutUrl:  gateway === 'adaptis' ? adaptisPaymentUrl : checkoutUrl,
+        checkoutUrl,
         receiptEmail: paymentEmail,
-        provider:     `${gateway}_${entityId}`,
+        provider:     `hitpay_${entityId}`,
       },
     });
 
@@ -211,12 +174,7 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   revalidatePath('/menu');
   revalidatePath('/orders');
 
-  // ADAPTIS uses form POST — return form data for the client to handle
-  if (gateway === 'adaptis') {
-    return { reference: fresh.reference, adaptisFormData, adaptisPaymentUrl };
-  }
-
-  // Embedded sessions open HitPay/Betterpay in a popup; plain web sessions redirect
+  // Embedded sessions open HitPay in a popup; plain web sessions redirect
   if (user.embed) {
     return { reference: fresh.reference, checkoutUrl };
   }

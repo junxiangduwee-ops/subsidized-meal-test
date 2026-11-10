@@ -61,24 +61,7 @@ export function WebPaymentStatus({
       return;
     }
 
-    // ADAPTIS — form submit in page
-    if (result.adaptisFormData && result.adaptisPaymentUrl) {
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = result.adaptisPaymentUrl;
-      for (const [key, val] of Object.entries(result.adaptisFormData)) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = String(val);
-        form.appendChild(input);
-      }
-      document.body.appendChild(form);
-      form.submit();
-      return;
-    }
-
-    // HitPay / Betterpay — redirect to fresh URL
+    // HitPay — redirect to fresh URL
     if (result.checkoutUrl) {
       window.location.href = result.checkoutUrl;
     }

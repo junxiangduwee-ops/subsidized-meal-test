@@ -77,6 +77,7 @@ export async function GET(request: Request) {
     .split(';')
     .map((g) => g.trim())
     .filter(Boolean);
+  const companyCode = (url.searchParams.get('companyCode') ?? '').trim() || null;
 
   if (!email && !staffId) {
     return uncachedRedirect('/embed/error?reason=sso_failed');
@@ -106,6 +107,14 @@ export async function GET(request: Request) {
     return uncachedRedirect('/embed/error?reason=inactive');
   }
 
+  // If Joget passed a company code, link the user to that company
+  if (companyCode) {
+    const company = await prisma.companyInfo.findUnique({ where: { code: companyCode } });
+    if (company) {
+      await prisma.user.update({ where: { id: user.id }, data: { companyId: company.id } });
+    }
+  }
+
   await createSession(
     {
       id: user.id,
@@ -127,6 +136,15 @@ export async function GET(request: Request) {
       metadata: { provider: 'JOGET_IDENTIFY_UNSIGNED' },
     },
   });
+
+  // Super-admins are exempt from the company requirement
+  const userRecord = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { companyId: true, superAdmin: true },
+  });
+  if (!userRecord?.superAdmin && !userRecord?.companyId) {
+    return uncachedRedirect('/select-company');
+  }
 
   return uncachedRedirect(landingPathFor(user.role));
 }

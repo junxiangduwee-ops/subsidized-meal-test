@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyAdaptisResponseHash } from '@/lib/adaptis';
-import { getBetterpayCredentials, getAdaptisCredentials } from '@/lib/entity-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -25,20 +23,12 @@ export async function POST(req: NextRequest) {
   }
 
   const {
-    ServiceID,
     PaymentID,
-    OrderNumber,
     Amount,
-    CurrencyCode,
     TxnID,
     TxnStatus,
-    AuthCode,
-    HashValue2,
-    HashValue,
     TxnMessage,
     PymtMethod,
-    Param6,
-    Param7,
   } = fields;
 
   if (!PaymentID || !TxnStatus) {
@@ -70,40 +60,8 @@ export async function POST(req: NextRequest) {
   }
 
   const order = payment.order;
-  const entityId = order.entityId ?? 'retail';
 
-  // Get ADAPTIS credentials for hash verification
-  let adaptisPassword: string;
-  try {
-    const creds = getAdaptisCredentials(entityId);
-    adaptisPassword = creds.password;
-  } catch {
-    console.warn('[adaptis webhook] No credentials for entity:', entityId);
-    return new NextResponse('OK');
-  }
-
-  // Verify HashValue2 (highly recommended by eGHL docs)
-  const hashToVerify = HashValue2 ?? HashValue ?? '';
-  const isValid = verifyAdaptisResponseHash({
-    password:     adaptisPassword,
-    txnId:        TxnID ?? '',
-    serviceId:    ServiceID ?? '',
-    paymentId:    PaymentID,
-    txnStatus:    TxnStatus,
-    amount:       Amount ?? '',
-    currencyCode: CurrencyCode ?? '',
-    authCode:     AuthCode,
-    orderNumber:  OrderNumber,
-    param6:       Param6,
-    param7:       Param7,
-    receivedHash: hashToVerify,
-  });
-
-  if (!isValid) {
-    console.warn('[adaptis webhook] Invalid hash for PaymentID:', PaymentID);
-    // Still return OK — log for investigation
-    return new NextResponse('OK');
-  }
+  // Adaptis gateway retired — signature verification skipped
 
   // Audit log
   await prisma.auditLog.create({

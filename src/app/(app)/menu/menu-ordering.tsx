@@ -9,8 +9,6 @@ import { formatSen } from '@/lib/money';
 import { DayTabs, type DayTab } from '@/components/day-tabs';
 
 import { checkout, chooseDeliverySite, chooseMeal, clearCart, removeMeal } from './actions';
-import { EntitySelectPopup } from './entity-select-popup';
-import type { EntityId } from '@/lib/entity-config';
 
 export type MenuDish = {
   menuItemId: string;
@@ -393,7 +391,6 @@ function OrderSummary({
   const [pending, startTransition] = useTransition();
   const [siteSaving, setSiteSaving] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState('');
-  const [showEntityPopup, setShowEntityPopup] = useState(false);
 
   // Capture the site selected when the page first loaded — this is the stable
   // reference for the confirmation prompt. We cannot use defaultDeliverySiteId
@@ -451,42 +448,17 @@ function OrderSummary({
         return;
       }
     }
-    // Show entity selection popup before payment (skip for free orders)
-    if (totalSen > 0) {
-      setShowEntityPopup(true);
-      return;
-    }
-    proceedCheckout(null);
+    proceedCheckout();
   }
 
-  /** Submit a hidden form to the given URL in the current page */
-  function submitFormInPage(actionUrl: string, fields: Record<string, string>) {
-    const form = window.document.createElement('form');
-    form.method = 'POST';
-    form.action = actionUrl;
-    for (const [key, val] of Object.entries(fields)) {
-      const input = window.document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = String(val);
-      form.appendChild(input);
-    }
-    window.document.body.appendChild(form);
-    form.submit();
-  }
-
-  function proceedCheckout(entityId: EntityId | null) {
-    setShowEntityPopup(false);
+  function proceedCheckout() {
     const wantsReceiptEmail = needsReceiptEmail && totalSen > 0;
     const data = new FormData();
     data.set('cycleId', cycleId);
-    if (entityId) data.set('entityId', entityId);
     if (wantsReceiptEmail) data.set('receiptEmail', receiptEmail.trim());
 
-    // For ADAPTIS — no popup in web mode (form submits full page)
-    // For HitPay/Betterpay embed — open blank popup immediately (must be sync)
-    const isAdaptis = entityId === 'properties';
-    const popup = isEmbed && totalSen > 0 && !isAdaptis
+    // Open blank popup immediately (must be sync) for embed sessions
+    const popup = isEmbed && totalSen > 0
       ? window.open('', 'hitpay_checkout', 'width=480,height=760')
       : null;
 
@@ -495,35 +467,6 @@ function OrderSummary({
       if (result?.error) {
         setError(result.error);
         popup?.close();
-        return;
-      }
-
-      // ADAPTIS — form POST flow (different for embed vs web)
-      if (result?.adaptisFormData && result?.adaptisPaymentUrl && result?.reference) {
-        if (isEmbed) {
-          // Embed: inject form into popup and submit it
-          const adaptisPopup = window.open('', 'hitpay_checkout', 'width=480,height=760');
-          if (adaptisPopup) {
-            const doc = adaptisPopup.document;
-            doc.open();
-            doc.write('<html><body>');
-            doc.write(`<form id="f" method="POST" action="${result.adaptisPaymentUrl}">`);
-            for (const [key, val] of Object.entries(result.adaptisFormData)) {
-              const safe = String(val).replace(/"/g, '&quot;');
-              doc.write(`<input type="hidden" name="${key}" value="${safe}">`);
-            }
-            doc.write('</form>');
-            doc.write('<script>document.getElementById("f").submit();<\/script>');
-            doc.write('</body></html>');
-            doc.close();
-          } else {
-            submitFormInPage(result.adaptisPaymentUrl, result.adaptisFormData);
-          }
-          router.push(`/orders/${encodeURIComponent(result.reference)}`);
-        } else {
-          // Web: full page form submit
-          submitFormInPage(result.adaptisPaymentUrl, result.adaptisFormData);
-        }
         return;
       }
 
@@ -671,13 +614,6 @@ function OrderSummary({
         </div>
       </div>
     </aside>
-
-    {showEntityPopup && (
-      <EntitySelectPopup
-        onConfirm={(entityId) => proceedCheckout(entityId)}
-        onCancel={() => setShowEntityPopup(false)}
-      />
-    )}
     </>
   );
 }

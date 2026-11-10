@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     : null;
 
   const entityId = orderForEntity?.entityId ?? 'retail';
-  const { salt } = getEntityCredentials(entityId);
+  const { salt } = await getEntityCredentials(entityId);
 
   if (!verifyWebhookSignature(fields, salt)) {
     console.warn('[hitpay] Rejected webhook with an invalid signature.');

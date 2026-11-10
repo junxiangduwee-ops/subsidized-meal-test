@@ -20,9 +20,12 @@ type UserFields = {
   defaultDeliverySiteId: string | null;
   defaultDeliverySiteLocked: boolean;
   receptionSiteId: string | null;
+  companyId: string | null;
+  superAdmin: boolean;
 };
 
 type DeliverySiteOption = { id: string; name: string };
+type CompanyOption = { id: string; name: string };
 
 function useRoleOptions() {
   const t = useTranslations('usersAdmin');
@@ -38,13 +41,18 @@ function useRoleOptions() {
 function CreateUserFields({
   departments,
   deliverySites,
+  companies,
+  currentUserIsSuperAdmin,
 }: {
   departments: string[];
   deliverySites: DeliverySiteOption[];
+  companies: CompanyOption[];
+  currentUserIsSuperAdmin: boolean;
 }) {
   const t = useTranslations('usersAdmin');
   const roleOptions = useRoleOptions();
   const [role, setRole] = useState('USER');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   return (
     <>
       <div>
@@ -81,6 +89,36 @@ function CreateUserFields({
           ))}
         </select>
       </div>
+      {currentUserIsSuperAdmin ? (
+        <div className="flex items-center gap-2">
+          <input
+            id="create-superAdmin"
+            name="superAdmin"
+            type="checkbox"
+            value="true"
+            checked={isSuperAdmin}
+            onChange={(e) => setIsSuperAdmin(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <label htmlFor="create-superAdmin" className="label mb-0 cursor-pointer">
+            Super Admin <span className="text-xs font-normal text-slate-500">(exempt from company, full system access)</span>
+          </label>
+        </div>
+      ) : null}
+      {!isSuperAdmin ? (
+        <div>
+          <label className="label">Company <span className="text-red-500">*</span></label>
+          <select name="companyId" required className="input">
+            <option value="">Select company…</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {companies.length === 0 ? (
+            <p className="mt-1 text-xs text-amber-600">No enabled companies. Go to Admin → Companies to enable one first.</p>
+          ) : null}
+        </div>
+      ) : null}
       <div>
         <label className="label">{t('defaultDeliverySite')}</label>
         <select name="defaultDeliverySiteId" defaultValue="" className="input">
@@ -119,9 +157,13 @@ function CreateUserFields({
 export function AddUserButton({
   departments,
   deliverySites,
+  companies,
+  currentUserIsSuperAdmin,
 }: {
   departments: string[];
   deliverySites: DeliverySiteOption[];
+  companies: CompanyOption[];
+  currentUserIsSuperAdmin: boolean;
 }) {
   const t = useTranslations('usersAdmin');
   return (
@@ -140,7 +182,7 @@ export function AddUserButton({
           className="space-y-3"
           onSuccess={close}
         >
-          <CreateUserFields departments={departments} deliverySites={deliverySites} />
+          <CreateUserFields departments={departments} deliverySites={deliverySites} companies={companies} currentUserIsSuperAdmin={currentUserIsSuperAdmin} />
         </ActionForm>
       )}
     </Dialog>
@@ -151,15 +193,20 @@ export function EditUserDialog({
   user,
   departments,
   deliverySites,
+  companies,
+  currentUserIsSuperAdmin,
 }: {
   user: UserFields;
   departments: string[];
   deliverySites: DeliverySiteOption[];
+  companies: CompanyOption[];
+  currentUserIsSuperAdmin: boolean;
 }) {
   const t = useTranslations('usersAdmin');
   const c = useTranslations('adminCommon');
   const roleOptions = useRoleOptions();
   const [role, setRole] = useState(user.role);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(user.superAdmin);
   // Only an already-*locked* default is the admin's business here - an
   // auto-learned one (from the person's own last order) should show as
   // "no pin set", so saving this form for an unrelated reason (say, just
@@ -233,6 +280,36 @@ export function EditUserDialog({
               ))}
             </select>
           </div>
+          {currentUserIsSuperAdmin ? (
+            <div className="flex items-center gap-2">
+              <input
+                id={`edit-superAdmin-${user.id}`}
+                name="superAdmin"
+                type="checkbox"
+                value="true"
+                checked={isSuperAdmin}
+                onChange={(e) => setIsSuperAdmin(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <label htmlFor={`edit-superAdmin-${user.id}`} className="label mb-0 cursor-pointer">
+                Super Admin <span className="text-xs font-normal text-slate-500">(exempt from company, full system access)</span>
+              </label>
+            </div>
+          ) : null}
+          {!isSuperAdmin ? (
+            <div>
+              <label className="label">Company <span className="text-red-500">*</span></label>
+              <select name="companyId" required defaultValue={user.companyId ?? ''} className="input">
+                <option value="">Select company…</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {companies.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-600">No enabled companies. Go to Admin → Companies to enable one first.</p>
+              ) : null}
+            </div>
+          ) : null}
           <div>
             <label className="label">{t('defaultDeliverySite')}</label>
             <select name="defaultDeliverySiteId" defaultValue={pinnedDeliverySiteId} className="input">

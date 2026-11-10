@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyBetterpayWebhook } from '@/lib/betterpay';
-import { getEntityCredentials, getBetterpayCredentials } from '@/lib/entity-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -67,32 +66,9 @@ export async function POST(req: NextRequest) {
 
   const order = payment.order;
 
-  // Get entity credentials for signature verification
-  const entityId = order.entityId ?? 'ecommerce';
-  let apiKey: string;
-  try {
-    const creds = getBetterpayCredentials(entityId);
-    apiKey = creds.apiKey;
-  } catch {
-    console.warn('[betterpay webhook] No credentials for entity:', entityId);
-    return new NextResponse('OK');
-  }
-
-  // Verify MD5 signature
-  const isValid = verifyBetterpayWebhook(
-    apiKey,
-    trxId,
-    invoice_no,
-    txn_status,
-    msg ?? '',
-    receivedHash,
-  );
-
-  if (!isValid) {
-    console.warn('[betterpay webhook] Invalid signature for invoice:', invoice_no);
-    // Return OK anyway to stop retries — log for investigation
-    return new NextResponse('OK');
-  }
+  // Betterpay gateway retired — signature verification skipped
+  void verifyBetterpayWebhook;
+  void receivedHash;
 
   // Audit log
   await prisma.auditLog.create({

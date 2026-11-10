@@ -68,19 +68,28 @@ export default async function UsersPage({
       include: {
         defaultDeliverySite: { select: { name: true } },
         receptionSite: { select: { name: true } },
+        company: { select: { name: true } },
       },
       // Include phone + profileCompleted so we can show status in the table
     }),
   ]);
 
-  const [departments, deliverySites] = await Promise.all([getDepartments(), getActiveDeliverySites()]);
+  const [departments, deliverySites, companies] = await Promise.all([
+    getDepartments(),
+    getActiveDeliverySites(),
+    prisma.companyInfo.findMany({
+      where: { entitlement: { enabled: true } },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   return (
     <>
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        action={<AddUserButton departments={departments} deliverySites={deliverySites} />}
+        action={<AddUserButton departments={departments} deliverySites={deliverySites} companies={companies} currentUserIsSuperAdmin={me.superAdmin} />}
       />
 
       <div className="mb-6">
@@ -125,6 +134,7 @@ export default async function UsersPage({
                   <th>{t('phone')}</th>
                   <th>{t('defaultDeliverySite')}</th>
                   <th>{t('role')}</th>
+                  <th>Company</th>
                   <th>{t('signIn')}</th>
                   <th>{t('lastSeen')}</th>
                   <th />
@@ -171,6 +181,15 @@ export default async function UsersPage({
                         </div>
                       ) : null}
                     </td>
+                    <td className="text-xs text-slate-600">
+                      {u.superAdmin ? (
+                        <span className="text-slate-400">Super Admin</span>
+                      ) : u.company ? (
+                        u.company.name
+                      ) : (
+                        <span className="text-amber-600">Not assigned</span>
+                      )}
+                    </td>
                     {/* Use human-readable label instead of raw enum value */}
                     <td className="text-xs text-slate-500">
                       {PROVIDER_LABEL[u.authProvider] ?? u.authProvider}
@@ -192,9 +211,13 @@ export default async function UsersPage({
                             defaultDeliverySiteId: u.defaultDeliverySiteId,
                             defaultDeliverySiteLocked: u.defaultDeliverySiteLocked,
                             receptionSiteId: u.receptionSiteId,
+                            companyId: u.companyId,
+                            superAdmin: u.superAdmin,
                           }}
                           departments={departments}
                           deliverySites={deliverySites}
+                          companies={companies}
+                          currentUserIsSuperAdmin={me.superAdmin}
                         />
                         <ResetPasswordDialog user={{ id: u.id, name: u.name }} />
                         {u.id === me.id ? null : (

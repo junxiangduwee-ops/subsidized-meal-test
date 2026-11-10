@@ -23,10 +23,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Joget iframe where the embedded session cookie is reused across requests.
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { profileCompleted: true },
+    select: { profileCompleted: true, companyId: true, superAdmin: true },
   });
   if (!dbUser?.profileCompleted) {
     redirect('/complete-profile');
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Company assignment gate ───────────────────────────────────────────────
+  // Super-admins are exempt — they manage the whole system and don't belong
+  // to any single entity.
+  if (!dbUser?.superAdmin && !dbUser?.companyId) {
+    redirect('/select-company');
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -60,6 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ...(can(user.role, 'settings:manage')
           ? [
               { href: '/admin/bulk-refund', label: t('bulkRefund') },
+              { href: '/admin/companies', label: 'Companies' },
               { href: '/admin/settings', label: t('settings') },
               { href: '/admin/audit', label: 'Audit Log' },
             ]

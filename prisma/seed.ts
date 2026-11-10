@@ -76,6 +76,7 @@ async function main() {
       role: 'ADMIN' as const,
       department: 'IT',
       staffId: 'EMP-00001',
+      superAdmin: true,
     },
     {
       email: 'analytics@mrdiy.com',
@@ -173,6 +174,7 @@ async function main() {
           role: spec.role,
           department: spec.department,
           staffId: spec.staffId,
+          superAdmin: (spec as any).superAdmin ?? false,
         },
         create: { ...spec, passwordHash, authProvider: 'LOCAL' },
       }),
@@ -305,6 +307,55 @@ async function main() {
     }
   }
   console.log(`  ${catalogue.length} restaurants, ${allDishes.length} dishes`);
+
+  // --- Entities ------------------------------------------------------------
+  const entitySpecs = [
+    { code: 'retail',     name: 'MR DIY Retail' },
+    { code: 'ecommerce',  name: 'MR DIY Ecommerce' },
+    { code: 'properties', name: 'MR DIY Properties' },
+    { code: 'group',      name: 'MR DIY Group' },
+  ];
+  for (const spec of entitySpecs) {
+    await prisma.entity.upsert({
+      where: { code: spec.code },
+      update: { name: spec.name },
+      create: spec,
+    });
+  }
+  console.log(`  ${entitySpecs.length} entities`);
+
+  // --- Companies -----------------------------------------------------------
+  const companySpecs = [
+    { code: 'MRD-RET', name: 'MR DIY Retail Sdn Bhd',      entityId: 'retail' },
+    { code: 'MRD-ECM', name: 'MR DIY Ecommerce Sdn Bhd',   entityId: 'ecommerce' },
+    { code: 'MRD-PRO', name: 'MR DIY Properties Sdn Bhd',  entityId: 'properties' },
+    { code: 'MRD-GRP', name: 'MR DIY Group Sdn Bhd',       entityId: 'group' },
+  ];
+
+  const companyMap: Record<string, string> = {}; // entityId → companyId
+  for (const spec of companySpecs) {
+    const co = await prisma.companyInfo.upsert({
+      where: { code: spec.code },
+      update: { name: spec.name, entityId: spec.entityId },
+      create: { code: spec.code, name: spec.name, entityId: spec.entityId },
+    });
+    await prisma.companyEntitlement.upsert({
+      where: { companyId: co.id },
+      update: {},
+      create: { companyId: co.id, enabled: true },
+    });
+    companyMap[spec.entityId] = co.id;
+  }
+  console.log(`  ${companySpecs.length} companies`);
+
+  // Assign all seed USER-role employees to MR DIY Retail (default for demo)
+  const retailCompanyId = companyMap['retail'];
+  if (retailCompanyId) {
+    await prisma.user.updateMany({
+      where: { role: 'USER' },
+      data: { companyId: retailCompanyId },
+    });
+  }
 
   // --- Delivery sites ----------------------------------------------------
   // Edit this list to match your actual sites - it's the only part of this

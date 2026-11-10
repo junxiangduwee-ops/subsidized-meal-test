@@ -80,26 +80,7 @@ export function PaymentStatus({
         return;
       }
 
-      // ADAPTIS — inject form into popup
-      if (result.adaptisFormData && result.adaptisPaymentUrl) {
-        if (popup && !popup.closed) {
-          const doc = popup.document;
-          doc.open();
-          doc.write('<html><body>');
-          doc.write(`<form id="f" method="POST" action="${result.adaptisPaymentUrl}">`);
-          for (const [key, val] of Object.entries(result.adaptisFormData)) {
-            const safe = String(val).replace(/"/g, '&quot;');
-            doc.write(`<input type="hidden" name="${key}" value="${safe}">`);
-          }
-          doc.write('</form>');
-          doc.write('<script>document.getElementById("f").submit();<\/script>');
-          doc.write('</body></html>');
-          doc.close();
-        }
-        return;
-      }
-
-      // HitPay / Betterpay — navigate popup to fresh URL
+      // HitPay — navigate popup to fresh URL
       if (result.checkoutUrl) {
         if (popup && !popup.closed) {
           popup.location.href = result.checkoutUrl;
