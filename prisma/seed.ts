@@ -99,12 +99,14 @@ async function main() {
       department: 'Facilities',
       staffId: 'EMP-00013',
     },
+    // Trading entity users
     {
       email: 'user@mrdiy.com',
       name: 'Farhan Idris',
       role: 'USER' as const,
       department: 'Operations',
       staffId: 'EMP-00004',
+      entity: 'trading',
     },
     {
       email: 'siti.zahra@mrdiy.com',
@@ -112,6 +114,7 @@ async function main() {
       role: 'USER' as const,
       department: 'Operations',
       staffId: 'EMP-00005',
+      entity: 'trading',
     },
     {
       email: 'lim.wei@mrdiy.com',
@@ -119,13 +122,16 @@ async function main() {
       role: 'USER' as const,
       department: 'Merchandising',
       staffId: 'EMP-00006',
+      entity: 'trading',
     },
+    // International entity users
     {
       email: 'kavitha.r@mrdiy.com',
       name: 'Kavitha Ramasamy',
       role: 'USER' as const,
       department: 'Merchandising',
       staffId: 'EMP-00007',
+      entity: 'international',
     },
     {
       email: 'hafiz.omar@mrdiy.com',
@@ -133,13 +139,16 @@ async function main() {
       role: 'USER' as const,
       department: 'Warehouse',
       staffId: 'EMP-00008',
+      entity: 'international',
     },
+    // Ecommerce entity users
     {
       email: 'chong.mei@mrdiy.com',
       name: 'Chong Mei Ling',
       role: 'USER' as const,
       department: 'Warehouse',
       staffId: 'EMP-00009',
+      entity: 'ecommerce',
     },
     {
       email: 'arif.samad@mrdiy.com',
@@ -147,13 +156,16 @@ async function main() {
       role: 'USER' as const,
       department: 'IT',
       staffId: 'EMP-00010',
+      entity: 'ecommerce',
     },
+    // Group entity users
     {
       email: 'nurul.ain@mrdiy.com',
       name: 'Nurul Ain',
       role: 'USER' as const,
       department: 'Finance',
       staffId: 'EMP-00011',
+      entity: 'group',
     },
     {
       email: 'tan.hock@mrdiy.com',
@@ -161,11 +173,13 @@ async function main() {
       role: 'USER' as const,
       department: 'Operations',
       staffId: 'EMP-00012',
+      entity: 'group',
     },
   ];
 
   const users: User[] = [];
   for (const spec of staffSpec) {
+    const { entity: _entity, ...userFields } = spec as any;
     users.push(
       await prisma.user.upsert({
         where: { email: spec.email },
@@ -176,7 +190,7 @@ async function main() {
           staffId: spec.staffId,
           superAdmin: (spec as any).superAdmin ?? false,
         },
-        create: { ...spec, passwordHash, authProvider: 'LOCAL' },
+        create: { ...userFields, passwordHash, authProvider: 'LOCAL' },
       }),
     );
   }
@@ -310,10 +324,10 @@ async function main() {
 
   // --- Entities ------------------------------------------------------------
   const entitySpecs = [
-    { code: 'retail',     name: 'MR DIY Retail' },
-    { code: 'ecommerce',  name: 'MR DIY Ecommerce' },
-    { code: 'properties', name: 'MR DIY Properties' },
-    { code: 'group',      name: 'MR DIY Group' },
+    { code: 'trading',       name: 'MR D.I.Y TRADING SDN BHD' },
+    { code: 'international', name: 'MR D.I.Y INTERNATIONAL SDN BHD' },
+    { code: 'ecommerce',     name: 'MR D.I.Y ECOMMERCE SDN BHD' },
+    { code: 'group',         name: 'MR D.I.Y MANAGEMENT SDN BHD' },
   ];
   for (const spec of entitySpecs) {
     await prisma.entity.upsert({
@@ -326,11 +340,27 @@ async function main() {
 
   // --- Companies -----------------------------------------------------------
   const companySpecs = [
-    { code: 'MRD-RET', name: 'MR DIY Retail Sdn Bhd',      entityId: 'retail' },
-    { code: 'MRD-ECM', name: 'MR DIY Ecommerce Sdn Bhd',   entityId: 'ecommerce' },
-    { code: 'MRD-PRO', name: 'MR DIY Properties Sdn Bhd',  entityId: 'properties' },
-    { code: 'MRD-GRP', name: 'MR DIY Group Sdn Bhd',       entityId: 'group' },
+    { code: 'MRD-TRD', name: 'MR D.I.Y Trading Sdn Bhd',       entityId: 'trading' },
+    { code: 'MRD-INT', name: 'MR D.I.Y International Sdn Bhd',  entityId: 'international' },
+    { code: 'MRD-ECM', name: 'MR D.I.Y Ecommerce Sdn Bhd',      entityId: 'ecommerce' },
+    { code: 'MRD-GRP', name: 'MR D.I.Y Management Sdn Bhd',     entityId: 'group' },
   ];
+
+  // Remove companies and entities that are no longer in the spec.
+  // Users must be detached first (companyId is nullable) before the company
+  // row can be deleted. Entitlements cascade-delete with their company.
+  const keepCompanyCodes = companySpecs.map((c) => c.code);
+  const keepEntityCodes  = entitySpecs.map((e) => e.code);
+  const staleCompanies = await prisma.companyInfo.findMany({
+    where: { code: { notIn: keepCompanyCodes } },
+    select: { id: true },
+  });
+  if (staleCompanies.length) {
+    const staleIds = staleCompanies.map((c) => c.id);
+    await prisma.user.updateMany({ where: { companyId: { in: staleIds } }, data: { companyId: null } });
+    await prisma.companyInfo.deleteMany({ where: { id: { in: staleIds } } });
+  }
+  await prisma.entity.deleteMany({ where: { code: { notIn: keepEntityCodes } } });
 
   const companyMap: Record<string, string> = {}; // entityId → companyId
   for (const spec of companySpecs) {
@@ -348,12 +378,15 @@ async function main() {
   }
   console.log(`  ${companySpecs.length} companies`);
 
-  // Assign all seed USER-role employees to MR DIY Retail (default for demo)
-  const retailCompanyId = companyMap['retail'];
-  if (retailCompanyId) {
-    await prisma.user.updateMany({
-      where: { role: 'USER' },
-      data: { companyId: retailCompanyId },
+  // Assign each USER to the company matching their entity tag in staffSpec
+  for (const spec of staffSpec) {
+    const entityCode = (spec as any).entity as string | undefined;
+    if (!entityCode) continue;
+    const companyId = companyMap[entityCode];
+    if (!companyId) continue;
+    await prisma.user.update({
+      where: { email: spec.email },
+      data: { companyId },
     });
   }
 
@@ -362,10 +395,13 @@ async function main() {
   // block you should need to touch.
   const DELIVERY_SITES: string[] = ['Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P', 'Warehouse Q', 'Warehouse X3', 'Warehouse Y1', 'Warehouse Y2', 'Mines 2 Office (International)', 'Training Academy (X4)'];
 
-  await prisma.deliverySite.deleteMany({});
-  await prisma.deliverySite.createMany({
-    data: DELIVERY_SITES.map((name) => ({ name, active: true })),
-  });
+  for (const name of DELIVERY_SITES) {
+    await prisma.deliverySite.upsert({
+      where: { name },
+      update: { active: true },
+      create: { name, active: true },
+    });
+  }
   const deliverySites = await prisma.deliverySite.findMany({ select: { id: true, name: true } });
   console.log(`  ${DELIVERY_SITES.length} delivery sites`);
 
@@ -382,8 +418,9 @@ async function main() {
   }
 
   // --- Subsidy rules ---------------------------------------------------
-  await prisma.subsidyRule.deleteMany({});
-  await prisma.subsidyRule.createMany({
+  // Only seed subsidy rules when none exist — avoids FK issues on re-seed
+  const existingRules = await prisma.subsidyRule.count();
+  if (existingRules === 0) await prisma.subsidyRule.createMany({
     data: [
       {
         name: 'Standard staff meal subsidy',

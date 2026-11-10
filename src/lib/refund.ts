@@ -99,7 +99,7 @@ export async function processRefund(
     return { ok: false, error: 'Payment ID is missing — cannot process refund.' };
   }
 
-  const entityId = order.entityId ?? 'retail';
+  const entityId = order.entityId ?? 'trading';
 
   let apiKey: string;
   let mode: string;

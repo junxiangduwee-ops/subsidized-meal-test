@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { toggleEntitlement, upsertCompany, addEntity } from './actions';
+import { toggleEntitlement, upsertCompany, addEntity, updateEntity } from './actions';
 
 type CompanyRow = {
   id: string;
@@ -33,8 +33,10 @@ export function CompaniesTable({
   const [, startTransition] = useTransition();
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showEntityForm, setShowEntityForm] = useState(false);
+  const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [entityError, setEntityError] = useState<string | null>(null);
+  const [editEntityError, setEditEntityError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function toggle(companyId: string, current: boolean) {
@@ -61,6 +63,25 @@ export function CompaniesTable({
       setCompanyError(result.error);
     } else {
       setShowCompanyForm(false);
+    }
+  }
+
+  async function handleUpdateEntity(e: React.FormEvent<HTMLFormElement>, entityId: string) {
+    e.preventDefault();
+    setEditEntityError(null);
+    setSaving(true);
+    const fd = new FormData(e.currentTarget);
+    const result = await updateEntity({
+      id: entityId,
+      name: String(fd.get('name') ?? ''),
+      hitpayApiKey: String(fd.get('hitpayApiKey') ?? '') || undefined,
+      hitpaySalt:   String(fd.get('hitpaySalt')   ?? '') || undefined,
+    });
+    setSaving(false);
+    if (result.error) {
+      setEditEntityError(result.error);
+    } else {
+      setEditingEntityId(null);
     }
   }
 
@@ -151,41 +172,83 @@ export function CompaniesTable({
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">HitPay Credentials</th>
                 <th className="px-4 py-3">Companies</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {entityRows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
                     No entities yet. Add one above.
                   </td>
                 </tr>
               ) : entityRows.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50/50">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{e.code}</td>
-                  <td className="px-4 py-3 font-medium text-slate-900">{e.name}</td>
-                  <td className="px-4 py-3">
-                    {e.configured ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        Configured
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-red-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                        Missing — set{' '}
-                        <code className="rounded bg-red-50 px-1 font-mono">
-                          HITPAY_API_KEY_{e.code.toUpperCase()}
-                        </code>
-                        {' '}and{' '}
-                        <code className="rounded bg-red-50 px-1 font-mono">
-                          HITPAY_SALT_{e.code.toUpperCase()}
-                        </code>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-600">{e.companyCount}</td>
-                </tr>
+                <>
+                  <tr key={e.id} className="hover:bg-slate-50/50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{e.code}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900">{e.name}</td>
+                    <td className="px-4 py-3">
+                      {e.configured ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Configured
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                          Not set
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{e.companyCount}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingEntityId((prev) => (prev === e.id ? null : e.id));
+                          setEditEntityError(null);
+                        }}
+                        className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-800"
+                      >
+                        {editingEntityId === e.id ? 'Cancel' : 'Edit'}
+                      </button>
+                    </td>
+                  </tr>
+                  {editingEntityId === e.id && (
+                    <tr key={`${e.id}-edit`}>
+                      <td colSpan={5} className="bg-slate-50 px-4 py-4">
+                        <form onSubmit={(ev) => handleUpdateEntity(ev, e.id)} className="space-y-3">
+                          <h4 className="text-xs font-semibold text-slate-700">Edit Entity — {e.code}</h4>
+                          {editEntityError && (
+                            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{editEntityError}</p>
+                          )}
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="block text-xs font-medium text-slate-600">
+                              Display Name <span className="text-red-500">*</span>
+                              <input name="name" defaultValue={e.name} className="input mt-1" required />
+                            </label>
+                            <label className="block text-xs font-medium text-slate-600">
+                              New HitPay API Key
+                              <input name="hitpayApiKey" type="password" className="input mt-1" placeholder="Leave blank to keep current" autoComplete="off" />
+                            </label>
+                            <label className="block text-xs font-medium text-slate-600">
+                              New HitPay Webhook Salt
+                              <input name="hitpaySalt" type="password" className="input mt-1" placeholder="Leave blank to keep current" autoComplete="off" />
+                            </label>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            Leave both credential fields blank to keep the existing credentials. To rotate, enter both the new API key and salt.
+                          </p>
+                          <div className="flex justify-end">
+                            <button type="submit" disabled={saving} className="btn-primary btn-sm">
+                              {saving ? 'Saving…' : 'Save Changes'}
+                            </button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>

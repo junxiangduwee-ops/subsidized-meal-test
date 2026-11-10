@@ -672,29 +672,13 @@ async function exportAudit(actorId: string, params: URLSearchParams) {
   return csvResponse(`audit-log-${toDateKey(fromDate)}-to-${toDateKey(toDate)}.csv`, csv);
 }
 
-// ── Shared constants ──────────────────────────────────────────────────────────
+// ── Shared constant ───────────────────────────────────────────────────────────
 
 const WH_ORDER = [
   'Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P',
   'Warehouse Q', 'Warehouse X3', 'Warehouse Y1', 'Warehouse Y2',
   'Mines 2 Office (International)', 'Training Academy (X4)',
 ];
-const CO_ORDER = [
-  'MR D.I.Y TRADING SDN BHD',
-  'MR D.I.Y INTERNATIONAL SDN BHD',
-  'MR D.I.Y ECOMMERCE SDN BHD',
-  'MR D.I.Y MANAGEMENT SDN BHD',
-];
-
-function companyFromProvider(provider: string): string {
-  const entityId = provider.split('_').slice(1).join('_').toLowerCase();
-  if (entityId === 'retail')     return 'MR D.I.Y TRADING SDN BHD';
-  if (entityId === 'international') return 'MR D.I.Y INTERNATIONAL SDN BHD';
-  if (entityId === 'ecommerce')  return 'MR D.I.Y ECOMMERCE SDN BHD';
-  if (entityId === 'properties') return 'MR D.I.Y PROPERTIES SDN BHD';
-  if (entityId === 'group')      return 'MR D.I.Y MANAGEMENT SDN BHD';
-  return provider;
-}
 
 // ── VENDOR EXPORT (fixed) ────────────────────────────────────────────────────
 // Exact format of PAKLOONG_19102026-23102026_1.xlsx
@@ -746,26 +730,13 @@ async function exportVendorOrders(
     name: string; department: string; warehouse: string;
   };
 
-  const WH_ORDER = [
-    'Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P',
-    'Warehouse Q', 'Warehouse X3', 'Warehouse Y1', 'Warehouse Y2',
-    'Mines 2 Office (International)', 'Training Academy (X4)',
-  ];
-  const CO_ORDER = [
-    'MR D.I.Y TRADING SDN BHD',
-    'MR D.I.Y INTERNATIONAL SDN BHD',
-    'MR D.I.Y ECOMMERCE SDN BHD',
-    'MR D.I.Y MANAGEMENT SDN BHD',
-  ];
+  const entities = await prisma.entity.findMany({ select: { code: true, name: true }, orderBy: { name: 'asc' } });
+  const entityNameMap = new Map(entities.map((e) => [e.code, e.name]));
+  const CO_ORDER = entities.map((e) => e.name);
 
   function companyFromProvider(p: string): string {
-    const e = p.split('_').slice(1).join('_').toLowerCase();
-    if (e === 'retail')        return 'MR D.I.Y TRADING SDN BHD';
-    if (e === 'international') return 'MR D.I.Y INTERNATIONAL SDN BHD';
-    if (e === 'ecommerce')     return 'MR D.I.Y ECOMMERCE SDN BHD';
-    if (e === 'properties')    return 'MR D.I.Y PROPERTIES SDN BHD';
-    if (e === 'group')         return 'MR D.I.Y MANAGEMENT SDN BHD';
-    return p;
+    const code = p.split('_').slice(1).join('_').toLowerCase();
+    return entityNameMap.get(code) ?? p;
   }
 
   // Expand by quantity
@@ -774,7 +745,7 @@ async function exportVendorOrders(
     const base: ERow = {
       serviceDate: item.serviceDate,
       dishName:    item.dishName,
-      company:     companyFromProvider(item.order.payments[0]?.provider ?? 'hitpay_retail'),
+      company:     companyFromProvider(item.order.payments[0]?.provider ?? 'hitpay_trading'),
       name:        item.order.user.name,
       department:  item.order.user.department ?? '',
       warehouse:   item.order.deliverySite?.name ?? 'Unassigned',
@@ -989,13 +960,21 @@ async function exportAdminOrders(actorId: string, cycleId: string | null) {
     return `${dd}/${mm}/${d.getUTCFullYear()}`;
   }
 
+  const [exportEntities, exportCompanies] = await Promise.all([
+    prisma.entity.findMany({ select: { code: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.companyInfo.findMany({ select: { entityId: true, bankName: true, bankAccountName: true, bankAccountNumber: true } }),
+  ]);
+  const exportEntityNameMap = new Map(exportEntities.map((e) => [e.code, e.name]));
+  const bankMap = new Map<string, string>();
+  for (const c of exportCompanies) {
+    if (!bankMap.has(c.entityId) && c.bankAccountNumber) {
+      bankMap.set(c.entityId, [c.bankAccountName, c.bankName, c.bankAccountNumber].filter(Boolean).join(' - '));
+    }
+  }
+
   function paymentAccount(provider: string): string {
-    const e = provider.split('_').slice(1).join('_').toLowerCase();
-    if (e === 'retail')        return 'MR D.I.Y TRADING SDN BHD - CIMB - 8600272453';
-    if (e === 'international') return 'MR D.I.Y INTERNATIONAL SDN BHD - CIMB - 8605978214';
-    if (e === 'ecommerce')     return 'MR D.I.Y ECOMMERCE SDN BHD - CIMB - 8603150030';
-    if (e === 'group')         return 'MR D.I.Y MANAGEMENT SDN BHD - CIMB - 8001461410';
-    return provider;
+    const code = provider.split('_').slice(1).join('_').toLowerCase();
+    return bankMap.get(code) ?? exportEntityNameMap.get(code) ?? provider;
   }
 
   const wb = XLSX.utils.book_new();

@@ -17,7 +17,7 @@ export function trailingWeeks(weeks = 12, now: Date = new Date()): WeekWindow {
   return { from: addWeeks(thisMonday, -(weeks - 1)), to: addWeeks(thisMonday, 1) };
 }
 
-export async function weeklyTotals(window: WeekWindow, locale?: string) {
+export async function weeklyTotals(window: WeekWindow, locale?: string, entityId?: string) {
   const cycles = await prisma.menuCycle.findMany({
     where: { serviceWeekStart: { gte: window.from, lt: window.to } },
     orderBy: { serviceWeekStart: 'asc' },
@@ -26,9 +26,11 @@ export async function weeklyTotals(window: WeekWindow, locale?: string) {
 
   if (cycles.length === 0) return [];
 
+  const entityFilter = entityId ? { entityId } : {};
+
   const grouped = await prisma.order.groupBy({
     by: ['cycleId'],
-    where: { cycleId: { in: cycles.map((c) => c.id) }, status: 'PAID' },
+    where: { cycleId: { in: cycles.map((c) => c.id) }, status: 'PAID', ...entityFilter },
     _count: { _all: true },
     _sum: { grossSen: true, subsidySen: true, netSen: true },
   });
@@ -36,7 +38,7 @@ export async function weeklyTotals(window: WeekWindow, locale?: string) {
 
   const meals = await prisma.orderItem.groupBy({
     by: ['orderId'],
-    where: { order: { cycleId: { in: cycles.map((c) => c.id) }, status: 'PAID' } },
+    where: { order: { cycleId: { in: cycles.map((c) => c.id) }, status: 'PAID', ...entityFilter } },
     _sum: { quantity: true },
   });
   // orderId -> cycleId, so meal counts can roll up per week.
@@ -68,11 +70,11 @@ export async function weeklyTotals(window: WeekWindow, locale?: string) {
   });
 }
 
-export async function topDishes(window: WeekWindow, limit = 10) {
+export async function topDishes(window: WeekWindow, limit = 10, entityId?: string) {
   const rows = await prisma.orderItem.groupBy({
     by: ['dishName', 'restaurantName'],
     where: {
-      order: { status: 'PAID' },
+      order: { status: 'PAID', ...(entityId ? { entityId } : {}) },
       serviceDate: { gte: window.from, lt: window.to },
     },
     _sum: { quantity: true, grossSen: true },
@@ -88,11 +90,11 @@ export async function topDishes(window: WeekWindow, limit = 10) {
   }));
 }
 
-export async function restaurantShare(window: WeekWindow) {
+export async function restaurantShare(window: WeekWindow, entityId?: string) {
   const rows = await prisma.orderItem.groupBy({
     by: ['restaurantName'],
     where: {
-      order: { status: 'PAID' },
+      order: { status: 'PAID', ...(entityId ? { entityId } : {}) },
       serviceDate: { gte: window.from, lt: window.to },
     },
     _sum: { quantity: true, grossSen: true },
@@ -107,11 +109,11 @@ export async function restaurantShare(window: WeekWindow) {
 }
 
 
-export async function demandByWeekday(window: WeekWindow, locale?: string) {
+export async function demandByWeekday(window: WeekWindow, locale?: string, entityId?: string) {
   const rows = await prisma.orderItem.groupBy({
     by: ['serviceDate'],
     where: {
-      order: { status: 'PAID' },
+      order: { status: 'PAID', ...(entityId ? { entityId } : {}) },
       serviceDate: { gte: window.from, lt: window.to },
     },
     _sum: { quantity: true },
@@ -130,10 +132,11 @@ export async function demandByWeekday(window: WeekWindow, locale?: string) {
   }));
 }
 
-export async function departmentBreakdown(window: WeekWindow) {
+export async function departmentBreakdown(window: WeekWindow, entityId?: string) {
   const orders = await prisma.order.findMany({
     where: {
       status: 'PAID',
+      ...(entityId ? { entityId } : {}),
       cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
     },
     select: {
@@ -181,12 +184,13 @@ export async function departmentBreakdown(window: WeekWindow) {
 }
 
 /** Share of active employees who ordered in the given window. */
-export async function participation(window: WeekWindow) {
+export async function participation(window: WeekWindow, entityId?: string) {
   const [eligible, orderedRows] = await Promise.all([
     prisma.user.count({ where: { active: true } }),
     prisma.order.findMany({
       where: {
         status: 'PAID',
+        ...(entityId ? { entityId } : {}),
         cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
       },
       distinct: ['userId'],

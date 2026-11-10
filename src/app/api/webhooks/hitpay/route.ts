@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       })
     : null;
 
-  const entityId = orderForEntity?.entityId ?? 'retail';
+  const entityId = orderForEntity?.entityId ?? 'trading';
   const { salt } = await getEntityCredentials(entityId);
 
   if (!verifyWebhookSignature(fields, salt)) {

@@ -174,22 +174,18 @@ export const getDepartments = unstable_cache(
 // ---------------------------------------------------------------------------
 
 export const getAnalyticsDashboard = unstable_cache(
-  async (weeks: number, locale: string) => {
+  async (weeks: number, locale: string, entityId?: string) => {
     const window = trailingWeeks(weeks);
     const [weekly, dishes, restaurants, weekday, departments, take] = await Promise.all([
-      weeklyTotals(window, locale),
-      topDishes(window, 10),
-      restaurantShare(window),
-      demandByWeekday(window, locale),
-      departmentBreakdown(window),
-      participation(window),
+      weeklyTotals(window, locale, entityId),
+      topDishes(window, 10, entityId),
+      restaurantShare(window, entityId),
+      demandByWeekday(window, locale, entityId),
+      departmentBreakdown(window, entityId),
+      participation(window, entityId),
     ]);
     return { weekly, dishes, restaurants, weekday, departments, take };
   },
   ['analytics-dashboard'],
-  { revalidate: 120 }, // time-based only - no tag, since it aggregates so many
-                        // tables (orders, order items, cycles) that tagging
-                        // every mutation that could touch it would defeat
-                        // the point; a 2-minute refresh is the intended
-                        // behaviour, not a fallback.
+  { revalidate: 120 },
 );

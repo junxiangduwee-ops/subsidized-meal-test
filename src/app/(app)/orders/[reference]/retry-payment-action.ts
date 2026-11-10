@@ -31,7 +31,7 @@ export async function retryPayment(reference: string): Promise<RetryPaymentResul
     return { error: 'Order not found or already paid.' };
   }
 
-  const entityId = order.entityId ?? 'retail';
+  const entityId = order.entityId ?? 'trading';
 
   const appBase = (
     process.env.APP_URL ??

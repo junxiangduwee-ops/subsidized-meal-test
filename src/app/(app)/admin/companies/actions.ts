@@ -71,6 +71,44 @@ export async function upsertCompany(data: {
   return {};
 }
 
+export async function updateEntity(data: {
+  id: string;
+  name: string;
+  hitpayApiKey?: string;
+  hitpaySalt?: string;
+}): Promise<{ error?: string }> {
+  await assertCapability('settings:manage');
+
+  const name = data.name.trim();
+  const apiKey = data.hitpayApiKey?.trim() || null;
+  const salt   = data.hitpaySalt?.trim()  || null;
+
+  if (!name) return { error: 'Name is required.' };
+
+  if ((apiKey && !salt) || (!apiKey && salt)) {
+    return { error: 'Enter both the API key and the salt, or leave both blank to keep the current credentials.' };
+  }
+
+  const updateData: {
+    name: string;
+    hitpayKeyEncrypted?: string;
+    hitpaySaltEncrypted?: string;
+  } = { name };
+
+  if (apiKey && salt) {
+    try {
+      updateData.hitpayKeyEncrypted  = encrypt(apiKey);
+      updateData.hitpaySaltEncrypted = encrypt(salt);
+    } catch {
+      return { error: 'Encryption failed — ensure HITPAY_ENCRYPTION_KEY is set correctly.' };
+    }
+  }
+
+  await prisma.entity.update({ where: { id: data.id }, data: updateData });
+  revalidatePath('/admin/companies');
+  return {};
+}
+
 export async function addEntity(data: {
   code: string;
   name: string;
