@@ -104,13 +104,11 @@ export async function processRefund(
   let apiKey: string;
   let mode: string;
   try {
-    const creds = getEntityCredentials(entityId);
+    const creds = await getEntityCredentials(entityId);
     apiKey = creds.apiKey;
     mode = creds.mode;
   } catch {
-    apiKey = process.env.HITPAY_API_KEY ?? '';
-    mode = process.env.HITPAY_MODE ?? 'sandbox';
-    if (!apiKey) return { ok: false, error: 'HitPay is not configured for this entity.' };
+    return { ok: false, error: 'HitPay is not configured for this entity.' };
   }
 
   try {
