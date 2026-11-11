@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/session';
 import { landingPathFor } from '@/lib/rbac';
+import { LOSLogo } from '@/components/los-logo';
 import { CompanyPicker } from './company-picker';
 
 export const dynamic = 'force-dynamic';
@@ -39,11 +40,14 @@ export default async function SelectCompanyPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold text-slate-900">Select Your Company</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Choose the MR DIY entity you belong to. This determines which account your meal payment goes to.
-          </p>
+        <div className="mb-6 flex flex-col items-center gap-4">
+          <LOSLogo size="md" stacked />
+          <div className="text-center">
+            <h1 className="text-lg font-semibold text-slate-900">Select Your Company</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Choose the MR DIY entity you belong to. This determines which account your meal payment goes to.
+            </p>
+          </div>
         </div>
         <CompanyPicker companies={items} />
       </div>

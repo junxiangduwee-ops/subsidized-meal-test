@@ -30,8 +30,6 @@ const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'subsidy:manage',
     'order:place',
     'analytics:view',
-    'finance:view',
-    'finance:export',
     'kitchen:view',
     'settings:manage',
     'delivery:confirm',

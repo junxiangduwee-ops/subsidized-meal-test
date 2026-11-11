@@ -99,19 +99,36 @@ export async function GET(request: Request) {
       department: department || null,
       groups,
     });
-  } catch {
-    return uncachedRedirect('/embed/error?reason=inactive');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Distinguish a genuine deactivated account from any other provisioning error
+    // so admins can tell from the redirect URL what actually went wrong.
+    if (msg.includes('deactivated')) {
+      return uncachedRedirect('/embed/error?reason=inactive');
+    }
+    console.error('[joget-identify] provisionFromDirectory failed:', msg);
+    return uncachedRedirect('/embed/error?reason=sso_failed');
   }
 
   if (!user.active) {
     return uncachedRedirect('/embed/error?reason=inactive');
   }
 
-  // If Joget passed a company code, link the user to that company
+  // If Joget passed a company code, link the user to that company.
+  // Skip if the company doesn't exist or its entitlement is disabled.
+  let companyId = user.companyId ?? null;
   if (companyCode) {
-    const company = await prisma.companyInfo.findUnique({ where: { code: companyCode } });
-    if (company) {
+    const company = await prisma.companyInfo.findUnique({
+      where: { code: companyCode },
+      include: { entitlement: true },
+    });
+    if (!company) {
+      console.warn(`[joget-identify] companyCode "${companyCode}" not found in DB — check Joget URL config.`);
+    } else if (!(company.entitlement?.enabled ?? true)) {
+      console.warn(`[joget-identify] companyCode "${companyCode}" exists but its entitlement is disabled — skipping assignment.`);
+    } else {
       await prisma.user.update({ where: { id: user.id }, data: { companyId: company.id } });
+      companyId = company.id;
     }
   }
 
@@ -137,12 +154,7 @@ export async function GET(request: Request) {
     },
   });
 
-  // Super-admins are exempt from the company requirement
-  const userRecord = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { companyId: true, superAdmin: true },
-  });
-  if (!userRecord?.superAdmin && !userRecord?.companyId) {
+  if (!user.superAdmin && !companyId) {
     return uncachedRedirect('/select-company');
   }
 

@@ -9,7 +9,6 @@ import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
 import { formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { departmentBreakdown, trailingWeeks, weeklyTotals } from '@/lib/reporting';
-import { hitpayConfigured } from '@/lib/hitpay';
 import { PageHeader, Section, Stat, StatusBadge, Alert, EmptyState } from '@/components/ui';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
@@ -124,11 +123,6 @@ export default async function FinancePage({
         {tabBar}
 
         <div className="mb-6 space-y-3">
-          {!hitpayConfigured() ? (
-            <Alert tone="warning">
-              {t('hitpayNotConfigured', { apiKey: 'HITPAY_API_KEY', salt: 'HITPAY_SALT' })}
-            </Alert>
-          ) : null}
           {unmatchedCount > 0 ? (
             <Alert tone="warning">
               {unmatchedCount} HitPay webhook{unmatchedCount === 1 ? '' : 's'} could not be
@@ -332,15 +326,15 @@ export default async function FinancePage({
   // back to the trailing-weeks window. Both the table and the aggregate
   // stats use the same filter so the reconciliation indicator always
   // matches what the table shows.
+  // All statuses that Finance needs to see: AWAITING_PAYMENT (pending), PAID (collected),
+  // REFUND_PENDING / REFUND_FAILED (queued/failed refund, money still with HitPay),
+  // REFUNDED (money returned), CANCELLED (no payment).
+  type ReconStatus = 'PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED' | 'REFUND_PENDING' | 'REFUND_FAILED';
+  const RECON_STATUSES: ReconStatus[] = ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED', 'REFUND_PENDING', 'REFUND_FAILED'];
+
   const reconWhere = selectedCycleId
-    ? {
-        status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
-        cycleId: selectedCycleId,
-      }
-    : {
-        status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
-        cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-      };
+    ? { status: { in: RECON_STATUSES }, cycleId: selectedCycleId }
+    : { status: { in: RECON_STATUSES }, cycle: { serviceWeekStart: { gte: window.from, lt: window.to } } };
 
   // Same filter shape for the aggregate queries (no status filter needed there)
   const reconAggWhere = selectedCycleId
@@ -366,6 +360,7 @@ export default async function FinancePage({
         id: true,
         reference: true,
         status: true,
+        entityId: true,
         grossSen: true,
         subsidySen: true,
         netSen: true,
@@ -410,16 +405,18 @@ export default async function FinancePage({
       take: 50,
       select: { id: true, createdAt: true, metadata: true },
     }),
-    // Aggregate: sum of netSen for PAID orders matching current filter
+    // Orders where HitPay collected money: PAID + queued/failed refunds + already refunded.
+    // AWAITING_PAYMENT and CANCELLED are excluded — no money was collected for those.
     prisma.order.aggregate({
-      where: { status: 'PAID', ...reconAggWhere },
+      where: { status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED', 'REFUNDED'] }, ...reconAggWhere },
       _sum: { netSen: true },
       _count: { _all: true },
     }),
-    // Aggregate: sum of SUCCEEDED payments matching current filter
+    // Payments HitPay processed: SUCCEEDED (collected) + REFUNDED (collected then returned).
+    // Both sides must cover the same universe so REFUND_PENDING orders don't create false discrepancies.
     prisma.payment.aggregate({
       where: {
-        status: 'SUCCEEDED',
+        status: { in: ['SUCCEEDED', 'REFUNDED'] },
         order: reconAggWhere,
       },
       _sum: { amountSen: true },
@@ -427,12 +424,33 @@ export default async function FinancePage({
     }),
   ]);
 
+  // Per-entity reconciliation breakdown
+  const allEntities = await prisma.entity.findMany({ orderBy: { code: 'asc' } });
+  const entityRecon = await Promise.all(
+    allEntities.map(async (e) => {
+      const [oAgg, pAgg] = await Promise.all([
+        prisma.order.aggregate({
+          where: { status: { in: ['PAID', 'REFUND_PENDING', 'REFUND_FAILED', 'REFUNDED'] }, entityId: e.code, ...reconAggWhere },
+          _sum: { netSen: true },
+          _count: { _all: true },
+        }),
+        prisma.payment.aggregate({
+          where: { status: { in: ['SUCCEEDED', 'REFUNDED'] }, order: { entityId: e.code, ...reconAggWhere } },
+          _sum: { amountSen: true },
+          _count: { _all: true },
+        }),
+      ]);
+      const ordersSen = oAgg._sum.netSen ?? 0;
+      const paidSen = pAgg._sum.amountSen ?? 0;
+      return { entity: e, ordersSen, paidSen, diff: paidSen - ordersSen, orders: oAgg._count._all };
+    }),
+  );
+
   // Reconciliation indicator
   const totalOrdersSen = reconAgg._sum.netSen ?? 0;
   const totalPaidSen = paymentAgg._sum.amountSen ?? 0;
   const diffSen = totalPaidSen - totalOrdersSen;
   const isReconciled = diffSen === 0;
-  const hasOrphanPayments = paymentAgg._count._all > reconAgg._count._all;
 
   return (
     <>
@@ -496,6 +514,54 @@ export default async function FinancePage({
             </p>
           </div>
         </div>
+
+        {/* Per-entity breakdown */}
+        {entityRecon.some((e) => e.orders > 0) && (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left">
+                  <th className="px-3 py-2 font-medium text-slate-600">Entity (HitPay Gateway)</th>
+                  <th className="px-3 py-2 text-right font-medium text-slate-600">PAID Orders</th>
+                  <th className="px-3 py-2 text-right font-medium text-slate-600">HitPay Collected</th>
+                  <th className="px-3 py-2 text-right font-medium text-slate-600">Difference</th>
+                  <th className="px-3 py-2 font-medium text-slate-600">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {entityRecon.map((row) => {
+                  const ok = row.diff === 0;
+                  return (
+                    <tr key={row.entity.code} className="bg-white">
+                      <td className="px-3 py-2 font-medium text-slate-800">{row.entity.name}</td>
+                      <td className="px-3 py-2 text-right text-slate-700">
+                        {formatSen(row.ordersSen)}
+                        <span className="ml-1 text-slate-400">({row.orders})</span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-700">{formatSen(row.paidSen)}</td>
+                      <td className={`px-3 py-2 text-right font-medium ${ok ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {row.diff === 0 ? '—' : `${row.diff > 0 ? '+' : ''}${formatSen(row.diff)}`}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.orders === 0 ? (
+                          <span className="text-slate-400">No data</span>
+                        ) : ok ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
+                            ✓ Matched
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-red-700">
+                            ⚠ Discrepancy
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {!isReconciled && (
           <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
@@ -594,6 +660,7 @@ export default async function FinancePage({
                 <thead>
                   <tr>
                     <th>Order Ref</th>
+                    <th>Entity</th>
                     <th>Service Week</th>
                     <th className="num">Food Total</th>
                     <th className="num">Subsidy</th>
@@ -615,12 +682,16 @@ export default async function FinancePage({
                     const successPayment = o.payments.find((p) => p.status === 'SUCCEEDED');
                     const latestPayment = successPayment ?? o.payments[0] ?? null;
 
-                    // Mismatch flag: order is PAID but no SUCCEEDED payment found
+                    // Mismatch: order is PAID but no SUCCEEDED payment found
                     const mismatch = o.status === 'PAID' && !successPayment;
-
+                    // Refund failed: money is with HitPay but refund couldn't be processed
+                    const refundFailed = o.status === 'REFUND_FAILED';
 
                     return (
-                      <tr key={o.id} className={mismatch ? 'bg-amber-50' : undefined}>
+                      <tr
+                        key={o.id}
+                        className={mismatch ? 'bg-amber-50' : refundFailed ? 'bg-rose-50' : undefined}
+                      >
                         <td>
                           <Link
                             href={`/orders/${o.reference}`}
@@ -631,6 +702,14 @@ export default async function FinancePage({
                           {mismatch ? (
                             <div className="mt-0.5 text-xs text-amber-700">⚠ No matched payment</div>
                           ) : null}
+                          {refundFailed ? (
+                            <div className="mt-0.5 text-xs text-rose-700">
+                              ↺ Refund failed — ask an Admin to retry via Bulk Refund
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="text-xs text-slate-600 whitespace-nowrap">
+                          {allEntities.find((e) => e.code === o.entityId)?.name ?? o.entityId ?? '—'}
                         </td>
                         <td className="text-xs text-slate-600 whitespace-nowrap">
                           {formatWeekRange(o.cycle.serviceWeekStart, locale)}

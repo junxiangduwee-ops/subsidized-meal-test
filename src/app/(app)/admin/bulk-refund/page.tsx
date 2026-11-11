@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { formatDate, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { formatSen } from '@/lib/money';
-import { PageHeader, Section } from '@/components/ui';
+import { PageHeader, Section, Alert } from '@/components/ui';
 import { BulkRefundForm } from './bulk-refund-form';
 import { BulkRefundFilters } from './bulk-refund-filters';
 
@@ -20,6 +20,20 @@ export default async function BulkRefundPage({
   const params = await searchParams;
   const t = await getTranslations('bulkRefund');
   const locale = await getLocale();
+
+  const failedRefundOrders = await prisma.order.findMany({
+    where: { status: 'REFUND_FAILED' },
+    select: {
+      id: true,
+      reference: true,
+      netSen: true,
+      user: { select: { name: true, staffId: true } },
+      cycle: { select: { serviceWeekStart: true } },
+      items: { select: { dishName: true, restaurantName: true, quantity: true }, orderBy: { serviceDate: 'asc' } },
+    },
+    orderBy: { lastRefundAttemptAt: 'desc' },
+  });
+  const failedRefundCount = failedRefundOrders.length;
 
   const cycles = await prisma.menuCycle.findMany({
     where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] } },
@@ -126,6 +140,47 @@ export default async function BulkRefundPage({
       </div>
 
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+
+      {failedRefundCount > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            {failedRefundCount} order{failedRefundCount === 1 ? '' : 's'} failed to refund and need a manual retry.
+            Select the cycle containing the order below, then check and refund.
+          </p>
+          <ul className="mt-3 divide-y divide-amber-100">
+            {failedRefundOrders.map((o) => (
+              <li key={o.id} className="py-2 text-xs">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Link
+                      href={`/orders/${o.reference}`}
+                      className="font-mono font-medium text-amber-800 underline hover:text-amber-900"
+                    >
+                      {o.reference}
+                    </Link>
+                    <span className="ml-2 text-amber-700">{o.user.name}</span>
+                    {o.user.staffId && (
+                      <span className="ml-1 text-amber-500">({o.user.staffId})</span>
+                    )}
+                    <div className="mt-1 space-y-0.5 text-amber-600">
+                      {o.items.map((item, i) => (
+                        <div key={i}>
+                          {item.dishName} ×{item.quantity}
+                          <span className="text-amber-400"> · {item.restaurantName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right text-amber-700">
+                    <div className="font-medium">{formatSen(o.netSen)}</div>
+                    <div className="text-amber-500">{formatWeekRange(o.cycle.serviceWeekStart, locale)}</div>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
       <div className="mb-6">

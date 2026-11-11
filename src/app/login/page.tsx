@@ -6,6 +6,7 @@ import { landingPathFor } from '@/lib/rbac';
 import { isLdapEnabled, isOidcEnabled } from '@/lib/auth';
 import { getSiteSettings } from '@/lib/settings';
 
+import { LOSLogo } from '@/components/los-logo';
 import { LoginForm } from './login-form';
 
 export const dynamic = 'force-dynamic';
@@ -36,11 +37,9 @@ export default async function LoginPage({
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={settings.logoUrl} alt="" className="mx-auto mb-3 h-14 w-14 object-contain" />
-          <h1 className="text-xl font-semibold text-slate-900">{t('title')}</h1>
-          <p className="mt-1 text-sm text-slate-500">{t('subtitle')}</p>
+        <div className="mb-6 flex flex-col items-center gap-4">
+          <LOSLogo size="lg" stacked />
+          <p className="text-sm text-slate-500">{t('subtitle')}</p>
         </div>
 
         <div className="card-pad">

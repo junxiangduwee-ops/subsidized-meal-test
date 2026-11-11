@@ -17,7 +17,7 @@ export type SiteSettings = {
 };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
-  siteName: 'MR DIY Food Ordering',
+  siteName: 'LOS',
   logoUrl: '/mr-diy-logo.png',
   faviconUrl: '/mr-diy-logo.png',
   supportEmail: null,

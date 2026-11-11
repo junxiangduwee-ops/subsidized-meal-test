@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireUser } from '@/lib/session';
 import { can, ROLE_LABEL } from '@/lib/rbac';
 import { getSiteSettings } from '@/lib/settings';
+import { LOSLogo } from '@/components/los-logo';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
 import { UserMenu } from '@/components/user-menu';
 import { Alert } from '@/components/ui';
@@ -104,10 +105,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {!user.embed ? (
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
-            <Link href="/" className="flex items-center gap-2.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={settings.logoUrl} alt="" className="h-8 w-8 object-contain" />
-              <span className="text-sm font-semibold text-slate-900">{settings.siteName}</span>
+            <Link href="/">
+              <LOSLogo size="sm" />
             </Link>
 
             <div className="flex items-center gap-3">

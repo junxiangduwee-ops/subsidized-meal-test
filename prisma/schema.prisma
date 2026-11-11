@@ -506,7 +506,7 @@ model Payment {
 model AppSettings {
   id                 String   @id
 
-  siteName           String   @default("MR DIY Food Ordering")
+  siteName           String   @default("LOS")
   logoUrl            String?
   faviconUrl         String?
   supportEmail       String?
