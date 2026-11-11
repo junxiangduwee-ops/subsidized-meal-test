@@ -5,17 +5,14 @@ publish it, staff order until the Wednesday cutoff, and the food is served the
 following week. The company subsidy is applied automatically; staff pay the
 remainder through HitPay.
 
-> ⚠️ **Review before use.** This system was generated with AI assistance. Verify
-> the business rules, pricing, subsidy policy and payment configuration against
-> your own requirements before deploying it or making decisions from its
-> reports. Anything touching payroll, payments or employee data needs
-> authorised sign-off.
+> **Review before use.** This system was built with AI assistance. Verify the
+> business rules, pricing, subsidy policy and payment configuration against your
+> own requirements before deploying it or making decisions from its reports.
+> Anything touching payroll, payments or employee data needs authorised sign-off.
 
 ---
 
 ## The weekly cycle
-
-This is the rule the whole system is built around:
 
 ```
 Week W-2   Admin drafts the menu for service week W          (DRAFT)
@@ -27,69 +24,93 @@ Week W     Mon–Fri    food served                            (FULFILLED)
 - A cycle is identified by the **Monday of the week the food is served**.
 - The cutoff weekday and time are configurable (`ORDER_CUTOFF_*`) and can be
   overridden per cycle in the admin UI.
-- All wall-clock reasoning happens in `APP_TIMEZONE` (default
-  `Asia/Kuala_Lumpur`).
-- Once a menu is published, dishes and prices are locked. Unpublishing is only
-  allowed while no order has been committed.
+- All wall-clock reasoning happens in `APP_TIMEZONE` (default `Asia/Kuala_Lumpur`).
+- Once a menu is published, dishes and prices are locked.
 
 ## Roles
 
-Access is capability-based (`src/lib/rbac.ts`), not role-literal — adding a
-role later is a one-line change to that table.
+Access is capability-based (`src/lib/rbac.ts`), not role-literal.
 
 | Role              | Can                                                                                                             |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Administrator** | Restaurants, dishes and prices; plan and publish weekly menus; subsidy rules; users and roles; everything below |
-| **Analytics**     | Demand dashboards, participation, top dishes, kitchen counts                                                    |
-| **Finance**       | Revenue, subsidy cost, HitPay reconciliation, CSV exports; also sees analytics                                  |
-| **Employee**      | Browse the open menu and order for next week                                                                    |
+| **Administrator** | Restaurants, dishes, menus, subsidy rules, users, companies, entities; everything below                         |
+| **Analytics**     | Demand dashboards, participation, top dishes, kitchen counts; also orders their own meals                       |
+| **Finance**       | Revenue, subsidy cost, HitPay reconciliation, CSV exports; also sees analytics and orders their own meals       |
+| **Reception**     | Mark meals as received/collected at the delivery site they are assigned to                                      |
+| **Employee**      | Browse the open menu and order for next week; self-cancel within the ordering window                            |
 
-Analytics and Finance can also place their own orders — they eat too.
+## Entities and Companies
+
+The system is multi-entity. Each **Entity** is a legal entity with its own HitPay
+account (e.g. MR D.I.Y Trading Sdn Bhd). Each **Company** belongs to one entity
+and groups the employees who pay through that entity's HitPay account.
+
+Managed via **Admin → Companies**:
+- Add/edit entities and their HitPay credentials (encrypted in DB).
+- Add/edit companies and assign them to an entity.
+- Enable or disable a company's access via its entitlement flag.
+
+An order's payment is routed through the entity that the ordering employee's
+company belongs to.
 
 ## Subsidies
 
 Rules live in **Admin → Subsidies**. Three types:
 
-- **Fixed per item** — e.g. RM 5.00 off each dish (one meal per day, so this
-  is effectively per day)
+- **Fixed per item** — e.g. RM 5.00 off each dish
 - **Percentage** — e.g. 60% off, optionally capped per item
 - **Daily cap** — the company never pays more than RM X per person per day
 
-How they combine, per order line:
+How they combine:
 
-1. One per-item rule is chosen: highest `priority` wins, and a `DEPARTMENT`
-   rule beats an `ALL` rule at equal priority.
-2. It is applied per unit and never exceeds the unit price.
-3. The daily cap then limits total subsidy across every line sharing a service
-   date, scaled down proportionally with exact integer conservation.
+1. One per-item rule is chosen: highest `priority` wins; a `DEPARTMENT` rule
+   beats an `ALL` rule at equal priority.
+2. Applied per unit, never exceeding the unit price.
+3. The daily cap limits total subsidy across every line sharing a service date,
+   scaled down proportionally with exact integer conservation.
 
 Whatever is left is what the employee pays. A fully subsidised order skips the
-payment gateway entirely. The rules applied are snapshotted onto the order at
-checkout, so Finance can always reconstruct why a given order was priced the
-way it was.
+payment gateway entirely. Rules are snapshotted onto the order at checkout.
+
+## Cancel and Refund
+
+Employees can self-cancel a paid order while the cycle's ordering window is open
+(between `orderOpenAt` and `orderCutoffAt`). Self-cancel is toggled in
+**Admin → Settings** (`selfCancelEnabled`).
+
+A cancellation request queues the order as `REFUND_PENDING`. A nightly cron job
+at **8 pm MYT** calls the HitPay refund API for every pending order. Failed
+attempts retry each night for up to **7 attempts**, then the order is marked
+`REFUND_FAILED` for manual follow-up.
+
+Admins can also refund immediately via **Admin → Bulk Refund**, which filters
+by cycle, service day, restaurant and dish.
 
 ## Money
 
 Every monetary column is an **integer number of sen** (1 MYR = 100 sen). No
-floats, no `Decimal` serialisation issues across the server/client boundary.
-Format with `formatSen()` from `src/lib/money.ts`.
+floats, no `Decimal` serialisation issues. Format with `formatSen()` from
+`src/lib/money.ts`.
 
 ---
 
 ## Getting started
 
-**Prerequisites:** Node 20+. Postgres is optional — see below.
+**Prerequisites:** Node 20+. Postgres is optional for local dev — see below.
 
 ```bash
 npm install
 cp .env.example .env
+# Fill in AUTH_SECRET and HITPAY_ENCRYPTION_KEY at minimum, then:
 npm run db:push && npm run db:seed && npm run dev
 ```
 
-Set `AUTH_SECRET` in `.env` before anything real (48 random bytes):
+Generate the required secrets:
 
 ```bash
-openssl rand -base64 48
+openssl rand -base64 48   # → AUTH_SECRET
+openssl rand -hex 32      # → HITPAY_ENCRYPTION_KEY
+openssl rand -hex 32      # → CRON_SECRET
 ```
 
 The seed prints one sign-in per role. **Change those passwords before this
@@ -98,39 +119,17 @@ touches a real environment.**
 ### Postgres or SQLite
 
 With no `DATABASE_URL` configured the app falls back to **SQLite** at
-`prisma/dev.db`, so it runs with zero setup. Point it at Postgres by setting
-the URL:
+`prisma/dev.db` (zero setup, development only). Point it at Postgres:
 
 ```
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mrdiy_food?schema=public"
 ```
 
-The provider is inferred from the URL scheme (`postgresql://` or `file:`), or
-forced with `DATABASE_PROVIDER=postgresql|sqlite`.
-
-`prisma/schema.prisma` is the single hand-edited source of truth and is
-written in Postgres form. Prisma does not allow `provider = env(...)`, so
-`scripts/db-config.mjs` derives `prisma/schema.sqlite.prisma` (generated,
-gitignored) whenever SQLite is in use. Every `npm run db:*` script and the
-dev/build scripts route through it, so this is invisible in normal use.
-
-Prisma's SQLite connector supports enums and `Json` but not scalar lists,
-`@db.Date`, `mode: 'insensitive'`, or `skipDuplicates`. Those four gaps are
-the whole difference, and they are handled in one place — `src/lib/db-compat.ts`:
-
-| Difference              | Postgres               | SQLite                                                  |
-| ----------------------- | ---------------------- | ------------------------------------------------------- |
-| `Dish.tags`             | `String[]`             | comma-delimited `String`, via `encodeTags`/`decodeTags` |
-| Date-only columns       | `@db.Date`             | plain `DateTime` (already stored as UTC midnight)       |
-| Case-insensitive search | `mode: 'insensitive'`  | `LIKE`, already case-insensitive for ASCII              |
-| `createMany` dedupe     | `skipDuplicates: true` | omitted; callers de-duplicate first                     |
-
-If you add a scalar list to the schema, the SQLite generator prints a warning
-telling you to add a codec.
+The provider is inferred from the URL scheme, or forced with
+`DATABASE_PROVIDER=postgresql|sqlite`.
 
 **SQLite is for development and demos.** Use Postgres for anything with real
-users — it handles concurrent writes properly, which matters when the whole
-office orders lunch in the same ten minutes.
+users — concurrent writes during the lunch rush need it.
 
 ### Other commands
 
@@ -138,179 +137,174 @@ office orders lunch in the same ten minutes.
 npm run test        # cycle arithmetic + subsidy engine (no DB needed)
 npm run typecheck   # tsc --noEmit
 npm run build       # production build
-npm run db:studio   # browse the database
-npm run db:migrate  # create a migration instead of db:push
-npm run db:reset    # DESTRUCTIVE - drop everything, then re-seed
+npm run db:studio   # browse the database (Prisma Studio)
+npm run db:push     # sync schema to DB (no migration files)
+npm run db:reset    # DESTRUCTIVE — drop everything, then re-seed
 ```
-
-`db:reset` deletes the SQLite file outright, or runs `prisma migrate reset`
-on Postgres (which prompts for confirmation). It does not re-seed for you -
-follow it with `npm run db:seed`.
-
----
-
-## Deploying to Vercel
-
-**SQLite will not work.** Vercel's filesystem is ephemeral and per-invocation,
-so you need a real Postgres database. The build fails with a clear message if
-`DATABASE_URL` is missing, rather than deploying something that breaks later.
-
-1. **Create a Postgres database** — Supabase, Neon, Vercel Postgres, or any
-   managed Postgres. Copy the connection string.
-
-   On **Supabase**, _Project Settings → Database → Connection string_ gives
-   you two. Use both:
-
-   - `DATABASE_URL` — the **transaction pooler** (`:6543`), with
-     `?pgbouncer=true` appended. This is what the app queries through.
-   - `DIRECT_URL` — the **session pooler** (`:5432`). Prisma cannot run
-     `db push` or migrations through a transaction-mode pooler, so schema
-     changes go down this one.
-
-   On plain unpooled Postgres, `DATABASE_URL` alone is enough; `DIRECT_URL`
-   falls back to it.
-
-2. **Set environment variables** in Vercel → Settings → Environment Variables:
-
-   | Variable         | Value                                        |
-   | ---------------- | -------------------------------------------- |
-   | `DATABASE_URL`   | pooled Postgres URL (`:6543?pgbouncer=true`) |
-   | `DIRECT_URL`     | direct/session URL (`:5432`), pooled hosts   |
-   | `AUTH_SECRET`    | 48 random bytes (`openssl rand -base64 48`)  |
-   | `APP_URL`        | `https://<your-project>.vercel.app`          |
-   | `HITPAY_API_KEY` | from the HitPay dashboard                    |
-   | `HITPAY_SALT`    | from the HitPay dashboard                    |
-   | `HITPAY_MODE`    | `sandbox` until you are ready for real money |
-   | `APP_TIMEZONE`   | `Asia/Kuala_Lumpur`                          |
-
-   `APP_URL` must be the real public URL. HitPay rejects `localhost` outright
-   (`"localhost not work for this field"`), so the webhook cannot be
-   registered from a local machine — use a tunnel for local testing.
-
-3. **Create the schema.** Vercel's build does not migrate for you. From your
-   machine, pointed at the production database:
-
-   ```bash
-   DATABASE_URL="<pooled url>" DIRECT_URL="<direct url>" npm run db:push
-   ```
-
-4. **Load the sample data** (optional but recommended for a trial). Run this
-   from your machine, pointed at the hosted database:
-
-   ```bash
-   DATABASE_URL="<pooled url>" DIRECT_URL="<direct url>" \
-   SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)" npm run db:seed
-   ```
-
-   That gives you 4 restaurants, 16 dishes, 12 staff accounts across five
-   departments, three subsidy rules, and five service weeks — three completed
-   (so Analytics and Finance have charts), one open for ordering right now,
-   and one draft. The sign-in list is printed at the end.
-
-   `SEED_DEFAULT_PASSWORD` is **required** when the target is not localhost.
-   The demo default is published in this README, so seeding a public
-   deployment with it would leave a publicly known administrator account; the
-   seed refuses rather than let that happen.
-
-   The seed regenerates the Prisma client for whichever provider
-   `DATABASE_URL` points at, so switching between local SQLite and hosted
-   Postgres needs no extra step.
-
-   Re-running is mostly safe — users, restaurants and dishes are upserted and
-   existing service weeks are skipped — but **subsidy rules are deleted and
-   recreated** each time.
-
-   For a real rollout, skip the seed entirely: create one administrator, then
-   use the in-app **Users & roles** screen for everyone else.
-
-5. **Deploy.** `npm run build` runs `prisma generate` against the Postgres
-   schema automatically.
-
-### Before real money
-
-- Switch `HITPAY_MODE` to `live` and swap in live API keys.
-- Confirm the webhook reaches `https://<your-app>/api/webhooks/hitpay`.
-- Change every seeded password.
-- Re-read the data-protection notes below — the CSV exports contain staff
-  names and IDs.
 
 ---
 
 ## HitPay
 
-Get the API key and salt from **HitPay dashboard → Settings → Payment Gateway
-→ API Keys**, then:
+Each entity has its own HitPay account. Credentials are managed two ways:
+
+**Preferred — Admin UI (encrypted in DB):**
+
+1. Go to **Admin → Companies → Entities**.
+2. Add or edit an entity, enter the API key and webhook salt.
+3. The app encrypts them with `HITPAY_ENCRYPTION_KEY` (AES-256-GCM) before saving.
+
+**Fallback — environment variables:**
 
 ```
-HITPAY_API_KEY="..."
-HITPAY_SALT="..."
-HITPAY_MODE="sandbox"     # "live" when you go live
-APP_URL="https://food.example.com"
+HITPAY_API_KEY_TRADING="..."
+HITPAY_SALT_TRADING="..."
+HITPAY_MODE_TRADING="sandbox"
 ```
 
-`APP_URL` must be reachable by HitPay — the webhook is registered as
-`{APP_URL}/api/webhooks/hitpay`. For local testing, tunnel it (ngrok,
-Cloudflare Tunnel) and set `APP_URL` to the tunnel URL.
+DB credentials take absolute priority. Env vars are only checked when no DB
+credential exists for that entity.
 
-**The webhook is the only thing that marks an order paid.** The browser
-redirect is cosmetic and can be forged. The handler:
+**`HITPAY_ENCRYPTION_KEY` is required** to use DB-stored credentials. Generate
+with `openssl rand -hex 32`. Back it up — losing it makes all stored keys
+unreadable.
 
-- verifies the HMAC signature before trusting any field,
-- rejects an underpayment rather than confirming the order,
-- is idempotent, because HitPay retries until it gets a `200`,
-- returns a failed order to `CART` so the employee can retry while the window
-  is still open.
+**The webhook is the only thing that marks an order paid.** Register it at:
 
-Sandbox and live use different base URLs and different keys — `HITPAY_MODE`
-picks the right one.
+```
+{APP_URL}/api/webhooks/hitpay
+```
+
+The handler verifies the HMAC signature, rejects underpayments, is idempotent
+(HitPay retries until 200), and returns a failed order to `CART` so the
+employee can retry.
+
+`APP_URL` must be reachable by HitPay — no localhost. Use a tunnel (ngrok,
+Cloudflare Tunnel) for local testing.
 
 ---
 
 ## Authentication
 
-Local email + password is always available. Two directory options layer on top,
-both off by default.
+Local email + password is always available. Additional options:
 
-**LDAP / Active Directory** — set `AUTH_LDAP_ENABLED=true` plus the `LDAP_*`
-variables. Flow: bind as the service account → search by email → re-bind as
-that user's DN with their password. A matching directory user is provisioned on
-first sign-in as an `Employee`; an admin promotes them afterwards. Requires the
-optional `ldapts` package (installed by default; the provider reports itself
-disabled if it is missing).
+**LDAP / Active Directory** — set `AUTH_LDAP_ENABLED=true` plus `LDAP_*` vars.
+Binds as a service account, searches by email, re-binds as the user. New users
+are provisioned as Employee on first sign-in; an admin promotes them.
 
 **OIDC / SSO** — set `AUTH_OIDC_ENABLED=true` plus `OIDC_ISSUER`,
-`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Standard Authorization Code flow with
-PKCE, endpoints read from the issuer's discovery document. Register the
-redirect URI `{APP_URL}/api/auth/oidc/callback`. Works with Entra ID / Azure AD.
+`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Authorization Code + PKCE flow, works
+with Entra ID / Azure AD. Register redirect URI: `{APP_URL}/api/auth/oidc/callback`.
+
+**Joget embedded (iframe) mode** — set `AUTH_JOGET_SSO_ENABLED=true`. Joget
+calls `/api/auth/joget-identify` with a signed JWT. The app provisions the user,
+maps Joget group names to roles via `JOGET_GROUP_ROLE_MAP`, and assigns their
+company if `companyCode=<code>` is passed in the SSO URL. The page then renders
+in a minimal mobile layout inside the iframe.
 
 Notes:
 
-- A **local password wins if one is set**, so break-glass admin accounts keep
-  working when the directory is unreachable.
-- Roles are assigned on creation and never overwritten by the directory — an
-  admin's role change sticks.
-- The session JWT is only a pointer; role and active status are re-read from
-  the database on every request, so revoking an account takes effect
-  immediately.
+- A local password wins if one is set — break-glass admin accounts keep working
+  when the directory is unreachable.
+- Roles are assigned on creation and never overwritten by the directory.
+- Role and active status are re-read from the database on every request, so
+  revoking an account takes effect immediately.
+
+---
+
+## Deploying to Vercel
+
+**SQLite will not work on Vercel** — the filesystem is ephemeral. Use Postgres.
+
+1. **Create a Postgres database** (Supabase, Neon, Vercel Postgres, or any
+   managed Postgres). On Supabase, use both URLs:
+   - `DATABASE_URL` — transaction pooler (`:6543?pgbouncer=true`)
+   - `DIRECT_URL` — session pooler (`:5432`) for schema pushes
+
+2. **Set environment variables** in Vercel → Settings → Environment Variables:
+
+   | Variable                | Value                                              |
+   | ----------------------- | -------------------------------------------------- |
+   | `DATABASE_URL`          | pooled Postgres URL                                |
+   | `DIRECT_URL`            | direct/session URL (Supabase only)                 |
+   | `AUTH_SECRET`           | `openssl rand -base64 48`                          |
+   | `HITPAY_ENCRYPTION_KEY` | `openssl rand -hex 32`                             |
+   | `CRON_SECRET`           | `openssl rand -hex 32`                             |
+   | `APP_URL`               | `https://<your-project>.vercel.app`                |
+   | `HITPAY_MODE`           | `sandbox` until ready for real money               |
+   | `APP_TIMEZONE`          | `Asia/Kuala_Lumpur`                                |
+
+   HitPay credentials per entity are entered via Admin → Companies after deploy,
+   not as env vars (they are encrypted in the database).
+
+3. **Push the schema:**
+
+   ```bash
+   DATABASE_URL="<pooled>" DIRECT_URL="<direct>" npm run db:push
+   ```
+
+4. **Seed sample data** (optional):
+
+   ```bash
+   DATABASE_URL="<pooled>" DIRECT_URL="<direct>" \
+   SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)" npm run db:seed
+   ```
+
+   Creates 4 entities, 4 companies, 13 staff accounts, 4 restaurants, 16 dishes,
+   3 subsidy rules, and 5 service weeks. Sign-in list printed at the end.
+
+   `SEED_DEFAULT_PASSWORD` is required for remote databases — the default is
+   published here, so seeding without it is refused.
+
+5. **Deploy.** `npm run build` runs `prisma generate` automatically.
+
+### Before going live
+
+- Enter live HitPay API keys and salts via **Admin → Companies → Entities**.
+- Switch `HITPAY_MODE` to `live`.
+- Confirm the webhook reaches `{APP_URL}/api/webhooks/hitpay`.
+- Change every seeded password.
+
+---
+
+## Scheduled jobs (cron)
+
+On Vercel, `vercel.json` schedules these automatically. For self-hosted
+deployments, call the same URLs on a schedule with
+`Authorization: Bearer <CRON_SECRET>`.
+
+| Endpoint                        | Schedule (MYT) | Purpose                                              |
+| ------------------------------- | -------------- | ---------------------------------------------------- |
+| `/api/cron/process-refunds`     | Daily 8pm      | Attempt HitPay refund for all `REFUND_PENDING` orders |
+| `/api/cron/confirm-meals`       | Daily 6pm      | Auto-mark uncollected meals as received               |
+| `/api/cron/close-cycles`        | Daily 5pm      | Flip overdue `PUBLISHED` cycles to `CLOSED`           |
+| `/api/cron/expire-orders`       | Daily 10am     | Cancel `AWAITING_PAYMENT` orders older than 24h       |
+
+`/api/cron` (no suffix) runs all four jobs in one request — use this for
+self-hosted crontab entries:
+
+```bash
+# /etc/cron.d/mrdiy-food  (times in UTC = MYT-8)
+0 12 * * * root curl -s -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron
+```
 
 ---
 
 ## Data protection
 
-The Finance exports contain **employee names, staff IDs and departments**.
-That is personal data:
+The Finance exports contain **employee names, staff IDs and departments**. That
+is personal data:
 
 - Only `finance:export` (Admin, Finance) can download them.
 - Every export is written to the audit log.
 - Keep the files on approved systems; share only within Finance and HR.
 
-Other handling notes:
+Other notes:
 
 - Passwords are bcrypt-hashed at cost 12 and never logged.
-- Never send a temporary password by email or chat — hand it over in person or
-  through a password manager.
+- HitPay API keys and salts are AES-256-GCM encrypted at rest.
 - Raw HitPay webhook payloads are stored on `Payment.rawPayload` for dispute
-  handling. They contain no card data, but treat them as sensitive.
+  handling — treat as sensitive.
 - Do not put real employee records into a shared or public deployment without
   approval.
 
@@ -321,98 +315,80 @@ Other handling notes:
 ```
 prisma/
   schema.prisma          data model (Postgres form); money is integer sen
-  seed.ts                demo users, catalogue, 5 service weeks
+  seed.ts                4 entities, 4 companies, 13 accounts, 5 service weeks
 
 scripts/
   db-config.mjs          provider resolution + SQLite schema derivation
-  prisma.mjs             runs the Prisma CLI against the right schema
-  seed.mjs, reset.mjs    seed / destructive reset
+  prisma.mjs             runs Prisma CLI against the right schema
 
 src/lib/
   cycle.ts               week arithmetic, ordering windows, phases
   subsidy.ts             the subsidy engine (pure, fully tested)
   orders.ts              cart, capacity, repricing, checkout guards
   hitpay.ts              gateway client + webhook signature verification
+  entity-config.ts       entity HitPay credentials (DB-first, env fallback)
+  encrypt.ts             AES-256-GCM encrypt/decrypt for stored credentials
+  refund.ts              queue and process HitPay refunds, eligibility check
   rbac.ts                capability table
   session.ts             JWT cookie session
-  auth.ts                provider chain: local → LDAP
-  auth/oidc.ts           OIDC Authorization Code + PKCE
+  auth.ts                provider chain: local → LDAP → OIDC → Joget
   reporting.ts           aggregates for Analytics / Finance / Kitchen
+  cache.ts               unstable_cache wrappers for analytics dashboard
   money.ts, csv.ts       formatting and safe CSV output
-  db-compat.ts           the four Postgres/SQLite differences, in one file
+  db-compat.ts           Postgres/SQLite differences in one file
 
 src/app/(app)/
   menu/                  employee: browse and order
-  orders/                employee: history and order detail
+  orders/                employee: history, order detail, retry payment
   admin/cycles/          plan, publish, close weekly menus
   admin/restaurants/     vendors
   admin/dishes/          catalogue and prices
   admin/subsidies/       company contribution rules
   admin/users/           accounts and roles
-  analytics/             demand, participation, popularity
+  admin/companies/       entities, companies, entitlements
+  admin/bulk-refund/     select and immediately refund paid orders
+  analytics/             demand, participation, popularity — by entity tab
   finance/               spend, subsidy cost, reconciliation, exports
   kitchen/               production counts per restaurant per day
 
 src/app/api/
   webhooks/hitpay/       payment confirmation (HMAC verified)
+  auth/joget-identify/   Joget SSO embedded login
   auth/oidc/             SSO start + callback
-  exports/[type]/        CSV downloads
+  cron/                  scheduled background jobs
+  exports/[type]/        CSV downloads (entity names and bank info from DB)
 ```
 
 ## Design decisions worth knowing
 
-- **Prices are snapshotted.** A `MenuItem` copies the dish price when it is
-  added to a week. Editing the catalogue later never changes a published menu
-  or a placed order.
+- **Prices are snapshotted.** A `MenuItem` copies the dish price when added to
+  a week. Editing the catalogue later never changes a published menu or order.
 - **Deactivate, don't delete.** Anything with order history is deactivated
-  instead of deleted, so reports stay correct.
-- **One order per employee per week.** It starts as a `CART` and is checked out
-  once; the unique index on `(userId, cycleId)` arbitrates concurrent tabs.
+  instead of deleted so reports stay correct.
+- **One order per employee per week.** Starts as a `CART`; the unique index on
+  `(userId, cycleId)` arbitrates concurrent tabs.
 - **Capacity is held by committed orders only** (`AWAITING_PAYMENT` + `PAID`).
-  A cart does not reserve a portion, and capacity is re-checked at checkout.
+  A cart does not reserve a portion; capacity is re-checked at checkout.
 - **Order line items are denormalised** (dish name, restaurant name, service
   date) so historical reports survive catalogue changes.
+- **Entity routing.** At checkout the order is tagged with the entity code from
+  the user's company. Payment is processed through that entity's HitPay account.
+  Refunds use the same entity credentials.
 - **The last active administrator cannot be demoted or deactivated.**
-- **One meal per person per service day.** Enforced in `selectMeal()`, not
-  just the UI: choosing a dish deletes whatever else was chosen for that date
-  in the same transaction. `validateForCheckout()` re-checks it before any
-  money moves, so a cart built by any other route still cannot get through.
-  The constant is `MEALS_PER_DAY` in `src/lib/orders.ts`; note that raising it
-  alone will not enable multi-meal ordering, because the ordering screen is a
-  single-choice control by design.
-- **One day at a time.** Both the ordering page and the admin planner load a
-  single service day per request, selected by `?day=YYYY-MM-DD`. The tab bar
-  needs only per-day counts, and tab prefetch is off — hovering five tabs
-  should not run five days of queries. The cart summary still spans the whole
-  week because it comes from the order rows, not the menu.
-- **The cart row is created on first add, not on first view**, so browsing the
-  menu does not litter the table with empty orders.
-- **The payment gateway is not named in employee-facing screens.** Staff see
-  "Pay RM 12.50"; Finance sees the HitPay references it needs to reconcile.
-- **Employees never see the company's contribution.** Menu rows show the price
-  _that employee_ pays (`employeePriceFor()`), and the order summary, order
-  list and receipt omit gross and subsidy entirely. Showing a list price
-  alongside "you pay" would leak the subsidy by subtraction, so the list price
-  is not sent to the browser at all. Everything behind `finance:view` still
-  shows the full split. Note this per-dish price is exact only because it is
-  one meal per day - see `employeePriceFor()` for why.
-- **Submitted orders reuse the ordering screen, read-only.** Rather than a
-  separate receipt layout, the same day tabs and dish rows render with the
-  chosen dish marked and the controls removed, so people recognise what they
-  are looking at.
-- **Create forms live in dialogs**, behind an "Add ..." button in the page
-  header, not in a permanent side panel. The list gets the full width, and
-  `ActionForm`'s `onSuccess` closes the dialog once the record is saved.
+- **One meal per person per service day.** Enforced in `selectMeal()` and
+  re-checked in `validateForCheckout()`.
+- **Employees never see the company's contribution.** Staff see the price they
+  pay; Finance sees the full split.
+- **The payment gateway is not named in employee-facing screens.**
+- **Submitted orders reuse the ordering screen, read-only.**
+- **Create forms live in dialogs**, not permanent side panels.
 
 ## Not built
 
-Deliberately out of scope for this version — flag if you want any of them:
+Deliberately out of scope — flag if you want any of them:
 
-- Automated refunds. Cancelling a week marks paid orders for refund but the
-  money is returned manually in the HitPay dashboard.
 - Email or push notifications (publish announcements, cutoff reminders,
   collection reminders).
 - Per-restaurant vendor logins.
-- Automatic cycle transitions. `CLOSED` and `FULFILLED` are set by admin
-  action; add a scheduled job if you want them to advance on their own.
 - Dietary preference matching and allergen warnings beyond free-text tags.
+- Multi-entity analytics comparison (cross-entity charts on a single view).

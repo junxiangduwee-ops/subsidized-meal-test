@@ -111,8 +111,24 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
   const byStaffId = identity.staffId
     ? await prisma.user.findUnique({ where: { staffId: identity.staffId } })
     : null;
+
+  // Only trust the staffId match if the email also agrees (or no email was provided).
+  // A wrong staffId from the directory must not land on a different (possibly inactive)
+  // account and lock the real user out.
+  const staffIdConflict =
+    byStaffId && identity.email && byStaffId.email && byStaffId.email !== identity.email;
+  if (staffIdConflict) {
+    console.warn(
+      `[auth] staffId ${identity.staffId} matched ${byStaffId!.email} ` +
+      `but incoming email is ${identity.email} — discarding staffId match, falling back to email. ` +
+      `Fix the staffId in the directory to remove this warning.`,
+    );
+  }
+  const staffIdMatch = staffIdConflict ? null : byStaffId;
+  const matchedByStaffId = !!staffIdMatch;
+
   const existing =
-    byStaffId ?? (identity.email ? await prisma.user.findUnique({ where: { email: identity.email } }) : null);
+    staffIdMatch ?? (identity.email ? await prisma.user.findUnique({ where: { email: identity.email } }) : null);
 
   const role = identity.provider === 'JOGET' ? roleFromGroups(identity.groups) : undefined;
 
@@ -121,18 +137,12 @@ export async function provisionFromDirectory(identity: ExternalIdentity): Promis
     return prisma.user.update({
       where: { id: existing.id },
       data: {
-        // Directory-supplied name is only used to seed a brand-new account
-        // (see the create branch below). On every subsequent login for an
-        // account that already exists, keep whatever name is on file
-        // locally - an admin (or the user, if that's ever exposed) may have
-        // corrected it, and Joget/LDAP/OIDC re-sending their own copy of
-        // the name on every single login must not silently clobber that.
-        // `existing.name` is a required, non-null column, so this only
-        // ever falls back to identity.name for the (should-never-happen)
-        // case of a legacy blank name.
+        // Name is only seeded on first creation — manual corrections in Admin → Users survive.
         name: existing.name || identity.name,
         email: identity.email ?? existing.email,
-        staffId: identity.staffId ?? existing.staffId,
+        // Only update staffId when we matched by staffId (high confidence).
+        // If we fell back to email, the incoming staffId may be wrong — keep the existing one.
+        staffId: matchedByStaffId ? (identity.staffId ?? existing.staffId) : existing.staffId,
         department: identity.department ?? existing.department,
         authProvider: identity.provider,
         externalId: identity.externalId,
