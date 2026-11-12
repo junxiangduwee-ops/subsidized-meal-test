@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { put, del } from '@vercel/blob';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
@@ -9,6 +10,25 @@ import { audit } from '@/lib/orders';
 import { dateOnly, toDateKey } from '@/lib/cycle';
 import { deliverySiteSheet, receptionSiteRestriction, DELIVERY_PHOTO_MAX_BYTES } from '@/lib/delivery';
 import type { ActionState } from '@/components/action-form';
+
+function isBlobUrl(url: string | null | undefined): url is string {
+  return !!url && url.startsWith('https://');
+}
+
+async function uploadToBlob(file: File, path: string): Promise<string | null> {
+  try {
+    const result = await Promise.race([
+      put(path, file, { access: 'private' }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Blob upload timeout after 10s')), 10000),
+      ),
+    ]);
+    return result.url;
+  } catch (err) {
+    console.error('[Blob upload failed]', err);
+    return null;
+  }
+}
 
 const confirmSchema = z.object({
   cycleId: z.string().min(1),
@@ -67,8 +87,17 @@ export async function confirmDelivery(_prev: ActionState, formData: FormData): P
         error: `That photo is larger than ${maxMb}MB, so it was not attached. You can still mark this delivery as received without a photo - just submit again.`,
       };
     }
-    const buffer = Buffer.from(await photo.arrayBuffer());
-    photoDataUrl = `data:${photo.type};base64,${buffer.toString('base64')}`;
+    const ext = photo.type.split('/')[1] ?? 'jpg';
+    const blobUrl = await uploadToBlob(
+      photo,
+      `delivery-photos/${deliverySiteId}-${serviceDate}-${Date.now()}.${ext}`,
+    );
+    if (blobUrl) {
+      photoDataUrl = blobUrl;
+    } else {
+      const buffer = Buffer.from(await photo.arrayBuffer());
+      photoDataUrl = `data:${photo.type};base64,${buffer.toString('base64')}`;
+    }
   }
 
   // Snapshot what was expected at the moment of confirmation, so a later
@@ -131,6 +160,7 @@ export async function unmarkDelivery(formData: FormData): Promise<void> {
   if (restriction && restriction.id !== existing.deliverySiteId) return;
 
   await prisma.deliveryConfirmation.delete({ where: { id } });
+  if (isBlobUrl(existing.photoDataUrl)) await del(existing.photoDataUrl);
 
   await audit(actor.id, 'delivery.unconfirm', 'DeliveryConfirmation', id, {
     deliverySiteId: existing.deliverySiteId,

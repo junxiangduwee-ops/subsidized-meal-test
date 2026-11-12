@@ -2,6 +2,7 @@
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
+import { put, del } from '@vercel/blob';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
@@ -13,23 +14,42 @@ import { CODE_MAX_LENGTH, CODE_PATTERN, generateUniqueCode, nextSequentialCode, 
 import type { ActionState } from '@/components/action-form';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
-const ALLOWED_IMAGE_TYPES: Record<string, boolean> = {
-  'image/png':  true,
-  'image/jpeg': true,
-  'image/webp': true,
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  'image/png':  'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
 };
+
+function isBlobUrl(url: string | null | undefined): url is string {
+  return !!url && url.startsWith('https://');
+}
 
 async function parseImageFile(
   formData: FormData,
-): Promise<{ dataUrl: string | null } | { error: string }> {
+): Promise<{ imageUrl: string | null } | { error: string }> {
   const file = formData.get('imageFile');
-  if (!(file instanceof File) || file.size === 0) return { dataUrl: null };
+  if (!(file instanceof File) || file.size === 0) return { imageUrl: null };
   if (file.size > MAX_IMAGE_BYTES)
     return { error: 'Image is too large — please keep it under 2 MB.' };
-  if (!ALLOWED_IMAGE_TYPES[file.type])
-    return { error: 'Unsupported image type. Use PNG, JPEG, or WEBP.' };
-  const buffer = Buffer.from(await file.arrayBuffer());
-  return { dataUrl: `data:${file.type};base64,${buffer.toString('base64')}` };
+  const ext = ALLOWED_IMAGE_TYPES[file.type];
+  if (!ext) return { error: 'Unsupported image type. Use PNG, JPEG, or WEBP.' };
+
+  try {
+    const result = await Promise.race([
+      put(`dish-images/${Date.now()}.${ext}`, file, {
+        access: 'public',
+        token: process.env.PUBLIC_READ_WRITE_TOKEN,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Blob upload timeout after 10s')), 10000),
+      ),
+    ]);
+    return { imageUrl: result.url };
+  } catch (err) {
+    console.error('[Dish image blob upload failed]', err);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    return { imageUrl: `data:${file.type};base64,${buffer.toString('base64')}` };
+  }
 }
 
 
@@ -111,7 +131,7 @@ export async function createDish(_prev: ActionState, formData: FormData): Promis
       priceSen: price.sen,
       category: d.category?.trim() || null,
       description: d.description?.trim() || null,
-      imageUrl: image.dataUrl,
+      imageUrl: image.imageUrl,
       tags: encodeTags(parseTags(d.tags)),
     },
   });
@@ -151,6 +171,9 @@ export async function updateDish(_prev: ActionState, formData: FormData): Promis
     if (codeClash) return { error: `Another dish already uses code "${code}".` };
   }
 
+  if (image.imageUrl !== null && isBlobUrl(before?.imageUrl))
+    await del(before.imageUrl, { token: process.env.PUBLIC_READ_WRITE_TOKEN });
+
   await prisma.dish.update({
     where: { id },
     data: {
@@ -160,7 +183,7 @@ export async function updateDish(_prev: ActionState, formData: FormData): Promis
       priceSen: price.sen,
       category: d.category?.trim() || null,
       description: d.description?.trim() || null,
-      imageUrl: image.dataUrl !== null ? image.dataUrl : (before?.imageUrl ?? null),
+      imageUrl: image.imageUrl !== null ? image.imageUrl : (before?.imageUrl ?? null),
       tags: encodeTags(parseTags(d.tags)),
     },
   });
@@ -199,12 +222,14 @@ export async function deleteDish(formData: FormData): Promise<void> {
 
   // A dish that has ever appeared on a menu is deactivated, not deleted -
   // MenuItem.dish uses onDelete: Restrict to protect order history.
+  const dish = await prisma.dish.findUnique({ where: { id }, select: { imageUrl: true } });
   const onMenus = await prisma.menuItem.count({ where: { dishId: id } });
   if (onMenus > 0) {
     await prisma.dish.update({ where: { id }, data: { active: false } });
     await audit(actor.id, 'dish.deactivate_instead_of_delete', 'Dish', id, { menuItems: onMenus });
   } else {
     await prisma.dish.delete({ where: { id } });
+    if (isBlobUrl(dish?.imageUrl)) await del(dish.imageUrl, { token: process.env.PUBLIC_READ_WRITE_TOKEN });
     await audit(actor.id, 'dish.delete', 'Dish', id);
   }
 

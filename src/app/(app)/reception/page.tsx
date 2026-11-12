@@ -191,7 +191,7 @@ export default async function ReceptionPage({
                                   receivedAtLabel={formatDateTime(confirmation.receivedAt!, locale)}
                                   receivedByName={confirmation.receivedBy?.name ?? null}
                                   note={confirmation.note}
-                                  photoDataUrl={confirmation.photoDataUrl}
+                                  photoDataUrl={confirmation.photoDataUrl ? `/api/delivery-confirmations/${confirmation.id}/photo` : null}
                                 />
                               ) : (
                                 <ConfirmDeliveryForm

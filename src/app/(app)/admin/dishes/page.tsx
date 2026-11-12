@@ -125,7 +125,7 @@ export default async function DishesPage({
                         <td className="w-10">
                           {d.imageUrl ? (
                             <img
-                              src={d.imageUrl}
+                              src={d.imageUrl.startsWith('data:') ? `/api/dishes/${d.id}/image` : d.imageUrl}
                               alt={d.name}
                               className="h-9 w-9 rounded-md object-cover border border-slate-100"
                             />

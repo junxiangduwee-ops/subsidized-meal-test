@@ -161,7 +161,7 @@ function Fields({
       </div>
 
       {/* Image upload with preview */}
-      <ImageField existing={dish?.imageUrl} />
+      <ImageField existing={dish?.imageUrl?.startsWith('data:') ? `/api/dishes/${dish.id}/image` : (dish?.imageUrl ?? null)} />
     </>
   );
 }
