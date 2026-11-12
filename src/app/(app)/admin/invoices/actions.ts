@@ -18,11 +18,12 @@ async function uploadToBlob(file: File, path: string): Promise<string | null> {
     const result = await Promise.race([
       put(path, file, { access: 'public' }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 10000),
+        setTimeout(() => reject(new Error('Blob upload timeout after 10s')), 10000),
       ),
     ]);
     return result.url;
-  } catch {
+  } catch (err) {
+    console.error('[Blob upload failed]', err);
     return null;
   }
 }
