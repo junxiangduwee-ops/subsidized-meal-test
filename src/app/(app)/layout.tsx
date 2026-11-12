@@ -8,7 +8,7 @@ import { getSiteSettings } from '@/lib/settings';
 import { LOSLogo } from '@/components/los-logo';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
 import { SidebarScroll } from '@/components/sidebar-scroll';
-import { MainScroll } from '@/components/main-scroll';
+import { WindowScrollObserver } from '@/components/window-scroll-observer';
 import { UserMenu } from '@/components/user-menu';
 import { Alert } from '@/components/ui';
 import { logoutAction } from '@/app/login/actions';
@@ -104,9 +104,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .join('');
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="min-h-screen">
       {!user.embed ? (
-        <header className="shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
             <Link href="/">
               <LOSLogo size="sm" />
@@ -127,29 +127,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileNav groups={groups} />
         </header>
       ) : (
-        <div className="shrink-0 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <MobileNav groups={groups} />
         </div>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {settings.maintenanceMessage ? (
-          <div className="shrink-0 mx-auto w-full max-w-[1400px] px-4 pt-4">
-            <Alert tone="warning">{settings.maintenanceMessage}</Alert>
-          </div>
-        ) : null}
+      <WindowScrollObserver />
 
-        <div className="flex flex-1 overflow-hidden">
-          <div className="mx-auto flex w-full max-w-[1400px] gap-6 px-4">
-            <aside className="hidden w-56 shrink-0 lg:flex lg:flex-col overflow-hidden">
-              <SidebarScroll>
-                {user.embed ? <SidebarLanguageSwitcher /> : null}
-                <SideNav groups={groups} />
-              </SidebarScroll>
-            </aside>
-            <MainScroll>{children}</MainScroll>
-          </div>
+      {settings.maintenanceMessage ? (
+        <div className="mx-auto max-w-[1400px] px-4 pt-4">
+          <Alert tone="warning">{settings.maintenanceMessage}</Alert>
         </div>
+      ) : null}
+
+      <div className="mx-auto flex max-w-[1400px] gap-6 px-4 py-6">
+        <aside className="hidden w-56 shrink-0 lg:block">
+          <div className={`sticky overflow-hidden ${user.embed ? 'top-12 h-[calc(100vh-3rem)]' : 'top-20 h-[calc(100vh-5rem)]'}`}>
+            <SidebarScroll>
+              {user.embed ? <SidebarLanguageSwitcher /> : null}
+              <SideNav groups={groups} />
+            </SidebarScroll>
+          </div>
+        </aside>
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
   );

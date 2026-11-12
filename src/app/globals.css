@@ -94,44 +94,37 @@ body {
   }
 }
 
-/* ── Main content scrollbar ──────────────────────────────────────────────────
-   Same auto-hide behaviour as the sidebar. Thumb is invisible by default,
-   fades in on hover and while scrolling (.scrollbar-visible), then fades out
-   1.5 s after scrolling stops. pr-5 on the container adds breathing room
-   between the content edge and the scrollbar track. */
-.main-scroll {
-  /* Reserve a stable gutter to the right so the scrollbar never eats
-     into content width — content stays at its full natural width. */
-  scrollbar-gutter: stable;
+/* ── Page (window) scrollbar ─────────────────────────────────────────────────
+   The main content uses ordinary page scroll so its width is never affected
+   by the scrollbar. WindowScrollObserver adds .page-scrolling to <html> on
+   scroll and removes it 1.5 s after the user stops, giving the same auto-hide
+   behaviour as the sidebar. */
+html {
   /* Firefox */
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
-  transition: scrollbar-color 0.3s ease;
 }
-.main-scroll:hover,
-.main-scroll.scrollbar-visible {
+html.page-scrolling {
   scrollbar-color: rgb(203 213 225) transparent; /* slate-300 thumb */
 }
 /* Chromium / Safari */
-.main-scroll::-webkit-scrollbar {
+html::-webkit-scrollbar {
   width: 10px;
 }
-.main-scroll::-webkit-scrollbar-track {
+html::-webkit-scrollbar-track {
   background: transparent;
 }
-.main-scroll::-webkit-scrollbar-thumb {
+html::-webkit-scrollbar-thumb {
   background-color: transparent;
   border-radius: 9999px;
   border: 3px solid transparent;
   background-clip: content-box;
   transition: background-color 0.3s ease;
 }
-.main-scroll:hover::-webkit-scrollbar-thumb,
-.main-scroll.scrollbar-visible::-webkit-scrollbar-thumb {
+html.page-scrolling::-webkit-scrollbar-thumb {
   background-color: rgb(203 213 225); /* slate-300 */
 }
-.main-scroll:hover::-webkit-scrollbar-thumb:hover,
-.main-scroll.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+html.page-scrolling::-webkit-scrollbar-thumb:hover {
   background-color: rgb(148 163 184); /* slate-400 on direct thumb hover */
 }
 
