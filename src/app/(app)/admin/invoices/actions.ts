@@ -16,7 +16,7 @@ function isBlobUrl(url: string | null | undefined): url is string {
 async function uploadToBlob(file: File, path: string): Promise<string | null> {
   try {
     const result = await Promise.race([
-      put(path, file, { access: 'public' }),
+      put(path, file, { access: 'private' }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Blob upload timeout after 10s')), 10000),
       ),

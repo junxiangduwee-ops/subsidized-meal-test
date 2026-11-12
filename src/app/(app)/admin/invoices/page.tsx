@@ -225,7 +225,7 @@ export default async function AdminInvoicesPage({
                       <td>
                         {inv.fileUrl ? (
                           <a
-                            href={inv.fileUrl}
+                            href={`/api/invoices/${inv.id}/file`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-brand-700 hover:underline"

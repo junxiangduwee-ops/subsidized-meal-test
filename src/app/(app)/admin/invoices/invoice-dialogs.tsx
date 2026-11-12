@@ -324,7 +324,7 @@ export function InvoiceReviewDialog({
               <p className="text-xs text-slate-500">
                 Current file:{' '}
                 <a
-                  href={invoice.fileUrl}
+                  href={`/api/invoices/${invoice.id}/file`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-brand-700 hover:underline"
