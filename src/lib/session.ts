@@ -133,7 +133,7 @@ export async function requireUser(): Promise<SessionUser> {
 /** Redirects to /login, or to /forbidden when the capability is missing. */
 export async function requireCapability(capability: Capability): Promise<SessionUser> {
   const user = await requireUser();
-  if (!can(user.role, capability)) redirect('/forbidden');
+  if (!user.superAdmin && !can(user.role, capability)) redirect('/forbidden');
   return user;
 }
 
@@ -141,6 +141,6 @@ export async function requireCapability(capability: Capability): Promise<Session
 export async function assertCapability(capability: Capability): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not signed in.');
-  if (!can(user.role, capability)) throw new Error('You do not have permission to do that.');
+  if (!user.superAdmin && !can(user.role, capability)) throw new Error('You do not have permission to do that.');
   return user;
 }

@@ -55,7 +55,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     });
   }
 
-  if (can(user.role, 'menu:plan')) {
+  const isSuperAdmin = user.superAdmin;
+
+  if (isSuperAdmin || can(user.role, 'menu:plan')) {
     groups.push({
       heading: t('administration'),
       items: [
@@ -66,7 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: '/admin/subsidies', label: t('subsidies') },
         { href: '/admin/users', label: t('usersRoles') },
         { href: '/admin/invoices', label: 'Vendor Invoices' },
-        ...(can(user.role, 'settings:manage')
+        ...(isSuperAdmin || can(user.role, 'settings:manage')
           ? [
               { href: '/admin/bulk-refund', label: t('bulkRefund') },
               { href: '/admin/companies', label: 'Companies' },
@@ -77,13 +79,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ],
     });
   }
-
   const insights: NavGroup = { heading: t('insights'), items: [] };
-  if (can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
-  if (can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
-  if (can(user.role, 'kitchen:view'))
+  if (isSuperAdmin || can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
+  if (isSuperAdmin || can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
+  if (isSuperAdmin || can(user.role, 'kitchen:view'))
     insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
-  if (can(user.role, 'analytics:view'))
+  if (isSuperAdmin || can(user.role, 'analytics:view'))
     insights.items.push({ href: '/receipt', label: 'Receipt Confirmation' });
   if (insights.items.length) groups.push(insights);
 
