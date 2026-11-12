@@ -2,11 +2,35 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { put, del } from '@vercel/blob';
 
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import type { ActionState } from '@/components/action-form';
+
+function isBlobUrl(url: string | null | undefined): url is string {
+  return !!url && url.startsWith('https://');
+}
+
+async function uploadToBlob(file: File, path: string): Promise<string | null> {
+  try {
+    const result = await Promise.race([
+      put(path, file, { access: 'public' }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 10000),
+      ),
+    ]);
+    return result.url;
+  } catch {
+    return null;
+  }
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return `data:${file.type};base64,${buffer.toString('base64')}`;
+}
 
 // ── File validation ──────────────────────────────────────────────────────────
 
@@ -65,7 +89,7 @@ export async function uploadInvoice(
       return { error: `Invoice "${d.invoiceNumber}" already exists for ${restaurant.name} this week.` };
   }
 
-  // ── Convert file to base64 data URL (same as reception photo) ───────────
+  // ── Upload file to Vercel Blob ───────────────────────────────────────────
   let fileUrl:  string | null = null;
   let fileName: string | null = null;
 
@@ -76,8 +100,9 @@ export async function uploadInvoice(
     if (!ALLOWED_TYPES[file.type])
       return { error: 'Unsupported file type. Use PDF, PNG, JPEG, or WEBP.' };
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    fileUrl  = `data:${file.type};base64,${buffer.toString('base64')}`;
+    const ext = ALLOWED_TYPES[file.type];
+    const blobUrl = await uploadToBlob(file, `invoices/${Date.now()}-${d.restaurantId}${ext}`);
+    fileUrl  = blobUrl ?? await fileToBase64(file);
     fileName = file.name;
   }
 
@@ -140,7 +165,7 @@ export async function reviewInvoice(
   });
   if (!existing) return { error: 'Invoice not found.' };
 
-  // Optional file replacement — also base64
+  // Optional file replacement — upload new to Blob, delete old if it was a Blob URL
   let fileUrl  = existing.fileUrl;
   let fileName: string | undefined;
 
@@ -151,8 +176,10 @@ export async function reviewInvoice(
     if (!ALLOWED_TYPES[file.type])
       return { error: 'Unsupported file type. Use PDF, PNG, JPEG, or WEBP.' };
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    fileUrl  = `data:${file.type};base64,${buffer.toString('base64')}`;
+    const ext = ALLOWED_TYPES[file.type];
+    const blobUrl = await uploadToBlob(file, `invoices/${Date.now()}-${d.id}${ext}`);
+    if (blobUrl && isBlobUrl(existing.fileUrl)) await del(existing.fileUrl);
+    fileUrl  = blobUrl ?? await fileToBase64(file);
     fileName = file.name;
   }
 
@@ -191,12 +218,12 @@ export async function deleteInvoice(formData: FormData): Promise<void> {
 
   const inv = await prisma.vendorInvoice.findUnique({
     where: { id },
-    select: { restaurant: { select: { name: true } }, invoiceNumber: true },
+    select: { restaurant: { select: { name: true } }, invoiceNumber: true, fileUrl: true },
   });
   if (!inv) return;
 
-  // No disk file to clean up — base64 is stored in the DB row
   await prisma.vendorInvoice.delete({ where: { id } });
+  if (isBlobUrl(inv.fileUrl)) await del(inv.fileUrl);
   await audit(actor.id, 'invoice.delete', 'VendorInvoice', id, {
     restaurantName: inv.restaurant.name,
     invoiceNumber:  inv.invoiceNumber,

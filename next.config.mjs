@@ -8,6 +8,13 @@ const nextConfig = {
   // provider. Keep it external so the build does not fail when it is absent.
   serverExternalPackages: ['ldapts', 'bcryptjs'],
 
+  // Raise the Server Action body size limit to match the invoice upload cap (10 MB).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '11mb',
+    },
+  },
+
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },
