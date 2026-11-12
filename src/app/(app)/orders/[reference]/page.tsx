@@ -41,9 +41,10 @@ export default async function OrderDetailPage({
 
   if (!order) notFound();
 
-  // Employees see only their own order; Finance and Admin can open any.
+  // Employees see only their own order; Finance, Admin, and superAdmin can open any.
   const isOwner = order.userId === user.id;
-  if (!isOwner && !can(user.role, 'finance:view')) notFound();
+  const canViewAny = user.superAdmin || can(user.role, 'finance:view') || can(user.role, 'menu:plan');
+  if (!isOwner && !canViewAny) notFound();
 
   const byDay = new Map<string, typeof order.items>();
   for (const item of order.items) {
@@ -53,8 +54,8 @@ export default async function OrderDetailPage({
     else byDay.set(key, [item]);
   }
 
-  // Employees see what they paid; only finance roles see the split.
-  const showSubsidy = can(user.role, 'finance:view');
+  // Employees see what they paid; finance roles and superAdmin see the split.
+  const showSubsidy = user.superAdmin || can(user.role, 'finance:view');
   // Latest payment for the checkout URL — includes PENDING so the
   // "Continue to payment" button always has a URL when AWAITING_PAYMENT.
   const latestPayment = order.payments[0];

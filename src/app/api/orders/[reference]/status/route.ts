@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ref
     select: { userId: true, status: true },
   });
 
-  if (!order || (order.userId !== user.id && !can(user.role, 'finance:view'))) {
+  if (!order || (order.userId !== user.id && !user.superAdmin && !can(user.role, 'finance:view') && !can(user.role, 'menu:plan'))) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: MR DIY Subsidized Meal System API
+  title: LOS (Lunch Ordering System) API
   description: |
     REST API for the MR DIY Subsidized Meal ordering system.
 
@@ -15,11 +15,13 @@ info:
     ## Roles
     | Role | Key permissions |
     |------|----------------|
-    | `ADMIN` | Full access |
-    | `FINANCE` | Finance exports, payment views |
-    | `ANALYTICS` | Analytics access |
+    | `ADMIN` | Menus, catalogue, users, subsidies, settings, audit log, bulk refund — **not** Finance |
+    | `FINANCE` | Finance dashboard, per-entity reconciliation, CSV exports, analytics; exclusively holds `finance:view` and `finance:export` capabilities |
+    | `ANALYTICS` | Analytics and kitchen counts |
     | `RECEPTION` | Delivery/reception view |
     | `USER` | Own orders, menu ordering |
+
+    > A user with `superAdmin = true` in the database bypasses all capability checks.
 
     > **⚠️ AI-generated content notice:** This spec was generated from source code analysis.
     > Review all endpoints, request/response shapes, and descriptions before using in production or publishing externally.
@@ -227,10 +229,10 @@ paths:
 
         | `type` | Required role permission | Description |
         |---|---|---|
-        | `orders` | `finance:export` | All paid/awaiting orders for a cycle |
-        | `payments` | `finance:export` | HitPay payment ledger |
-        | `subsidy` | `finance:export` | Weekly subsidy cost summary |
-        | `reconciliation` | `finance:export` | Full order + payment reconciliation |
+        | `orders` | `finance:export` (Finance role only) | All paid/awaiting orders for a cycle |
+        | `payments` | `finance:export` (Finance role only) | HitPay payment ledger |
+        | `subsidy` | `finance:export` (Finance role only) | Weekly subsidy cost summary |
+        | `reconciliation` | `finance:export` (Finance role only) | Full order + payment reconciliation per entity |
         | `kitchen` | `kitchen:view` | Dish portion counts per delivery site |
         | `kitchen-employees` | `kitchen:view` | Per-employee dish breakdown for a cycle |
         | `audit` | `settings:manage` | Audit log export |
@@ -570,8 +572,10 @@ components:
         - `AWAITING_PAYMENT` – submitted; waiting for HitPay webhook
         - `PAID` – payment confirmed by webhook
         - `CANCELLED` – cancelled by user or admin
-        - `REFUNDED` – refund processed
-      enum: [CART, AWAITING_PAYMENT, PAID, CANCELLED, REFUNDED]
+        - `REFUND_PENDING` – cancellation accepted; awaiting nightly cron refund
+        - `REFUND_FAILED` – refund attempted but failed; admin must retry via Bulk Refund
+        - `REFUNDED` – refund successfully processed
+      enum: [CART, AWAITING_PAYMENT, PAID, CANCELLED, REFUND_PENDING, REFUND_FAILED, REFUNDED]
 
     Role:
       type: string

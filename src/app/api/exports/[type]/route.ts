@@ -36,32 +36,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   const url = new URL(request.url);
   const cycleId = url.searchParams.get('cycle');
 
+  const isSuperAdmin = user.superAdmin;
   const needsFinance = type === 'orders' || type === 'subsidy' || type === 'payments';
-  if (needsFinance && !can(user.role, 'finance:export')) {
+  if (needsFinance && !isSuperAdmin && !can(user.role, 'finance:export')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'vendor-orders' && !can(user.role, 'kitchen:view')) {
+  if (type === 'vendor-orders' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'admin-orders' && !can(user.role, 'kitchen:view')) {
+  if (type === 'admin-orders' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'kitchen' && !can(user.role, 'kitchen:view')) {
+  if (type === 'kitchen' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'kitchen-employees' && !can(user.role, 'kitchen:view')) {
+  if (type === 'kitchen-employees' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'reconciliation' && !can(user.role, 'finance:export')) {
+  if (type === 'reconciliation' && !isSuperAdmin && !can(user.role, 'finance:export')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'audit' && !can(user.role, 'settings:manage')) {
+  if (type === 'audit' && !isSuperAdmin && !can(user.role, 'settings:manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if ((type === 'restaurants' || type === 'dishes') && !can(user.role, 'catalogue:manage')) {
+  if ((type === 'restaurants' || type === 'dishes') && !isSuperAdmin && !can(user.role, 'catalogue:manage')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'weekly-menu-template' && !can(user.role, 'menu:plan')) {
+  if (type === 'weekly-menu-template' && !isSuperAdmin && !can(user.role, 'menu:plan')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -1,4 +1,4 @@
-# MR DIY Food Ordering
+# LOS — Lunch Ordering System
 
 Weekly staff meal planning and ordering. Admins plan a menu two weeks ahead,
 publish it, staff order until the Wednesday cutoff, and the food is served the
@@ -33,11 +33,13 @@ Access is capability-based (`src/lib/rbac.ts`), not role-literal.
 
 | Role              | Can                                                                                                             |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Administrator** | Restaurants, dishes, menus, subsidy rules, users, companies, entities; everything below                         |
+| **Administrator** | Restaurants, dishes, menus, subsidy rules, users, companies, entities, audit log, settings, bulk refund; also orders their own meals. **Does not have Finance access** — Finance is a separate department. |
 | **Analytics**     | Demand dashboards, participation, top dishes, kitchen counts; also orders their own meals                       |
-| **Finance**       | Revenue, subsidy cost, HitPay reconciliation, CSV exports; also sees analytics and orders their own meals       |
+| **Finance**       | Revenue, subsidy cost, per-entity HitPay reconciliation, CSV exports; also sees analytics and orders their own meals |
 | **Reception**     | Mark meals as received/collected at the delivery site they are assigned to                                      |
 | **Employee**      | Browse the open menu and order for next week; self-cancel within the ordering window                            |
+
+> **superAdmin flag:** A user with `superAdmin = true` in the database bypasses all capability checks and sees every navigation item and page, regardless of their assigned role. This is for break-glass system administrators only — set via Prisma Studio or a direct DB update, not via the UI.
 
 ## Entities and Companies
 
@@ -84,7 +86,10 @@ attempts retry each night for up to **7 attempts**, then the order is marked
 `REFUND_FAILED` for manual follow-up.
 
 Admins can also refund immediately via **Admin → Bulk Refund**, which filters
-by cycle, service day, restaurant and dish.
+by cycle, service day, restaurant and dish. The Bulk Refund page shows an amber
+warning banner listing every `REFUND_FAILED` order with the employee name, staff
+ID, food items, amount, and service week so the admin can find and retry the
+correct order immediately.
 
 ## Money
 
@@ -295,7 +300,7 @@ self-hosted crontab entries:
 The Finance exports contain **employee names, staff IDs and departments**. That
 is personal data:
 
-- Only `finance:export` (Admin, Finance) can download them.
+- Only `finance:export` (**Finance** role only; Admin no longer has this capability) can download them.
 - Every export is written to the audit log.
 - Keep the files on approved systems; share only within Finance and HR.
 

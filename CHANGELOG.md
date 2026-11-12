@@ -244,3 +244,39 @@ The uploaded project already included:
    *Files: `src\app\(app)\menu\menu-ordering.tsx`, `src\app\(app)\menu\page.tsx`*
 
 ---
+
+## 27 — LOS branding, reconciliation fixes, RBAC separation, superAdmin bypass — 12 Nov 2026
+
+1. **New: LOS brand identity applied across the entire UI.**
+   Created `src/components/los-logo.tsx` — a reusable `<LOSLogo>` component (three sizes: `sm` for the header, `md` for select-company, `lg` for login/complete-profile) with a red-gradient fork+knife icon and bold "LOS" wordmark. Applied to login page, app-shell header, select-company, and complete-profile pages, replacing the old logo image + site-name text.
+   *Files: `src/components/los-logo.tsx` (new), `src/app/login/page.tsx`, `src/app/(app)/layout.tsx`, `src/app/select-company/page.tsx`, `src/app/complete-profile/page.tsx`*
+
+2. **Browser tab title changed to "LOS".**
+   Updated `DEFAULT_SETTINGS.siteName` and the Prisma schema default from `"MR DIY Food Ordering"` to `"LOS"`. (Existing DB rows must be updated via Admin → Settings or Prisma Studio.)
+   *Files: `src/lib/settings.ts`, `prisma/schema.prisma`*
+
+3. **Fixed: order-status badge wrapping and alignment.**
+   Added `whitespace-nowrap` to prevent multi-line badge text (e.g. "Refund Failed") and `justify-center` to horizontally center text inside every badge. `REFUND_FAILED` badge colour changed to rose to distinguish it from plain CANCELLED.
+   *Files: `src/app/globals.css`, `src/components/ui.tsx`*
+
+4. **Fixed: finance reconciliation — stale alert and inaccurate status filters.**
+   Removed the stale global `hitpayConfigured` alert (it only checked a deprecated env var, not entity-based credentials). Fixed the order aggregate to include `PAID`, `REFUND_PENDING`, `REFUND_FAILED` and `REFUNDED` (was only `PAID`), and the payment aggregate to include `SUCCEEDED` and `REFUNDED`, so both sides of the reconciliation cover the same universe and no false discrepancies appear for in-flight refunds. Added `REFUND_PENDING` and `REFUND_FAILED` to the reconciliation table row filter.
+   *Files: `src/app/(app)/finance/page.tsx`*
+
+5. **New: per-entity HitPay reconciliation breakdown in Finance.**
+   The Finance reconciliation page now shows a breakdown table per entity — PAID orders total vs HitPay collected vs difference vs status — so finance staff can pinpoint which entity has a gap.
+   *Files: `src/app/(app)/finance/page.tsx`*
+
+6. **New: REFUND_FAILED admin notification on Bulk Refund page.**
+   The Bulk Refund page now fetches all `REFUND_FAILED` orders (no limit) and displays an amber warning banner listing each failed order with its reference (linked to the order detail), employee name, staff ID, food items, amount, and service week — so an admin can immediately identify and retry the correct order.
+   *Files: `src/app/(app)/admin/bulk-refund/page.tsx`*
+
+7. **RBAC: Finance access separated from Admin role.**
+   Removed `finance:view` and `finance:export` from the ADMIN capability set. Finance is a different department and now has exclusive access to revenue, reconciliation, and CSV exports. Admin retains all other capabilities unchanged.
+   *Files: `src/lib/rbac.ts`*
+
+8. **Fixed: superAdmin could not access Finance after RBAC separation.**
+   `requireCapability` and `assertCapability` in `session.ts` now short-circuit the capability check for `superAdmin` users, so a superAdmin retains full access regardless of role. The app-shell nav was also updated to show all navigation items for superAdmin.
+   *Files: `src/lib/session.ts`, `src/app/(app)/layout.tsx`*
+
+---
